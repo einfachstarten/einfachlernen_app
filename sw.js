@@ -1,12 +1,12 @@
 const CACHE_NAME = 'anna-braun-v1.0.0';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/slots.php',
-  '/termine.html',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/einfachlernen/',
+  '/einfachlernen/index.html',
+  '/einfachlernen/slots.php',
+  '/einfachlernen/termine.html',
+  '/einfachlernen/manifest.json',
+  '/einfachlernen/icons/icon-192x192.png',
+  '/einfachlernen/icons/icon-512x512.png'
 ];
 
 // Install Service Worker
@@ -69,7 +69,7 @@ self.addEventListener('fetch', (event) => {
             
             // If the request is for the main page, return index.html
             if (event.request.mode === 'navigate') {
-              return caches.match('/index.html');
+              return caches.match('/einfachlernen/index.html');
             }
             
             // For other failed requests, return a generic offline response
@@ -99,8 +99,8 @@ self.addEventListener('sync', (event) => {
 self.addEventListener('push', (event) => {
   const options = {
     body: event.data ? event.data.text() : 'Neue Benachrichtigung',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    icon: '/einfachlernen/icons/icon-192x192.png',
+    badge: '/einfachlernen/icons/icon-72x72.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -110,12 +110,12 @@ self.addEventListener('push', (event) => {
       {
         action: 'explore', 
         title: 'App öffnen',
-        icon: '/icons/icon-192x192.png'
+        icon: '/einfachlernen/icons/icon-192x192.png'
       },
       {
         action: 'close', 
         title: 'Schließen',
-        icon: '/icons/icon-192x192.png'
+        icon: '/einfachlernen/icons/icon-192x192.png'
       }
     ]
   };
@@ -132,7 +132,7 @@ self.addEventListener('notificationclick', (event) => {
   if (event.action === 'explore') {
     // Open the app
     event.waitUntil(
-      clients.openWindow('/')
+      clients.openWindow('/einfachlernen/')
     );
   }
 });

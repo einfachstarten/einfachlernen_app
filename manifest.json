@@ -2,12 +2,12 @@
   "name": "Anna Braun Lerncoaching",
   "short_name": "Anna Braun",
   "description": "Termine buchen und verwalten für ganzheitliches Lerncoaching",
-  "start_url": "/",
+  "start_url": "/einfachlernen/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#4a90b8",
   "background_color": "#e3f2fd",
-  "scope": "/",
+  "scope": "/einfachlernen/",
   "lang": "de",
   "categories": ["education", "productivity", "health"],
   "icons": [
@@ -65,7 +65,7 @@
       "name": "Termine suchen",
       "short_name": "Suchen",
       "description": "Freie Termine finden und buchen",
-      "url": "/?tab=search",
+      "url": "/einfachlernen/?tab=search",
       "icons": [
         {
           "src": "icons/icon-96x96.png",
@@ -77,7 +77,7 @@
       "name": "Meine Termine",
       "short_name": "Termine",
       "description": "Gebuchte Termine anzeigen",
-      "url": "/?tab=appointments",
+      "url": "/einfachlernen/?tab=appointments",
       "icons": [
         {
           "src": "icons/icon-96x96.png",

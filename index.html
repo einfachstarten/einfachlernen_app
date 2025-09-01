@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Anna Braun Lerncoaching - Termine buchen und verwalten">
+    <meta name="theme-color" content="#4a90b8">
+    <title>Anna Braun - Lerncoaching</title>
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Anna Braun">
+    
+    <style>
+        :root {
+            --primary: #4a90b8;
+            --secondary: #52b3a4;
+            --accent-green: #7cb342;
+            --accent-teal: #26a69a;
+            --light-blue: #e3f2fd;
+            --white: #ffffff;
+            --gray-light: #f8f9fa;
+            --gray-medium: #6c757d;
+            --gray-dark: #343a40;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, var(--light-blue) 0%, var(--white) 100%);
+            min-height: 100vh;
+            color: var(--gray-dark);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.4;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 100%;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 15px var(--shadow);
+            flex-shrink: 0;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 0.5rem;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 300;
+        }
+
+        .header .subtitle {
+            margin: 0.2rem 0 0;
+            opacity: 0.9;
+            font-size: 0.8rem;
+        }
+
+        .tab-navigation {
+            display: flex;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            flex-shrink: 0;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            background: transparent;
+            color: var(--gray-medium);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .tab-button.active {
+            color: var(--primary);
+        }
+
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tab-panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transform: translateX(20px);
+            transition: all 0.3s ease;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            display: none;
+            padding-bottom: 2rem; /* Safe area for mobile scrolling */
+        }
+
+        .tab-panel.active {
+            opacity: 1;
+            transform: translateX(0);
+            display: block;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--light-blue) 0%, var(--white) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--gray-light);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem;
+            box-shadow: 0 3px 15px var(--shadow);
+            border-left: 4px solid #e53935;
+        }
+
+        .error-title {
+            color: #c62828;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .error-message {
+            color: var(--gray-dark);
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .error-details {
+            background: #fce4ec;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+            color: var(--gray-medium);
+            border: 1px solid #f8bbd9;
+        }
+
+        .error-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .error-button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: transform 0.2s ease;
+        }
+
+        .error-button:hover {
+            transform: translateY(-1px);
+        }
+
+        .control-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem auto;
+            max-width: 500px;
+            box-shadow: 0 3px 15px var(--shadow);
+        }
+
+        .control-panel h2 {
+            margin: 0 0 0.5rem;
+            color: var(--gray-dark);
+            text-align: center;
+            font-size: 1.2rem;
+        }
+
+        .control-panel p {
+            margin: 0 0 1.5rem;
+            color: var(--gray-medium);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .email-form {
+            margin-bottom: 1.5rem;
+        }
+
+        .email-form label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-dark);
+        }
+
+        .email-input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .email-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            padding: 1rem;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            padding: 0.8rem;
+            background: transparent;
+            color: var(--gray-medium);
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-light);
+            border-color: var(--gray-medium);
+        }
+
+        .status-indicator {
+            background: var(--light-blue);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            color: var(--primary);
+        }
+
+        /* Full appointments view styles */
+        .appointments-view {
+            padding: 1rem;
+            height: calc(100% - 2rem);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .calendar-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .date-header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            box-shadow: 0 3px 15px var(--shadow);
+        }
+
+        .appointment-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 3px 15px var(--shadow);
+            border-left: 4px solid var(--primary);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .appointment-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+
+        .appointment-main {
+            display: grid;
+            grid-template-columns: minmax(150px, 200px) 1fr minmax(50px, 80px);
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .appointment-date-time {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .date-info {
+            color: var(--gray-dark);
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .time-badge {
+            background: linear-gradient(45deg, var(--accent-green), var(--accent-teal));
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .appointment-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--gray-dark);
+        }
+
+        .duration {
+            background: var(--light-blue);
+            color: var(--primary);
+            padding: 0.3rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .appointment-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            color: var(--gray-medium);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .detail-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 0;
+        }
+
+        .detail-icon {
+            flex-shrink: 0;
+            width: 16px;
+            height: 16px;
+            background: var(--light-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+
+        .detail-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status-badges {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .status-badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-confirmed {
+            background: var(--light-blue);
+            color: var(--primary);
+        }
+
+        .status-created {
+            background: var(--gray-light);
+            color: var(--gray-medium);
+        }
+
+        .appointment-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            background: linear-gradient(45deg, var(--accent-green), var(--accent-teal));
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .action-button:hover {
+            transform: scale(1.05);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .btn-calendar {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+        }
+
+        .btn-reschedule {
+            background: linear-gradient(45deg, var(--gray-medium), #8a8a8a);
+        }
+
+        .btn-disabled {
+            background: var(--gray-light);
+            color: var(--gray-medium);
+            cursor: not-allowed;
+        }
+
+        .btn-disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .reschedule-notice {
+            font-size: 0.8rem;
+            color: var(--gray-medium);
+            font-style: italic;
+            margin-top: 0.5rem;
+        }
+
+        .no-appointments {
+            text-align: center;
+            padding: 2rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 3px 15px var(--shadow);
+        }
+
+        .no-appointments-icon {
+            font-size: 3rem;
+            color: var(--gray-medium);
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .no-appointments h2 {
+            font-size: 1.3rem;
+            margin: 0 0 0.5rem;
+            color: var(--gray-dark);
+        }
+
+        .no-appointments p {
+            font-size: 0.9rem;
+            margin: 0;
+            color: var(--gray-medium);
+        }
+
+        /* Add responsive styles */
+        @media (max-width: 480px) {
+            .header {
+                padding: 0.8rem;
+            }
+            
+            .header h1 {
+                font-size: 1.1rem;
+            }
+            
+            .logo {
+                width: 35px;
+                height: 35px;
+                font-size: 1rem;
+            }
+            
+            .tab-button {
+                padding: 0.8rem;
+                font-size: 0.8rem;
+            }
+
+            .control-panel {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+
+            .error-card {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+            
+            /* Fix embedded content alignment on mobile */
+            .embedded .container {
+                padding: 1rem 0.5rem 2rem 0.5rem;
+            }
+            
+            /* Fix progress section alignment */
+            .progress-section {
+                margin: 1rem 0.5rem;
+            }
+            
+            /* Fix results section padding */
+            .results-section {
+                margin: 0 0.5rem;
+                padding-bottom: 3rem;
+            }
+            
+            /* Fix slot cards on mobile */
+            .slot-card {
+                margin: 0.5rem 0;
+                padding: 1rem;
+            }
+            
+            /* Ensure mobile scrolling works */
+            .appointments-view {
+                padding: 0.5rem;
+                padding-bottom: 4rem;
+            }
+            
+            /* Fix appointment cards layout on mobile */
+            .appointment-main {
+                grid-template-columns: 1fr;
+                gap: 0.8rem;
+                text-align: left;
+            }
+
+            .appointment-date-time {
+                flex-direction: row;
+                gap: 1rem;
+                align-items: center;
+                justify-content: space-between;
+            }
+            
+            .duration {
+                font-size: 0.7rem;
+                padding: 0.2rem 0.4rem;
+                min-width: 35px;
+            }
+            
+            /* Stack appointment info vertically on mobile */
+            .appointment-card {
+                padding: 1rem;
+            }
+            
+            .appointment-title {
+                font-size: 1rem;
+                margin: 0.5rem 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="logo">🧠</div>
+            <h1>Anna Braun</h1>
+            <p class="subtitle">Ganzheitliches Lerncoaching</p>
+        </div>
+
+        <div class="tab-navigation">
+            <button class="tab-button active" data-tab="search">
+                🔍 Termine suchen
+            </button>
+            <button class="tab-button" data-tab="appointments">
+                🗓️ Meine Termine
+            </button>
+        </div>
+
+        <div class="tab-content">
+            <div class="tab-panel active" id="search-panel">
+                <div class="loading-overlay">
+                    <div class="loading-spinner"></div>
+                    <p>Termine werden geladen...</p>
+                </div>
+            </div>
+            
+            <div class="tab-panel" id="appointments-panel">
+                <div class="loading-overlay">
+                    <div class="loading-spinner"></div>
+                    <p>Termine werden geladen...</p>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+    <script>
+        let userEmail = localStorage.getItem('userEmail') || '';
+        let currentTab = 'search';
+
+        // Debug logging
+        console.log('App initialized. User email from storage:', userEmail);
+
+        // Tab Management
+        function switchTab(tabName) {
+            console.log('Switching to tab:', tabName);
+            currentTab = tabName;
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            // Update tab panels
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            
+            const targetPanel = document.getElementById(`${tabName}-panel`);
+            targetPanel.classList.add('active');
+
+            // Load content
+            if (tabName === 'search') {
+                loadSearchContent();
+            } else if (tabName === 'appointments') {
+                const storedEmail = localStorage.getItem('anna_braun_email');
+                if (storedEmail && !userEmail) {
+                    userEmail = storedEmail;
+                    localStorage.setItem('userEmail', storedEmail);
+                }
+                
+                if (userEmail) {
+                    showAppointmentsControlPanel();
+                } else {
+                    showAppointmentsEmailForm();
+                }
+            }
+        }
+
+        // Load search content (slots.php)
+        function loadSearchContent() {
+            const panel = document.getElementById('search-panel');
+            const loading = panel.querySelector('.loading-overlay');
+            
+            if (panel.querySelector('.container')) {
+                if (loading) loading.style.display = 'none';
+                return;
+            }
+            
+            fetch('slots.php')
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    const container = doc.querySelector('.container');
+                    const styles = doc.querySelector('style');
+                    
+                    if (container && styles) {
+                        if (!document.head.querySelector('style[data-slots]')) {
+                            styles.setAttribute('data-slots', 'true');
+                            document.head.appendChild(styles);
+                        }
+                        
+                        // Add embedded class and fix container
+                        container.classList.add('embedded');
+                        
+                        // Fix progress and results sections alignment
+                        const progressSection = container.querySelector('#progressSection');
+                        const resultsSection = container.querySelector('#resultsSection');
+                        if (progressSection) {
+                            progressSection.style.margin = '1rem 0';
+                        }
+                        if (resultsSection) {
+                            resultsSection.style.margin = '0';
+                            resultsSection.style.paddingBottom = '3rem';
+                        }
+                        
+                        panel.innerHTML = container.outerHTML;
+                        initializeSlotsApp();
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to load search content:', error);
+                    showError(panel, 'Fehler beim Laden der Terminsuche', error.message, [
+                        {
+                            text: 'Extern öffnen',
+                            onclick: () => window.open('slots.php', '_blank')
+                        }
+                    ]);
+                });
+        }
+
+        // Initialize slots functionality (same as before but cleaner)
+        function initializeSlotsApp() {
+            let searchActive = false;
+            let allSlots = [];
+
+            const form = document.getElementById('slotForm');
+            if (!form) return;
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                if (searchActive) return;
+                
+                const service = e.target.service.value;
+                const count = parseInt(e.target.count.value);
+                
+                searchActive = true;
+                const searchBtn = document.getElementById('searchBtn');
+                searchBtn.disabled = true;
+                searchBtn.innerHTML = '<span class="loading-spinner"></span>Suche läuft...';
+                
+                const progressSection = document.getElementById('progressSection');
+                const resultsSection = document.getElementById('resultsSection');
+                
+                if (progressSection) progressSection.style.display = 'block';
+                if (resultsSection) resultsSection.style.display = 'none';
+                
+                allSlots = [];
+                updateProgressUI(0, count, 0, 0);
+                
+                let week = 0;
+                let totalFound = 0;
+                
+                while (totalFound < count && week < 26) {
+                    try {
+                        const response = await fetch(`slots.php?service=${service}&count=${count}&week=${week}`);
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        const contentType = response.headers.get("content-type");
+                        if (!contentType || !contentType.includes("application/json")) {
+                            throw new Error("Server antwortet mit HTML statt JSON - bitte externen Link verwenden");
+                        }
+                        
+                        const data = await response.json();
+                        
+                        if (data.error) {
+                            alert('Fehler: ' + data.error);
+                            break;
+                        }
+                        
+                        updateWeekProgress(data);
+                        
+                        if (data.slots && data.slots.length > 0) {
+                            allSlots.push(...data.slots);
+                            totalFound = allSlots.length;
+                            
+                            if (totalFound > count) {
+                                allSlots = allSlots.slice(0, count);
+                                totalFound = count;
+                            }
+                        }
+                        
+                        updateProgressUI(totalFound, count, week + 1, data.slots_this_week);
+                        
+                        if (totalFound >= count || !data.has_more_weeks) {
+                            break;
+                        }
+                        
+                        week++;
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        
+                    } catch (error) {
+                        console.error('Search error:', error);
+                        alert('Fehler bei der Suche: ' + error.message);
+                        break;
+                    }
+                }
+                
+                showResults(allSlots, count);
+                
+                searchActive = false;
+                searchBtn.disabled = false;
+                searchBtn.innerHTML = 'Neue Suche starten';
+                if (progressSection) progressSection.style.display = 'none';
+            });
+
+            function updateProgressUI(found, target, weeks, currentWeek) {
+                const els = {
+                    slotsFound: document.getElementById('slotsFound'),
+                    slotsTarget: document.getElementById('slotsTarget'),
+                    weeksSearched: document.getElementById('weeksSearched'),
+                    currentWeekSlots: document.getElementById('currentWeekSlots'),
+                    progressFill: document.getElementById('progressFill')
+                };
+                
+                if (els.slotsFound) els.slotsFound.textContent = found;
+                if (els.slotsTarget) els.slotsTarget.textContent = target;
+                if (els.weeksSearched) els.weeksSearched.textContent = weeks;
+                if (els.currentWeekSlots) els.currentWeekSlots.textContent = currentWeek;
+                if (els.progressFill) {
+                    const progress = Math.min((found / target) * 100, 100);
+                    els.progressFill.style.width = progress + '%';
+                }
+            }
+
+            function updateWeekProgress(data) {
+                const weeksText = data.current_week === 1 ? 'nächste Woche' : `in ${data.current_week} Wochen`;
+                const currentWeek = document.getElementById('currentWeek');
+                const weekInfo = document.getElementById('weekInfo');
+                
+                if (currentWeek) {
+                    currentWeek.textContent = `Durchsuche ${weeksText}: ${data.week_range}`;
+                }
+                if (weekInfo) {
+                    weekInfo.textContent = data.week_range;
+                }
+            }
+
+            function showResults(slots, targetCount) {
+                const resultsSection = document.getElementById('resultsSection');
+                const slotsContainer = document.getElementById('slotsContainer');
+                const resultsTitle = document.getElementById('resultsTitle');
+                const resultsSubtitle = document.getElementById('resultsSubtitle');
+                
+                if (!resultsSection || !slotsContainer) return;
+                
+                if (slots.length === 0) {
+                    slotsContainer.innerHTML = `
+                        <div class="no-slots">
+                            <div class="no-slots-icon">😔</div>
+                            <h3>Keine freien Termine gefunden</h3>
+                            <p>In den nächsten 26 Wochen wurden keine verfügbaren Termine gefunden. Versuchen Sie es später erneut oder kontaktieren Sie uns direkt.</p>
+                        </div>
+                    `;
+                    if (resultsTitle) resultsTitle.textContent = 'Keine Termine verfügbar';
+                    if (resultsSubtitle) resultsSubtitle.textContent = '';
+                } else {
+                    if (resultsTitle) resultsTitle.textContent = `${slots.length} Tage mit freien Terminen gefunden`;
+                    if (resultsSubtitle) {
+                        resultsSubtitle.textContent = slots.length >= targetCount ? 
+                            'Alle gewünschten Tage verfügbar!' : 
+                            `${targetCount - slots.length} weitere Tage nicht verfügbar`;
+                    }
+                    
+                    slotsContainer.innerHTML = slots.map(daySlot => {
+                        const weeksFromNow = daySlot.weeks_from_now || 1;
+                        const weeksText = weeksFromNow === 1 ? 'nächste Woche' : `in ${weeksFromNow} Wochen`;
+                        
+                        const timeButtons = daySlot.slots.map(slot => {
+                            return `<a href="${slot.booking_url}" target="_blank" class="time-button">
+                                ${slot.time_only} Uhr
+                            </a>`;
+                        }).join('');
+                        
+                        return `
+                            <div class="slot-card">
+                                <div class="slot-info">
+                                    <div class="slot-date">${daySlot.date_formatted}</div>
+                                    <div class="slot-week-info">${weeksText} • ${daySlot.slots.length} Termin${daySlot.slots.length > 1 ? 'e' : ''} verfügbar</div>
+                                </div>
+                                <div class="slot-times">
+                                    ${timeButtons}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                
+                resultsSection.style.display = 'block';
+            }
+        }
+
+        // Show appointments email form
+        function showAppointmentsEmailForm() {
+            const panel = document.getElementById('appointments-panel');
+            const storedEmail = localStorage.getItem('anna_braun_email') || '';
+            
+            panel.innerHTML = `
+                <div class="control-panel">
+                    <h2>E-Mail-Adresse eingeben</h2>
+                    <p>Geben Sie Ihre E-Mail-Adresse ein, um Ihre gebuchten Termine anzuzeigen</p>
+                    
+                    ${storedEmail ? `
+                        <div class="status-indicator">
+                            <strong>Gespeicherte E-Mail gefunden:</strong> ${storedEmail}
+                        </div>
+                    ` : ''}
+                    
+                    <form class="email-form" onsubmit="submitAppointmentEmail(event)">
+                        <label for="appointmentEmailField">E-Mail-Adresse:</label>
+                        <input type="email" 
+                               id="appointmentEmailField" 
+                               class="email-input"
+                               value="${storedEmail}"
+                               placeholder="ihre.email@example.com" 
+                               required>
+                        
+                        <label class="checkbox-wrapper">
+                            <input type="checkbox" id="rememberAppointmentEmail" ${storedEmail ? 'checked' : ''}>
+                            E-Mail-Adresse für zukünftige Besuche merken
+                        </label>
+                        
+                        <div class="button-group">
+                            <button type="submit" class="btn-primary">
+                                Termine laden
+                            </button>
+                            
+                            ${storedEmail ? `
+                                <button type="button" class="btn-secondary" onclick="clearStoredAppointmentEmail()">
+                                    Gespeicherte E-Mail löschen
+                                </button>
+                            ` : ''}
+                        </div>
+                    </form>
+                </div>
+            `;
+        }
+
+        // Show appointments control panel
+        function showAppointmentsControlPanel() {
+            const panel = document.getElementById('appointments-panel');
+            
+            panel.innerHTML = `
+                <div class="control-panel">
+                    <h2>Ihre gebuchten Termine</h2>
+                    <p>Angemeldet als: <strong>${userEmail}</strong></p>
+                    
+                    <div class="button-group">
+                        <button onclick="loadAppointmentsDirectly()" class="btn-primary">
+                            📅 Termine jetzt laden
+                        </button>
+                        
+                        <button onclick="showAppointmentsEmailForm()" class="btn-secondary">
+                            ✏️ E-Mail-Adresse ändern
+                        </button>
+                    </div>
+                    
+                    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; font-size: 0.8rem; color: var(--gray-medium); text-align: center;">
+                        💡 Tipp: Ihre E-Mail-Adresse wird ${localStorage.getItem('anna_braun_email') ? 'gespeichert' : 'nicht gespeichert'}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Load appointments directly via API
+        async function loadAppointmentsDirectly() {
+            const panel = document.getElementById('appointments-panel');
+            
+            panel.innerHTML = `
+                <div class="loading-overlay">
+                    <div class="loading-spinner"></div>
+                    <p>Termine werden geladen...</p>
+                    <p style="font-size: 0.8rem; color: var(--gray-medium);">Für: ${userEmail}</p>
+                    <button onclick="showAppointmentsControlPanel()" 
+                            style="margin-top: 2rem; padding: 0.5rem 1rem; background: transparent; color: var(--gray-medium); border: 1px solid #e0e0e0; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">
+                        ← Zurück
+                    </button>
+                </div>
+            `;
+            
+            try {
+                console.log('Loading appointments directly for:', userEmail);
+                
+                const response = await fetch(`calendly_api.php?email=${encodeURIComponent(userEmail)}`);
+                console.log('API Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    throw new Error("Server antwortete mit HTML statt JSON");
+                }
+                
+                const data = await response.json();
+                console.log('API Response data:', data);
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Show results directly in this panel with full functionality
+                renderFullAppointments(data.events || [], userEmail);
+                
+            } catch (error) {
+                console.error('Error loading appointments directly:', error);
+                showError(panel, 'Fehler beim Laden der Termine', error.message, [
+                    {
+                        text: 'Erneut versuchen',
+                        onclick: () => loadAppointmentsDirectly()
+                    },
+                    {
+                        text: 'Zurück',
+                        onclick: () => showAppointmentsControlPanel()
+                    },
+                    {
+                        text: 'API testen',
+                        onclick: () => window.open('calendly_api.php?debug=1', '_blank')
+                    }
+                ]);
+            }
+        }
+
+        // Full appointments rendering (integrated from terme.html)
+        
+        // Format date to German
+        function formatDate(dateObj) {
+            const date = dateObj instanceof Date ? dateObj : new Date(dateObj);
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            
+            const today = new Date();
+            const isToday = date.toDateString() === today.toDateString();
+            
+            return {
+                dayFormatted: `${day}.${month}.${year}`,
+                isToday: isToday,
+                dayName: date.toLocaleDateString('de-DE', { weekday: 'short' })
+            };
+        }
+
+        // Format month header
+        function formatMonth(dateObj) {
+            const months = [
+                'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+                'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+            ];
+            const month = months[dateObj.getMonth()];
+            const year = dateObj.getFullYear();
+            
+            return {
+                formatted: `${month} ${year}`,
+                isCurrentMonth: dateObj.getMonth() === new Date().getMonth() && dateObj.getFullYear() === new Date().getFullYear()
+            };
+        }
+
+        // Format created date
+        function formatCreatedDate(isoString) {
+            if (!isoString) return '';
+            const date = new Date(isoString);
+            return date.toLocaleDateString('de-DE', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric'
+            });
+        }
+
+        // Format time
+        function formatTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleTimeString('de-DE', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                timeZone: 'Europe/Vienna'
+            });
+        }
+
+        // Calculate duration in minutes
+        function calculateDuration(start, end) {
+            const startTime = new Date(start);
+            const endTime = new Date(end);
+            return Math.round((endTime - startTime) / (1000 * 60));
+        }
+
+        // Check if appointment is more than 24 hours away
+        function isMoreThan24HoursAway(appointmentTime) {
+            const now = new Date();
+            const appointment = new Date(appointmentTime);
+            const hoursDiff = (appointment - now) / (1000 * 60 * 60);
+            return hoursDiff > 24;
+        }
+
+        // Generate .ics file content
+        function generateICSFile(event) {
+            const startDate = new Date(event.start_time);
+            const endDate = new Date(event.end_time);
+            
+            const formatICSDate = (date) => {
+                return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            };
+
+            const location = event.location?.join_url || event.location?.location || event.location?.type || '';
+            const title = event.name || 'Termin';
+            const description = `Lerncoaching-Termin mit Anna Braun\\n\\nTeilnehmer: ${event.invitee_name || 'Unbekannt'}`;
+
+            const icsContent = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Anna Braun Lerncoaching//Terminkalender//DE',
+                'BEGIN:VEVENT',
+                `UID:${event.id}@einfachlernen.com`,
+                `DTSTART:${formatICSDate(startDate)}`,
+                `DTEND:${formatICSDate(endDate)}`,
+                `SUMMARY:${title}`,
+                `DESCRIPTION:${description}`,
+                location ? `LOCATION:${location}` : '',
+                `DTSTAMP:${formatICSDate(new Date())}`,
+                'END:VEVENT',
+                'END:VCALENDAR'
+            ].filter(line => line).join('\r\n');
+
+            return icsContent;
+        }
+
+        // Download .ics file
+        function downloadICSFile(event) {
+            const icsContent = generateICSFile(event);
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `termin-${event.id}.ics`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Generate Google Calendar URL
+        function generateGoogleCalendarURL(event) {
+            const startDate = new Date(event.start_time);
+            const endDate = new Date(event.end_time);
+            
+            const formatGoogleDate = (date) => {
+                return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            };
+
+            const title = encodeURIComponent(event.name || 'Termin');
+            const dates = `${formatGoogleDate(startDate)}/${formatGoogleDate(endDate)}`;
+            const location = encodeURIComponent(event.location?.join_url || event.location?.location || event.location?.type || '');
+            const details = encodeURIComponent(`Lerncoaching-Termin mit Anna Braun\n\nTeilnehmer: ${event.invitee_name || 'Unbekannt'}`);
+
+            const params = new URLSearchParams({
+                action: 'TEMPLATE',
+                text: title,
+                dates: dates,
+                details: details,
+                location: location,
+                trp: false
+            });
+
+            return `https://calendar.google.com/calendar/render?${params.toString()}`;
+        }
+
+        // Render full appointments view
+        function renderFullAppointments(events, email) {
+            const panel = document.getElementById('appointments-panel');
+            
+            if (!events || events.length === 0) {
+                panel.innerHTML = `
+                    <div class="appointments-view">
+                        <div style="text-align: center; padding: 2rem 0;">
+                            <button onclick="showAppointmentsControlPanel()" class="btn-secondary" style="margin-bottom: 2rem;">
+                                ← Zurück zur Übersicht
+                            </button>
+                        </div>
+                        
+                        <div class="no-appointments">
+                            <div class="no-appointments-icon">📅</div>
+                            <h2>Keine anstehenden Termine</h2>
+                            <p>Sie haben derzeit keine gebuchten Termine im gewählten Zeitraum.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group events by month
+            const eventsByMonth = {};
+            events.forEach(event => {
+                const date = new Date(event.start_time);
+                const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                if (!eventsByMonth[monthKey]) {
+                    eventsByMonth[monthKey] = [];
+                }
+                eventsByMonth[monthKey].push(event);
+            });
+
+            let html = `
+                <div class="appointments-view">
+                    <div style="text-align: center; padding: 1rem 0 2rem;">
+                        <button onclick="showAppointmentsControlPanel()" class="btn-secondary">
+                            ← Zurück zur Übersicht
+                        </button>
+                    </div>
+                    
+                    <div style="background: white; padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 3px 15px var(--shadow); text-align: center;">
+                        <p style="margin: 0; font-size: 1rem; color: var(--gray-dark);">Ihre gebuchten Termine</p>
+                        <div style="color: var(--primary); font-weight: 600; font-size: 1rem;">${email}</div>
+                    </div>
+            `;
+
+            Object.keys(eventsByMonth).sort().forEach(monthKey => {
+                const monthEvents = eventsByMonth[monthKey];
+                const firstEventDate = new Date(monthEvents[0].start_time);
+                const monthInfo = formatMonth(firstEventDate);
+                
+                html += `
+                    <div class="calendar-section">
+                        <div class="date-header">
+                            📅 ${monthInfo.formatted}
+                        </div>
+                `;
+
+                monthEvents.forEach(event => {
+                    const startTime = formatTime(event.start_time);
+                    const endTime = formatTime(event.end_time);
+                    const duration = calculateDuration(event.start_time, event.end_time);
+                    const location = event.location?.join_url || event.location?.location || event.location?.type || '–';
+                    const eventDate = new Date(event.start_time);
+                    const dateInfo = formatDate(eventDate);
+                    const createdDate = formatCreatedDate(event.created_at);
+                    const canReschedule = isMoreThan24HoursAway(event.start_time);
+                    
+                    html += `
+                        <div class="appointment-card">
+                            <div class="appointment-main">
+                                <div class="appointment-date-time">
+                                    <div class="date-info">${dateInfo.dayName} ${dateInfo.dayFormatted}</div>
+                                    <div class="time-badge">${startTime}–${endTime}</div>
+                                </div>
+                                <div class="appointment-title">${event.name || 'Termin'}</div>
+                                <div class="duration">${duration}m</div>
+                            </div>
+
+                            <div class="appointment-details">
+                                <div class="detail-item">
+                                    <div class="detail-icon">🏢</div>
+                                    <div class="detail-text" title="${location}">${location}</div>
+                                </div>
+                                ${event.invitee_name ? `
+                                <div class="detail-item">
+                                    <div class="detail-icon">👤</div>
+                                    <div class="detail-text">${event.invitee_name}</div>
+                                </div>
+                                ` : ''}
+                            </div>
+
+                            <div class="status-badges">
+                                ${event.invitee_status ? `<span class="status-badge status-confirmed">${event.invitee_status}</span>` : ''}
+                                ${createdDate ? `<span class="status-badge status-created">Gebucht am: ${createdDate}</span>` : ''}
+                            </div>
+
+                            <div class="appointment-actions">
+                                <button class="action-button btn-calendar" onclick="downloadICSFile(${JSON.stringify(event).replace(/"/g, '&quot;')})">
+                                    📅 Kalender-Datei
+                                </button>
+                                <a class="action-button btn-calendar" href="${generateGoogleCalendarURL(event)}" target="_blank">
+                                    📅 Google Kalender
+                                </a>
+                                ${canReschedule ? 
+                                    (event.reschedule_url ? 
+                                        `<a class="action-button btn-reschedule" href="${event.reschedule_url}" target="_blank">✏️ Termin verschieben</a>` :
+                                        ''
+                                    ) +
+                                    (event.cancel_url ? 
+                                        `<a class="action-button btn-reschedule" href="${event.cancel_url}" target="_blank">❌ Termin stornieren</a>` :
+                                        ''
+                                    )
+                                    : 
+                                    `<span class="action-button btn-disabled">⏰ Änderungen nicht möglich</span>`
+                                }
+                            </div>
+                            ${!canReschedule ? '<div class="reschedule-notice">Umbuchungen nur bis 24 Stunden vor dem Termin möglich</div>' : ''}
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+            });
+
+            html += '</div>';
+            panel.innerHTML = html;
+        }
+
+        // Submit appointment email
+        function submitAppointmentEmail(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('appointmentEmailField').value.trim();
+            const remember = document.getElementById('rememberAppointmentEmail').checked;
+            
+            if (email && /\S+@\S+\.\S+/.test(email)) {
+                userEmail = email;
+                localStorage.setItem('userEmail', email);
+                
+                if (remember) {
+                    localStorage.setItem('anna_braun_email', email);
+                } else {
+                    localStorage.removeItem('anna_braun_email');
+                }
+                
+                showAppointmentsControlPanel();
+            } else {
+                alert('Bitte geben Sie eine gültige E-Mail-Adresse ein.');
+            }
+        }
+
+        // Clear stored appointment email
+        function clearStoredAppointmentEmail() {
+            localStorage.removeItem('anna_braun_email');
+            localStorage.removeItem('userEmail');
+            userEmail = '';
+            showAppointmentsEmailForm();
+        }
+
+        // Show error in panel
+        function showError(panel, title, message, actions = []) {
+            const actionsHtml = actions.map((action, index) => 
+                `<button class="error-button" onclick="(${action.onclick})()">${action.text}</button>`
+            ).join('');
+
+            panel.innerHTML = `
+                <div class="error-card">
+                    <div class="error-title">${title}</div>
+                    <div class="error-message">${message}</div>
+                    ${message.length > 100 ? `<div class="error-details">${message}</div>` : ''}
+                    <div class="error-actions">
+                        ${actionsHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Open current tab externally
+        function openCurrentTabExternal() {
+            if (currentTab === 'search') {
+                window.open('slots.php', '_blank');
+            } else if (currentTab === 'appointments') {
+                if (userEmail) {
+                    window.open(`termine.html?email=${encodeURIComponent(userEmail)}`, '_blank');
+                } else {
+                    alert('Bitte geben Sie zuerst Ihre E-Mail-Adresse ein.');
+                }
+            }
+        }
+
+        // Event Listeners
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                switchTab(e.target.dataset.tab);
+            });
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const storedEmail = localStorage.getItem('anna_braun_email');
+            if (storedEmail) {
+                userEmail = storedEmail;
+                localStorage.setItem('userEmail', storedEmail);
+                console.log('Restored email from storage:', storedEmail);
+            }
+            
+            loadSearchContent();
+            
+            // Register service worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => {
+                        console.log('SW registered:', registration);
+                    })
+                    .catch(error => {
+                        console.log('SW registration failed:', error);
+                    });
+            }
+        });
+    </script>
+</body>
+</html>

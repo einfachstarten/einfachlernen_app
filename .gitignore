@@ -1,0 +1,6 @@
+# Environment files
+.htaccess
+.env
+
+# Sensitive config files
+config/credentials.php

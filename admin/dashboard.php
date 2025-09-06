@@ -884,6 +884,7 @@ setInterval(() => {
 
 <script>
 async function showCustomerBookings(customerId, email, name) {
+    window.currentBookingCustomerId = customerId; // Store for quick actions
     const modal = document.getElementById('bookingsModal');
     const title = document.getElementById('bookingsTitle');
     const content = document.getElementById('bookingsContent');
@@ -1000,6 +1001,38 @@ function createBookingHTML(event, isFuture) {
     const statusColor = event.status === 'active' ? '#28a745' : '#6c757d';
     const containerClass = isFuture ? 'booking-future' : 'booking-past';
 
+    // Quick Actions nur für zukünftige Termine
+    let quickActions = '';
+    if (isFuture && event.can_cancel) {
+        quickActions = `
+            <div style="margin-top:0.8rem;padding-top:0.8rem;border-top:1px solid #eee;">
+                <strong style="font-size:0.8em;color:#495057;">🔧 Quick Actions:</strong><br>
+                <div style="margin-top:0.5rem;">
+                    ${event.can_cancel ? `
+                        <button onclick="doQuickAction('open_cancel', '${event.id}', '${event.invitee_uuid}')" 
+                                style="background:#dc3545;color:white;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:11px;margin-right:5px;">
+                            ❌ Stornieren
+                        </button>
+                    ` : ''}
+                    ${event.can_reschedule ? `
+                        <button onclick="doQuickAction('open_reschedule', '${event.id}', '${event.invitee_uuid}')" 
+                                style="background:#ffc107;color:#212529;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:11px;margin-right:5px;">
+                            🔄 Verschieben
+                        </button>
+                    ` : ''}
+                    <button onclick="showNoteDialog('${event.id}')" 
+                            style="background:#6c757d;color:white;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:11px;margin-right:5px;">
+                        📝 Notiz
+                    </button>
+                    <button onclick="doQuickAction('send_reminder', '${event.id}')" 
+                            style="background:#17a2b8;color:white;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:11px;">
+                        📧 Erinnerung
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     return `
         <div class="booking-item ${containerClass}">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -1010,6 +1043,7 @@ function createBookingHTML(event, isFuture) {
                         📍 ${event.location}<br>
                         🗓️ Gebucht am: ${event.created_at}
                     </div>
+                    ${quickActions}
                 </div>
                 <div style="text-align:right;">
                     <span style="color:${statusColor};font-weight:bold;font-size:0.8em;">
@@ -1019,6 +1053,74 @@ function createBookingHTML(event, isFuture) {
             </div>
         </div>
     `;
+}
+
+// Quick Action Handler
+async function doQuickAction(action, eventId, inviteeUuid = null) {
+    const currentCustomerId = window.currentBookingCustomerId; // Set when modal opens
+
+    try {
+        const formData = new FormData();
+        formData.append('action', action);
+        formData.append('event_id', eventId);
+        formData.append('customer_id', currentCustomerId || '');
+        if (inviteeUuid) formData.append('invitee_uuid', inviteeUuid);
+
+        const response = await fetch('booking_actions.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.action === 'redirect') {
+                window.open(data.url, '_blank');
+                showQuickActionResult(data.message, 'success');
+            } else {
+                showQuickActionResult(data.message, 'success');
+            }
+        } else {
+            showQuickActionResult(data.error, 'error');
+        }
+    } catch (error) {
+        showQuickActionResult('Aktion fehlgeschlagen: ' + error.message, 'error');
+    }
+}
+
+function showQuickActionResult(message, type) {
+    const color = type === 'success' ? '#28a745' : '#dc3545';
+    const result = document.createElement('div');
+    result.style.cssText = `
+        position:fixed;top:20px;right:20px;background:${color};color:white;
+        padding:12px 16px;border-radius:8px;z-index:10001;
+        box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    `;
+    result.textContent = message;
+    document.body.appendChild(result);
+
+    setTimeout(() => result.remove(), 4000);
+}
+
+function showNoteDialog(eventId) {
+    const note = prompt('Notiz zu diesem Termin hinzufügen:');
+    if (note && note.trim()) {
+        const formData = new FormData();
+        formData.append('action', 'add_note');
+        formData.append('event_id', eventId);
+        formData.append('customer_id', window.currentBookingCustomerId || '');
+        formData.append('note', note.trim());
+
+        fetch('booking_actions.php', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showQuickActionResult(data.message, 'success');
+                } else {
+                    showQuickActionResult(data.error, 'error');
+                }
+            });
+    }
 }
 
 function closeBookingsModal() {

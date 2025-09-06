@@ -16,7 +16,7 @@ return [
     'SMTP_TIMEOUT' => 30,
 
     // PIN Configuration
-    'PIN_DURATION_MINUTES' => 15,  // Production: 525600 (1 year)
+    'PIN_DURATION_MINUTES' => 525600,  // Production: 525600 (1 year)
     'PIN_CLEANUP_EXPIRED' => false
 ];
 ?>

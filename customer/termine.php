@@ -358,7 +358,7 @@ logPageView($customer['id'], 'termine', [
             <a href="index.php" class="back-btn">←</a>
             <div class="header-content">
                 <h1>Meine Termine</h1>
-                <p>Übersicht Ihrer gebuchten Coaching-Termine</p>
+                <p>Übersicht deiner gebuchten Coaching-Termine</p>
             </div>
         </header>
 

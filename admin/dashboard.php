@@ -19,6 +19,87 @@ function getPDO() {
 $pdo = getPDO();
 if(isset($_GET['logout'])){session_destroy();header('Location: login.php');exit;}
 $config = require __DIR__ . '/config.php';
+function getCurrentVersionFromSW() {
+    $sw_path = __DIR__ . '/../sw.js';
+    if (!file_exists($sw_path)) {
+        return 'unknown';
+    }
+    $content = file_get_contents($sw_path);
+    if (preg_match('/const VERSION = [\'\"]v?([0-9]+\.[0-9]+\.[0-9]+)[\'\"];/', $content, $matches)) {
+        return $matches[1];
+    }
+    return 'unknown';
+}
+
+function parseVersion($version) {
+    $parts = explode('.', $version);
+    return [
+        'major' => (int)($parts[0] ?? 0),
+        'minor' => (int)($parts[1] ?? 0),
+        'patch' => (int)($parts[2] ?? 0)
+    ];
+}
+
+function incrementVersion($version, $type) {
+    $parts = parseVersion($version);
+    switch ($type) {
+        case 'major':
+            $parts['major']++;
+            $parts['minor'] = 0;
+            $parts['patch'] = 0;
+            break;
+        case 'minor':
+            $parts['minor']++;
+            $parts['patch'] = 0;
+            break;
+        case 'patch':
+            $parts['patch']++;
+            break;
+    }
+    return "{$parts['major']}.{$parts['minor']}.{$parts['patch']}";
+}
+
+function updateVersionInFiles($new_version) {
+    $sw_path = __DIR__ . '/../sw.js';
+    $manifest_path = __DIR__ . '/../manifest.json';
+
+    try {
+        $sw_content = file_get_contents($sw_path);
+        $sw_content = preg_replace(
+            '/const VERSION = [\'\"]v?[0-9]+\.[0-9]+\.[0-9]+[\'\"];/',
+            "const VERSION = 'v{$new_version}';",
+            $sw_content
+        );
+        file_put_contents($sw_path, $sw_content);
+
+        if (file_exists($manifest_path)) {
+            $manifest = json_decode(file_get_contents($manifest_path), true);
+            $manifest['version'] = $new_version;
+            file_put_contents($manifest_path, json_encode($manifest, JSON_PRETTY_PRINT));
+        }
+
+        return true;
+    } catch (Exception $e) {
+        error_log('Version update failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_version') {
+    $type = $_POST['version_type'] ?? '';
+    if (in_array($type, ['major','minor','patch'], true)) {
+        $current_version = getCurrentVersionFromSW();
+        $new_version = incrementVersion($current_version, $type);
+        if (updateVersionInFiles($new_version)) {
+            header('Location: dashboard.php?success=' . urlencode("Version updated to v{$new_version}"));
+        } else {
+            header('Location: dashboard.php?error=' . urlencode('Version update failed'));
+        }
+    } else {
+        header('Location: dashboard.php?error=' . urlencode('Invalid version type'));
+    }
+    exit;
+}
 if(!empty($config['PIN_CLEANUP_EXPIRED'])) {
     $cleanup = $pdo->prepare("UPDATE customers SET pin = NULL, pin_expires = NULL WHERE pin_expires < NOW() AND pin IS NOT NULL");
     $cleanup->execute();
@@ -72,20 +153,6 @@ unset($c);
     <a href="migrate.php">Database Migration</a>
     <a href="?logout=1">Logout</a>
 </nav>
-<?php
-$app_version = '2.1.0'; // Keep in sync with SW
-$manifest_path = __DIR__ . '/../manifest.json';
-$sw_path = __DIR__ . '/../sw.js';
-
-echo "<div style='background:#e7f3ff;padding:1rem;margin:1rem 0;border:1px solid #0066cc;'>";
-echo "<h4>PWA Version Info</h4>";
-echo "<p><strong>App Version:</strong> $app_version</p>";
-echo "<p><strong>Manifest Last Modified:</strong> " . (file_exists($manifest_path) ? date('Y-m-d H:i:s', filemtime($manifest_path)) : 'Not found') . "</p>";
-echo "<p><strong>Service Worker Last Modified:</strong> " . (file_exists($sw_path) ? date('Y-m-d H:i:s', filemtime($sw_path)) : 'Not found') . "</p>";
-echo "<button onclick='forceClientUpdates()'>🚨 Force Update</button> ";
-echo "<button onclick='clearAllCaches()'>🗑️ Force Clear All Caches</button>";
-echo "</div>";
-?>
 <?php if(!empty($_GET['success'])): ?>
     <div style="background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin-bottom:1rem;">
         ✅ <?=htmlspecialchars($_GET['success'])?>
@@ -116,6 +183,79 @@ echo "</div>";
     </tr>
     <?php endforeach; ?>
 </table>
+
+<?php
+$current_version = getCurrentVersionFromSW();
+$version_parts = parseVersion($current_version);
+$manifest_path = __DIR__ . '/../manifest.json';
+$sw_path = __DIR__ . '/../sw.js';
+?>
+
+<div style='background:#f8f9fa;padding:1.5rem;margin:2rem 0;border:1px solid #dee2e6;border-radius:8px;'>
+    <h3 style='color:#4a90b8;margin-top:0;'>🚀 PWA Version Management</h3>
+    
+    <div style='display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0;'>
+        <div style='background:white;padding:1rem;border-radius:6px;border:1px solid #e9ecef;'>
+            <h4 style='margin:0 0 0.5rem 0;color:#495057;'>Current Version</h4>
+            <div style='font-size:1.5rem;font-weight:bold;color:#28a745;'>v<?= htmlspecialchars($current_version) ?></div>
+            <div style='font-size:0.9rem;color:#6c757d;margin-top:0.5rem;'>
+                Major: <?= $version_parts['major'] ?> • 
+                Minor: <?= $version_parts['minor'] ?> • 
+                Patch: <?= $version_parts['patch'] ?>
+            </div>
+        </div>
+        
+        <div style='background:white;padding:1rem;border-radius:6px;border:1px solid #e9ecef;'>
+            <h4 style='margin:0 0 0.5rem 0;color:#495057;'>File Status</h4>
+            <div style='font-size:0.85rem;'>
+                <div><?= file_exists($sw_path) ? '✅' : '❌' ?> Service Worker: <?= file_exists($sw_path) ? date('Y-m-d H:i', filemtime($sw_path)) : 'Missing' ?></div>
+                <div><?= file_exists($manifest_path) ? '✅' : '❌' ?> Manifest: <?= file_exists($manifest_path) ? date('Y-m-d H:i', filemtime($manifest_path)) : 'Missing' ?></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Version Update Controls -->
+    <form method="POST" style='margin:1rem 0;'>
+        <input type="hidden" name="action" value="update_version">
+        <h4 style='margin:0 0 1rem 0;color:#495057;'>Update Version:</h4>
+        
+        <div style='display:flex;gap:1rem;align-items:center;'>
+            <button type="submit" name="version_type" value="major" 
+                    style='background:#dc3545;color:white;border:none;padding:0.75rem 1rem;border-radius:6px;cursor:pointer;font-weight:bold;'
+                    onclick='return confirm("Major Update (breaking changes)? Current: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'major') ?>")'>
+                🔴 Major Update<br>
+                <small style='font-weight:normal;opacity:0.9;'>v<?= incrementVersion($current_version, 'major') ?></small>
+            </button>
+            
+            <button type="submit" name="version_type" value="minor" 
+                    style='background:#ffc107;color:#212529;border:none;padding:0.75rem 1rem;border-radius:6px;cursor:pointer;font-weight:bold;'
+                    onclick='return confirm("Minor Update (new features)? Current: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'minor') ?>")'>
+                🟡 Minor Update<br>
+                <small style='font-weight:normal;opacity:0.8;'>v<?= incrementVersion($current_version, 'minor') ?></small>
+            </button>
+            
+            <button type="submit" name="version_type" value="patch" 
+                    style='background:#28a745;color:white;border:none;padding:0.75rem 1rem;border-radius:6px;cursor:pointer;font-weight:bold;'
+                    onclick='return confirm("Patch Update (bugfixes)? Current: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'patch') ?>")'>
+                🟢 Patch Update<br>
+                <small style='font-weight:normal;opacity:0.9;'>v<?= incrementVersion($current_version, 'patch') ?></small>
+            </button>
+        </div>
+    </form>
+    
+    <!-- Emergency Controls -->
+    <div style='border-top:1px solid #dee2e6;padding-top:1rem;margin-top:1rem;'>
+        <h5 style='margin:0 0 0.5rem 0;color:#495057;'>Emergency Controls:</h5>
+        <button onclick='forceClientUpdates()' style='background:#e74c3c;color:white;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;margin-right:0.5rem;'>
+            🚨 Force Client Update
+        </button>
+        <button onclick='clearAllCaches()' style='background:#95a5a6;color:white;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;'>
+            🗑️ Clear All Caches
+        </button>
+    </div>
+</div>
+
+<!-- Activities Section bleibt danach -->
 
 <?php
 // ENHANCED ACTIVITY VIEW (replace existing view_activity section)

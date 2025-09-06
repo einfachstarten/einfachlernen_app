@@ -16,7 +16,6 @@ if(isset($_SESSION['customer_last_activity']) && (time() - $_SESSION['customer_l
     header('Location: ../login.php?message=' . urlencode('Session expired. Please login again.'));
     exit;
 }
-$_SESSION['customer_last_activity'] = time();
 
 if(isset($_GET['logout'])){
     $_SESSION = [];
@@ -33,6 +32,22 @@ if(isset($_GET['logout'])){
     exit;
 }
 $customer = require_customer_login();
+
+if(!empty($_SESSION['customer'])) {
+    // Update last activity timestamp
+    $_SESSION['customer_last_activity'] = time();
+
+    // Refresh customer data from database
+    $pdo = getPDO();
+    $customer_id = $_SESSION['customer']['id'];
+    $stmt = $pdo->prepare("SELECT * FROM customers WHERE id = ?");
+    $stmt->execute([$customer_id]);
+    $current_customer = $stmt->fetch(PDO::FETCH_ASSOC);
+    if($current_customer) {
+        $_SESSION['customer'] = $current_customer;
+        $customer = $current_customer;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html>

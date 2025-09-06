@@ -18,21 +18,32 @@ function getPDO() {
 }
 $pdo = getPDO();
 if(isset($_GET['logout'])){session_destroy();header('Location: login.php');exit;}
+$config = require __DIR__ . '/config.php';
+if(!empty($config['PIN_CLEANUP_EXPIRED'])) {
+    $cleanup = $pdo->prepare("UPDATE customers SET pin = NULL, pin_expires = NULL WHERE pin_expires < NOW() AND pin IS NOT NULL");
+    $cleanup->execute();
+}
 $countStmt = $pdo->query('SELECT COUNT(*) FROM customers');
 $total = $countStmt->fetchColumn();
 $customers = $pdo->query('SELECT * FROM customers ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
 foreach($customers as &$c) {
-    if(!empty($c['pin']) && !empty($c['pin_expires'])) {
-        if(strtotime($c['pin_expires']) < time()) {
-            $c['pin_status'] = '<span style="color:red">🔴 PIN Expired (expired: ' . htmlspecialchars($c['pin_expires']) . ')</span>';
+    if(!empty($c['pin']) && !empty($c['pin_expires'])){
+        $expires_timestamp = strtotime($c['pin_expires']);
+        $now = time();
+        if($expires_timestamp < $now){
+            $c['pin_status'] = '<span style="color:#dc3545">🔴 PIN Expired (' . date('H:i', $expires_timestamp) . ')</span>';
             $c['pin_status_raw'] = 'expired';
         } else {
-            $remaining = round((strtotime($c['pin_expires']) - time()) / 60);
-            $c['pin_status'] = '<span style="color:green">🟢 Active (' . $remaining . ' min left, expires: ' . htmlspecialchars($c['pin_expires']) . ')</span>';
+            $remaining_minutes = round(($expires_timestamp - $now) / 60);
+            if($remaining_minutes > 0) {
+                $c['pin_status'] = '<span style="color:#28a745">🟢 PIN Active (' . $remaining_minutes . ' min left)</span>';
+            } else {
+                $c['pin_status'] = '<span style="color:#ffc107">🟡 PIN Expiring (&lt;1 min)</span>';
+            }
             $c['pin_status_raw'] = 'active';
         }
     } else {
-        $c['pin_status'] = '<span style="color:gray">⚪ No PIN sent</span>';
+        $c['pin_status'] = '<span style="color:#6c757d">⚪ No PIN sent</span>';
         $c['pin_status_raw'] = 'none';
     }
 }

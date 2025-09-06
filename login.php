@@ -19,8 +19,10 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
             $error = 'Invalid email or PIN.';
         }else{
             create_customer_session($cust['id']);
-            $upd = $pdo->prepare('UPDATE customers SET pin = NULL, pin_expires = NULL, last_login = NOW() WHERE id = ?');
+            $upd = $pdo->prepare('UPDATE customers SET last_login = NOW() WHERE id = ?');
             $upd->execute([$cust['id']]);
+            $_SESSION['customer'] = $cust;
+            $_SESSION['customer_login_time'] = time();
             header('Location: customer/index.php');
             exit;
         }

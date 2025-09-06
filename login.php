@@ -1,6 +1,8 @@
 <?php
 require __DIR__.'/customer/auth.php';
+require_once __DIR__.'/admin/ActivityLogger.php';
 $pdo = getPDO();
+$logger = new ActivityLogger($pdo);
 $error = '';
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $email = trim($_POST['email'] ?? '');
@@ -17,12 +19,26 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
             $error = 'PIN expired or invalid.';
         }elseif(!password_verify($pin, $cust['pin'])){
             $error = 'Invalid email or PIN.';
+            $_SESSION['pin_attempts'] = ($_SESSION['pin_attempts'] ?? 0) + 1;
+            if (isset($cust['id'])) {
+                $logger->logActivity($cust['id'], 'login_failed', [
+                    'login_method' => 'pin',
+                    'pin_attempts' => $_SESSION['pin_attempts'],
+                    'failure_reason' => 'invalid_pin'
+                ]);
+            }
         }else{
             create_customer_session($cust['id']);
             $upd = $pdo->prepare('UPDATE customers SET last_login = NOW() WHERE id = ?');
             $upd->execute([$cust['id']]);
             $_SESSION['customer'] = $cust;
             $_SESSION['customer_login_time'] = time();
+            $logger->logActivity($cust['id'], 'login', [
+                'login_method' => 'pin',
+                'login_success' => true,
+                'pin_attempts' => $_SESSION['pin_attempts'] ?? 1
+            ]);
+            unset($_SESSION['pin_attempts']);
             header('Location: customer/index.php');
             exit;
         }

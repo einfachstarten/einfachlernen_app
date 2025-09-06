@@ -73,6 +73,33 @@ try {
     } catch (PDOException $e) {
         echo "<p style='color:red'>❌ customer_sessions creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
     }
+
+    // Create customer_activities table if not exists
+    echo "<h3>Creating customer_activities table:</h3>";
+    try {
+        $create_activities = "CREATE TABLE IF NOT EXISTS customer_activities (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            customer_id INT NOT NULL,
+            activity_type VARCHAR(50) NOT NULL,
+            activity_data JSON NULL,
+            ip_address VARCHAR(45) NULL,
+            user_agent TEXT NULL,
+            session_id VARCHAR(64) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+        )";
+        $pdo->exec($create_activities);
+
+        // Indexes for performance
+        $pdo->exec("CREATE INDEX idx_customer_activities_customer ON customer_activities(customer_id)");
+        $pdo->exec("CREATE INDEX idx_customer_activities_type ON customer_activities(activity_type)");
+        $pdo->exec("CREATE INDEX idx_customer_activities_date ON customer_activities(created_at)");
+        $pdo->exec("CREATE INDEX idx_customer_activities_customer_date ON customer_activities(customer_id, created_at)");
+
+        echo "<p style='color:green'>✅ customer_activities table ready</p>";
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ customer_activities creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
     
     // Verify final schema
     echo "<h3>Final Schema Verification:</h3>";

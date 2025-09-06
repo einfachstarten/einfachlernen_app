@@ -9,6 +9,7 @@ mb_http_output('UTF-8');
 session_start();
 $config = require __DIR__ . '/config.php';
 $duration_minutes = $config['PIN_DURATION_MINUTES'] ?? 15;
+require_once __DIR__ . '/ActivityLogger.php';
 
 echo "<!DOCTYPE html><html><head><title>Send PIN Debug</title></head><body>";
 echo "<h1>DEBUG: send_pin.php</h1>";
@@ -136,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
     echo "<p>Processing customer ID: $cid</p>";
 
     $pdo = getPDO();
+    $logger = new ActivityLogger($pdo);
 
     echo "<h3>Database Schema Verification</h3>";
     try {
@@ -187,6 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
         $pin,
         $expires
     );
+    $mail_result = $smtp_success;
 
     if ($smtp_success) {
         echo "<div style='background:#d4edda;color:#155724;padding:1.5rem;border-radius:8px;margin:1rem 0;'>";
@@ -215,6 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
                    'Content-Type: text/plain; charset=UTF-8';
 
         $fallback_result = mail($cust['email'], $subject, $fallback_message, $headers);
+        $mail_result = $fallback_result;
 
         if ($fallback_result) {
             echo "<div style='background:#d1ecf1;color:#0c5460;padding:1rem;border-radius:8px;margin:1rem 0;'>";
@@ -234,6 +238,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
             echo "<p><a href='dashboard.php?error=" . urlencode('All email methods failed for ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
         }
     }
+
+    $logger->logActivity($cid, 'pin_request', [
+        'pin_generation_method' => 'admin_sent',
+        'email_sent' => $mail_result,
+        'pin_expires_at' => $expires,
+        'requested_by_admin' => $_SESSION['admin']
+    ]);
 
 } else {
     echo "<h3 style='color:red'>Invalid Request</h3>";

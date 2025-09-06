@@ -615,6 +615,11 @@ $conversion_rates = [
                 <?php endif; ?>
             </div>
         </div>
+        <h2>📊 Service Analytics (Last <?= $days ?> days)</h2>
+        <div id="serviceAnalytics">Service Analytics werden geladen...</div>
+
+        <h2>📈 Weekly Capacity Overview</h2>
+        <div id="weeklyCapacity">Kapazitätsplanung wird geladen...</div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -772,6 +777,168 @@ $conversion_rates = [
                 }
             }, 500);
         });
+    </script>
+    <script>
+    // Calendly Analytics laden
+    document.addEventListener('DOMContentLoaded', function() {
+        loadServiceAnalytics(<?= $days ?>);
+        loadWeeklyCapacity();
+    });
+
+    async function loadServiceAnalytics(days) {
+        try {
+            const response = await fetch(`calendly_analytics.php?type=service_stats&days=` + days);
+            const data = await response.json();
+
+            if (data.success) {
+                displayServiceAnalytics(data);
+            } else {
+                document.getElementById('serviceAnalytics').innerHTML =
+                    '<p style="color:red;">❌ ' + data.error + '</p>';
+            }
+        } catch (error) {
+            document.getElementById('serviceAnalytics').innerHTML =
+                '<p style="color:red;">❌ Fehler beim Laden der Service Analytics</p>';
+        }
+    }
+
+    async function loadWeeklyCapacity() {
+        try {
+            const response = await fetch('calendly_analytics.php?type=weekly_capacity');
+            const data = await response.json();
+
+            if (data.success) {
+                displayWeeklyCapacity(data);
+            } else {
+                document.getElementById('weeklyCapacity').innerHTML =
+                    '<p style="color:red;">❌ ' + data.error + '</p>';
+            }
+        } catch (error) {
+            document.getElementById('weeklyCapacity').innerHTML =
+                '<p style="color:red;">❌ Fehler beim Laden der Kapazitätsplanung</p>';
+        }
+    }
+
+    function displayServiceAnalytics(data) {
+        let html = `
+            <div style='background:#f8f9fa;padding:1rem;border-radius:8px;margin-bottom:1rem;'>
+                <div style='display:flex;justify-content:space-between;margin-bottom:1rem;'>
+                    <div style='text-align:center;'>
+                        <h3 style='color:#28a745;margin:0;'>${data.total_bookings}</h3>
+                        <small>Gesamtbuchungen</small>
+                    </div>
+                    <div style='text-align:center;'>
+                        <h3 style='color:#17a2b8;margin:0;'>€${data.total_revenue}</h3>
+                        <small>Gesamtumsatz</small>
+                    </div>
+                    <div style='text-align:center;'>
+                        <h3 style='color:#ffc107;margin:0;'>€${data.avg_booking_value}</h3>
+                        <small>⌀ Buchungswert</small>
+                    </div>
+                </div>
+            </div>
+
+            <table style='width:100%;border-collapse:collapse;'>
+                <tr style='background:#4a90b8;color:white;'>
+                    <th style='padding:0.8rem;text-align:left;'>Service</th>
+                    <th style='padding:0.8rem;text-align:center;'>Buchungen</th>
+                    <th style='padding:0.8rem;text-align:center;'>Anteil</th>
+                    <th style='padding:0.8rem;text-align:right;'>Umsatz</th>
+                </tr>
+        `;
+
+        Object.entries(data.services).forEach(([service, stats]) => {
+            const barWidth = stats.percentage;
+            html += `
+                <tr style='border-bottom:1px solid #ddd;'>
+                    <td style='padding:0.8rem;'>
+                        <strong>${service}</strong>
+                        <div style='background:#e9ecef;height:6px;margin-top:4px;border-radius:3px;'>
+                            <div style='background:#28a745;height:100%;width:${barWidth}%;border-radius:3px;'></div>
+                        </div>
+                    </td>
+                    <td style='padding:0.8rem;text-align:center;'>${stats.count}</td>
+                    <td style='padding:0.8rem;text-align:center;'>${stats.percentage}%</td>
+                    <td style='padding:0.8rem;text-align:right;font-weight:bold;'>€${stats.revenue}</td>
+                </tr>
+            `;
+        });
+
+        html += '</table>';
+        document.getElementById('serviceAnalytics').innerHTML = html;
+    }
+
+    function displayWeeklyCapacity(data) {
+        let html = `
+            <div style='background:#f8f9fa;padding:1rem;border-radius:8px;margin-bottom:1rem;'>
+                <div style='display:flex;justify-content:space-between;'>
+                    <div style='text-align:center;'>
+                        <h3 style='color:#17a2b8;margin:0;'>€${data.total_upcoming_revenue}</h3>
+                        <small>Kommender Umsatz</small>
+                    </div>
+                    <div style='text-align:center;'>
+                        <h3 style='color:#28a745;margin:0;'>${data.average_capacity}%</h3>
+                        <small>⌀ Auslastung</small>
+                    </div>
+                </div>
+            </div>
+
+            <table style='width:100%;border-collapse:collapse;'>
+                <tr style='background:#4a90b8;color:white;'>
+                    <th style='padding:0.8rem;text-align:left;'>Woche</th>
+                    <th style='padding:0.8rem;text-align:center;'>Auslastung</th>
+                    <th style='padding:0.8rem;text-align:center;'>Gebucht/Max</th>
+                    <th style='padding:0.8rem;text-align:right;'>Umsatz</th>
+                    <th style='padding:0.8rem;text-align:center;'>Status</th>
+                </tr>
+        `;
+
+        data.weeks.forEach(week => {
+            const statusColor = week.status === 'full' ? '#dc3545' :
+                               week.status === 'medium' ? '#ffc107' : '#28a745';
+            const statusText = week.status === 'full' ? 'Voll' :
+                              week.status === 'medium' ? 'Mittel' : 'Frei';
+
+            html += `
+                <tr style='border-bottom:1px solid #ddd;'>
+                    <td style='padding:0.8rem;'>
+                        <strong>Woche ${week.week_number}</strong><br>
+                        <small>${week.week_start} - ${week.week_end}</small>
+                    </td>
+                    <td style='padding:0.8rem;text-align:center;'>
+                        <div style='background:#e9ecef;height:20px;border-radius:10px;position:relative;'>
+                            <div style='background:${statusColor};height:100%;width:${week.capacity_percentage}%;border-radius:10px;'></div>
+                            <span style='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:12px;font-weight:bold;'>
+                                ${week.capacity_percentage}%
+                            </span>
+                        </div>
+                    </td>
+                    <td style='padding:0.8rem;text-align:center;'>${week.booked_slots}/${week.max_capacity}</td>
+                    <td style='padding:0.8rem;text-align:right;font-weight:bold;'>€${week.revenue}</td>
+                    <td style='padding:0.8rem;text-align:center;'>
+                        <span style='background:${statusColor};color:white;padding:2px 8px;border-radius:12px;font-size:11px;'>
+                            ${statusText}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</table>';
+
+        const lowWeeks = data.weeks.filter(w => w.status === 'low');
+        if (lowWeeks.length > 0) {
+            html += `
+                <div style='background:#fff3cd;padding:1rem;border-radius:8px;margin-top:1rem;border-left:4px solid #ffc107;'>
+                    <strong>💡 Marketing-Empfehlung:</strong><br>
+                    Wochen mit niedriger Auslastung: ${lowWeeks.map(w => w.week_number).join(', ')}. 
+                    Erwägen Sie gezielte Marketing-Aktionen oder Sonderangebote.
+                </div>
+            `;
+        }
+
+        document.getElementById('weeklyCapacity').innerHTML = html;
+    }
     </script>
 </body>
 </html>

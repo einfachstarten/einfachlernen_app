@@ -1,42 +1,87 @@
 <?php
+// Enable debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 mb_internal_encoding('UTF-8');
 mb_http_output('UTF-8');
+
 session_start();
-if(empty($_SESSION['admin'])){header('Location: login.php');exit;}
-function getPDO(){
+
+echo "<!DOCTYPE html><html><head><title>Send PIN Debug</title></head><body>";
+echo "<h1>DEBUG: send_pin.php</h1>";
+echo "<p>Script started at: " . date('Y-m-d H:i:s') . "</p>";
+echo "<p>Request method: " . ($_SERVER['REQUEST_METHOD'] ?? 'CLI') . "</p>";
+echo "<p>POST data received:</p><pre>";
+var_dump($_POST);
+echo "</pre>";
+echo "<h3>Session Check</h3>";
+if (empty($_SESSION['admin'])) {
+    echo "<p style='color:red'>❌ No admin session found</p>";
+    echo "<p>Redirecting to login.php...</p>";
+    echo "<p><a href='login.php'>Manual redirect if needed</a></p>";
+    header('Location: login.php');
+    exit;
+} else {
+    echo "<p style='color:green'>✅ Admin session OK: " . htmlspecialchars($_SESSION['admin']) . "</p>";
+}
+
+echo "<h3>Database Connection</h3>";
+function getPDO() {
+    echo "<p>Attempting database connection...</p>";
     $config = require __DIR__ . '/config.php';
-    try{
-        return new PDO(
+    echo "<p>Config loaded successfully</p>";
+    try {
+        $pdo = new PDO(
             "mysql:host={$config['DB_HOST']};dbname={$config['DB_NAME']};charset=utf8mb4",
             $config['DB_USER'],
             $config['DB_PASS'],
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
-    }catch(PDOException $e){
-        die('DB connection failed: '.htmlspecialchars($e->getMessage()));
+        echo "<p style='color:green'>✅ Database connected successfully</p>";
+        return $pdo;
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ Database connection failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+        die('</body></html>');
     }
 }
-if($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])){
+
+echo "<h3>Request Processing</h3>";
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
+    echo "<p style='color:green'>✅ Valid POST request with customer_id</p>";
     $cid = (int)$_POST['customer_id'];
+    echo "<p>Processing customer ID: $cid</p>";
+
     $pdo = getPDO();
+
+    echo "<h3>Customer Lookup</h3>";
     $stmt = $pdo->prepare('SELECT email, first_name FROM customers WHERE id = ?');
     $stmt->execute([$cid]);
     $cust = $stmt->fetch(PDO::FETCH_ASSOC);
-    if(!$cust){
-        echo "<h2 style='color:red'>❌ Customer not found</h2>";
-        echo "<p><a href='dashboard.php?error=".urlencode('Customer not found')."'>← Back to Dashboard</a></p>";
+
+    if (!$cust) {
+        echo "<p style='color:red'>❌ Customer not found with ID: $cid</p>";
+        echo "<p><a href='dashboard.php?error=" . urlencode('Customer not found') . "'>← Back to Dashboard</a></p>";
         exit;
     }
 
+    echo "<p style='color:green'>✅ Customer found: " . htmlspecialchars($cust['email']) . " (" . htmlspecialchars($cust['first_name']) . ")</p>";
+
+    echo "<h3>PIN Generation</h3>";
     $pin = sprintf('%06d', random_int(100000, 999999));
+    echo "<p>Generated PIN: <strong>$pin</strong></p>";
+
     $pin_hash = password_hash($pin, PASSWORD_DEFAULT);
     $expires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+    echo "<p>PIN expires at: $expires</p>";
+
+    echo "<h3>Database Update</h3>";
     $upd = $pdo->prepare('UPDATE customers SET pin = ?, pin_expires = ? WHERE id = ?');
-    $upd->execute([$pin_hash, $expires, $cid]);
+    $result = $upd->execute([$pin_hash, $expires, $cid]);
+    echo "<p>Database update result: " . ($result ? '✅ SUCCESS' : '❌ FAILED') . "</p>";
 
-    // TODO: Implement rate limiting - max 3 PIN requests per hour per email
-    // TODO: Log PIN generation attempts for security monitoring
-
+    // Build email
+    echo "<h3>Email Preparation</h3>";
     $subject = 'Ihr Login-Code für Anna Braun Lerncoaching';
 
     $message = "Liebe/r {$cust['first_name']},\n\n";
@@ -56,6 +101,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])){
     $message .= "Web: www.einfachlernen.jetzt\n";
     $message .= "Diese E-Mail wurde automatisch generiert.";
 
+    echo "<p>Email recipient: " . htmlspecialchars($cust['email']) . "</p>";
+    echo "<p>Email subject: " . htmlspecialchars($subject) . "</p>";
+
     $headers = 'From: Anna Braun Lerncoaching <info@einfachlernen.jetzt>' . "\r\n" .
                'Reply-To: info@einfachlernen.jetzt' . "\r\n" .
                'Return-Path: info@einfachlernen.jetzt' . "\r\n" .
@@ -69,38 +117,39 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])){
                'MIME-Version: 1.0' . "\r\n" .
                'Organization: Anna Braun Lerncoaching';
 
+    echo "<h3>Email Sending</h3>";
+    echo "<p>Calling mail() function...</p>";
     $mail_result = mail($cust['email'], $subject, $message, $headers);
+    echo "<p>mail() returned: " . ($mail_result ? '✅ TRUE' : '❌ FALSE') . "</p>";
 
-    if($mail_result){
-        echo "<h2 style='color:green'>✅ E-Mail erfolgreich versendet</h2>";
-        echo "<p><strong>Empfänger:</strong> " . htmlspecialchars($cust['email']) . "</p>";
-        echo "<p><strong>Login-Code:</strong> <code style='background:#f0f0f0;padding:5px;'>$pin</code></p>";
-        echo "<p><strong>Gültig bis:</strong> " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr</p>";
-        echo "<div style='background:#d4edda;padding:15px;border-radius:5px;margin:15px 0;'>";
-        echo "<strong>Nächste Schritte:</strong><br>";
-        echo "1. E-Mail im Posteingang prüfen (auch Spam-Ordner)<br>";
-        echo "2. Login-Code verwenden: <a href='/einfachlernen/login.php' target='_blank'>Zum Login</a><br>";
-        echo "3. Bei Problemen: info@einfachlernen.jetzt kontaktieren";
+    if ($mail_result) {
+        echo "<div style='background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin:1rem 0;'>";
+        echo "<h2>✅ PIN Successfully Sent</h2>";
+        echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
+        echo "<p><strong>PIN:</strong> <code>$pin</code> (valid for 15 minutes)</p>";
+        echo "<p><strong>Expires:</strong> $expires</p>";
         echo "</div>";
+        echo "<p><a href='dashboard.php?success=" . urlencode('PIN sent to ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
     } else {
-        echo "<h2 style='color:red'>❌ E-Mail Versand fehlgeschlagen</h2>";
-        echo "<p><strong>Empfänger:</strong> " . htmlspecialchars($cust['email']) . "</p>";
+        echo "<div style='background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;margin:1rem 0;'>";
+        echo "<h2>❌ Email Sending Failed</h2>";
+        echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
         $error = error_get_last();
-        if($error){
-            echo "<p><strong>Fehlermeldung:</strong> " . htmlspecialchars($error['message']) . "</p>";
-        }
+        echo "<p><strong>Last PHP Error:</strong> " . ($error['message'] ?? 'No error details') . "</p>";
         echo "<p><strong>Server:</strong> " . $_SERVER['SERVER_NAME'] . "</p>";
-        echo "<div style='background:#f8d7da;padding:15px;border-radius:5px;margin:15px 0;'>";
-        echo "Mögliche Ursachen:<br>";
-        echo "1. Server blockiert den Mailversand<br>";
-        echo "2. Ungültige Empfängeradresse<br>";
-        echo "3. Spamfilter hat die E-Mail abgelehnt";
         echo "</div>";
-        echo "<p><a href='dashboard.php?error=" . urlencode('Email sending failed') . "'>← Back to Dashboard</a></p>";
+        echo "<p><a href='dashboard.php?error=" . urlencode('Email sending failed for ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
     }
-    exit;
+
+} else {
+    echo "<h3 style='color:red'>Invalid Request</h3>";
+    echo "<p>Request method: " . ($_SERVER['REQUEST_METHOD'] ?? 'CLI') . "</p>";
+    echo "<p>customer_id present: " . (isset($_POST['customer_id']) ? 'YES (' . $_POST['customer_id'] . ')' : 'NO') . "</p>";
+    echo "<p>All POST data:</p><pre>";
+    var_dump($_POST);
+    echo "</pre>";
+    echo "<p><a href='dashboard.php?error=" . urlencode('Invalid request - missing customer_id') . "'>← Back to Dashboard</a></p>";
 }
-echo "<h2 style='color:red'>❌ Invalid request</h2>";
-echo "<p><a href='dashboard.php?error=" . urlencode('Invalid request') . "'>← Back to Dashboard</a></p>";
-exit;
+
+echo "</body></html>";
 ?>

@@ -4,3 +4,4 @@
 
 # Sensitive config files
 config/credentials.php
+admin/logs/

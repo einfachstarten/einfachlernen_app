@@ -63,26 +63,47 @@ function api_get($url, $token) {
 }
 
 try {
-    $sixMonthsAgo = (new DateTimeImmutable('-6 months', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
+    // Get bookings for last 12 months and next 6 months
+    $twelveMonthsAgo = (new DateTimeImmutable('-12 months', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
     $sixMonthsAhead = (new DateTimeImmutable('+6 months', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
 
-    $url = 'https://api.calendly.com/scheduled_events?' . http_build_query([
-        'organization' => $ORG_URI,
-        'invitee_email' => $customer['email'],
-        'min_start_time' => $sixMonthsAgo,
-        'max_start_time' => $sixMonthsAhead,
-        'count' => 100
-    ]);
+    // Pagination through all events
+    $all_events = [];
+    $page_token = null;
+    $max_pages = 10; // Safety limit: max 1000 events
+    $page_count = 0;
 
-    list($data, $err) = api_get($url, $CALENDLY_TOKEN);
-    if ($err) {
-        throw new Exception("Calendly API Error: $err");
-    }
+    do {
+        $params = [
+            'organization' => $ORG_URI,
+            'invitee_email' => $customer['email'],
+            'min_start_time' => $twelveMonthsAgo,
+            'max_start_time' => $sixMonthsAhead,
+            'count' => 100
+        ];
 
-    $events = $data['collection'] ?? [];
+        if ($page_token) {
+            $params['page_token'] = $page_token;
+        }
 
+        $url = 'https://api.calendly.com/scheduled_events?' . http_build_query($params);
+
+        list($data, $err) = api_get($url, $CALENDLY_TOKEN);
+        if ($err) {
+            throw new Exception("Calendly API Error: $err");
+        }
+
+        $events = $data['collection'] ?? [];
+        $all_events = array_merge($all_events, $events);
+
+        $page_token = $data['pagination']['next_page_token'] ?? null;
+        $page_count++;
+
+    } while ($page_token && $page_count < $max_pages);
+
+    // Format events for admin view
     $formatted_events = [];
-    foreach ($events as $event) {
+    foreach ($all_events as $event) {
         $start_dt = new DateTimeImmutable($event['start_time']);
         $end_dt = new DateTimeImmutable($event['end_time']);
 
@@ -95,17 +116,21 @@ try {
             'location' => $event['location']['location'] ?? 'Online',
             'created_at' => (new DateTimeImmutable($event['created_at']))->format('d.m.Y'),
             'is_future' => $start_dt > new DateTimeImmutable(),
-            'calendly_url' => "https://calendly.com/events/{$event['uri']}"
+            'calendly_url' => "https://calendly.com/events/{$event['uri']}",
+            'start_timestamp' => $start_dt->getTimestamp()
         ];
     }
 
-    usort($formatted_events, fn($a, $b) => strcmp($b['start_time'], $a['start_time']));
+    // Sort by start time (newest first)
+    usort($formatted_events, fn($a, $b) => $b['start_timestamp'] <=> $a['start_timestamp']);
 
     echo json_encode([
         'success' => true,
         'customer' => $customer,
         'events' => $formatted_events,
-        'total_events' => count($formatted_events)
+        'total_events' => count($formatted_events),
+        'pages_fetched' => $page_count,
+        'has_more_potential' => $page_count >= $max_pages
     ]);
 
 } catch (Exception $e) {

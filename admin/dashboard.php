@@ -860,6 +860,7 @@ async function showCustomerBookings(customerId, email, name) {
         <div style="text-align:center;padding:2rem;">
             <div style="width:30px;height:30px;border:3px solid #f3f3f3;border-top:3px solid #4a90b8;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>
             <p style="margin-top:1rem;">Termine werden geladen...</p>
+            <small style="color:#6c757d;">Alle verfügbaren Termine der letzten 12 Monate</small>
         </div>
     `;
 
@@ -891,15 +892,22 @@ function displayBookings(data) {
         return;
     }
 
+    // Separate future and past events
     const futureEvents = events.filter(e => e.is_future);
     const pastEvents = events.filter(e => !e.is_future);
 
-    let html = `<div style="margin-bottom:1rem;color:#6c757d;font-size:0.9em;">
-        <strong>Insgesamt:</strong> ${events.length} Termine | 
-        <strong>Kommend:</strong> ${futureEvents.length} | 
-        <strong>Vergangen:</strong> ${pastEvents.length}
-    </div>`;
+    let html = `
+        <div style="margin-bottom:1rem;color:#6c757d;font-size:0.9em;background:#f8f9fa;padding:0.8rem;border-radius:4px;">
+            <strong>📊 Terminübersicht:</strong><br>
+            <strong>Insgesamt:</strong> ${events.length} Termine |
+            <strong>Kommend:</strong> ${futureEvents.length} |
+            <strong>Vergangen:</strong> ${pastEvents.length}
+            ${data.pages_fetched ? `<br><small>📄 ${data.pages_fetched} API-Seiten geladen</small>` : ''}
+            ${data.has_more_potential ? '<br><small style="color:#dc3545;">⚠️ Möglicherweise weitere Termine verfügbar</small>' : ''}
+        </div>
+    `;
 
+    // Show future events first
     if (futureEvents.length > 0) {
         html += '<h4 style="color:#28a745;margin:1rem 0 0.5rem 0;">🔜 Kommende Termine</h4>';
         futureEvents.forEach(event => {
@@ -907,18 +915,50 @@ function displayBookings(data) {
         });
     }
 
+    // Show past events - all, but collapsible
     if (pastEvents.length > 0) {
-        html += '<h4 style="color:#6c757d;margin:1.5rem 0 0.5rem 0;">📅 Vergangene Termine</h4>';
-        pastEvents.slice(0, 10).forEach(event => {
+        const showFirst = 5;
+        const shouldCollapse = pastEvents.length > showFirst;
+
+        html += `
+            <h4 style="color:#6c757d;margin:1.5rem 0 0.5rem 0;">
+                📅 Vergangene Termine (${pastEvents.length})
+            </h4>
+        `;
+
+        pastEvents.slice(0, showFirst).forEach(event => {
             html += createBookingHTML(event, false);
         });
 
-        if (pastEvents.length > 10) {
-            html += `<p style="color:#6c757d;font-style:italic;margin-top:0.5rem;">... und ${pastEvents.length - 10} weitere vergangene Termine</p>`;
+        if (shouldCollapse) {
+            html += `
+                <div id="morePastEvents" style="display:none;">
+                    ${pastEvents.slice(showFirst).map(event => createBookingHTML(event, false)).join('')}
+                </div>
+                <button onclick="toggleMorePastEvents()" id="toggleMoreBtn" 
+                        style="background:#6c757d;color:white;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;margin-top:0.5rem;width:100%;">
+                    📅 ${pastEvents.length - showFirst} weitere vergangene Termine anzeigen
+                </button>
+            `;
         }
     }
 
     content.innerHTML = html;
+}
+
+function toggleMorePastEvents() {
+    const moreDiv = document.getElementById('morePastEvents');
+    const toggleBtn = document.getElementById('toggleMoreBtn');
+
+    if (moreDiv.style.display === 'none') {
+        moreDiv.style.display = 'block';
+        toggleBtn.textContent = '🔼 Vergangene Termine ausblenden';
+        toggleBtn.style.background = '#dc3545';
+    } else {
+        moreDiv.style.display = 'none';
+        toggleBtn.textContent = `📅 ${moreDiv.children.length} weitere vergangene Termine anzeigen`;
+        toggleBtn.style.background = '#6c757d';
+    }
 }
 
 function createBookingHTML(event, isFuture) {

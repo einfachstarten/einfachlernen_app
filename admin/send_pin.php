@@ -38,6 +38,27 @@ function logPinSendError(string $customer_email, string $error_type, string $det
     error_log($log_entry, 3, $log_dir . '/pin_send_errors.log');
 }
 
+function logEmailDelivery($customer_email, $success, $details = '') {
+    $log_dir = __DIR__ . '/logs';
+    if (!is_dir($log_dir)) {
+        mkdir($log_dir, 0777, true);
+    }
+
+    $log_entry = [
+        'timestamp' => date('Y-m-d H:i:s'),
+        'email'     => $customer_email,
+        'success'   => $success,
+        'details'   => $details,
+        'ip'        => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+        'user_agent'=> $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
+    ];
+
+    $log_file = $log_dir . '/email_delivery.log';
+    $log_line = json_encode($log_entry) . PHP_EOL;
+
+    file_put_contents($log_file, $log_line, FILE_APPEND | LOCK_EX);
+}
+
 function getPDO(): PDO
 {
     $config = require __DIR__ . '/config.php';
@@ -79,276 +100,55 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
         $mail->Port = $config['SMTP_PORT'];
         $mail->Timeout = $config['SMTP_TIMEOUT'];
 
+        // Basic Settings
         $mail->setFrom($config['SMTP_FROM_EMAIL'], $config['SMTP_FROM_NAME']);
         $mail->addAddress($to_email, $to_name);
         $mail->addReplyTo($config['SMTP_FROM_EMAIL'], $config['SMTP_FROM_NAME']);
 
-        $mail->isHTML(true);
-        $mail->Subject = '🔐 Dein Login-Code für Anna Braun Lerncoaching';
+        // Enhanced Anti-Spam Headers
+        $mail->addCustomHeader('Return-Path', $config['SMTP_FROM_EMAIL']);
+        $mail->addCustomHeader('X-Mailer', 'Anna Braun Lerncoaching System v1.0');
+        $mail->addCustomHeader('X-Priority', '3 (Normal)');
+        $mail->addCustomHeader('Importance', 'Normal');
+        $mail->addCustomHeader('X-Auto-Response-Suppress', 'All');
+        $mail->addCustomHeader('X-Entity-ID', 'anna-braun-lerncoaching');
+        $mail->addCustomHeader('X-Originating-IP', $_SERVER['SERVER_ADDR'] ?? 'unknown');
+        $mail->addCustomHeader('List-Unsubscribe', '<mailto:termine@einfachstarten.jetzt?subject=Unsubscribe>');
+        $mail->addCustomHeader('Organization', 'Anna Braun Lerncoaching');
+
+        // Unique Message ID
+        $mail->MessageID = '<ab_' . uniqid() . '.' . time() . '@einfachstarten.jetzt>';
+
+        $mail->isHTML(false);
+        $mail->Subject = 'Anmelde-Code für Ihren Termin';
         $mail->CharSet = 'UTF-8';
 
-        // FIXED: Proper date formatting
-        $expiry_timestamp = strtotime($expires);
-        $formatted_expiry = date('d.m.Y \\u\\m H:i', $expiry_timestamp) . ' Uhr';
+        // Optimized Content
+        $message = "Hallo {$to_name},\n\n";
+        $message .= "hier ist Ihr angeforderter Anmelde-Code für das Kundenkonto:\n\n";
+        $message .= "Anmelde-Code: {$pin}\n";
+        $message .= "Gültig bis: " . date('d.m.Y \u\m H:i', strtotime($expires)) . " Uhr\n\n";
+        $message .= "Zur Anmeldung: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
+        $message .= "Dieser Code ist {$duration_minutes} Minuten gültig.\n";
+        $message .= "Falls Sie diesen Code nicht angefordert haben, können Sie diese Nachricht ignorieren.\n\n";
+        $message .= "Bei Fragen erreichen Sie uns unter termine@einfachstarten.jetzt\n\n";
+        $message .= "Freundliche Grüße\n";
+        $message .= "Anna Braun\n";
+        $message .= "Lerncoaching\n\n";
+        $message .= "---\n";
+        $message .= "Anna Braun Lerncoaching\n";
+        $message .= "E-Mail: termine@einfachstarten.jetzt\n";
+        $message .= "Web: www.einfachlernen.jetzt";
 
-        // FIXED: Dynamic duration calculation
-        $now = time();
-        $expiry_time = strtotime($expires);
-        $duration_seconds = $expiry_time - $now;
-
-        if ($duration_seconds < 3600) {
-            $duration_text = round($duration_seconds / 60) . ' Minuten';
-        } elseif ($duration_seconds < 86400) {
-            $duration_text = round($duration_seconds / 3600) . ' Stunden';
-        } else {
-            $days = round($duration_seconds / 86400);
-            if ($days > 30) {
-                $months = round($days / 30);
-                $duration_text = $months . ' Monat' . ($months > 1 ? 'e' : '');
-            } else {
-                $duration_text = $days . ' Tag' . ($days > 1 ? 'e' : '');
-            }
-        }
-
-        $html_message = '
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dein Login-Code</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            background-color: #f8fafc;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        .email-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 30px 20px;
-            text-align: center;
-            color: white;
-        }
-        .email-header h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 700;
-        }
-        .email-header .subtitle {
-            margin: 8px 0 0 0;
-            font-size: 16px;
-            opacity: 0.9;
-        }
-        .email-body {
-            padding: 40px 30px;
-            color: #2d3748;
-        }
-        .greeting {
-            font-size: 20px;
-            margin: 0 0 20px 0;
-            color: #2d3748;
-        }
-        .message {
-            font-size: 16px;
-            margin: 0 0 30px 0;
-            color: #4a5568;
-        }
-        .pin-container {
-            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 25px;
-            text-align: center;
-            margin: 30px 0;
-        }
-        .pin-label {
-            font-size: 14px;
-            color: #718096;
-            margin: 0 0 10px 0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
-        }
-        .pin-code {
-            font-size: 36px;
-            font-weight: 800;
-            color: #667eea;
-            font-family: "Courier New", monospace;
-            letter-spacing: 8px;
-            margin: 0;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .pin-expiry {
-            font-size: 14px;
-            color: #e53e3e;
-            margin: 15px 0 0 0;
-            font-weight: 500;
-        }
-        .login-button {
-            display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-decoration: none;
-            padding: 16px 32px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            margin: 20px 0;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-            transition: all 0.3s ease;
-        }
-        .login-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-        }
-        .info-box {
-            background: #fff5f5;
-            border-left: 4px solid #fc8181;
-            padding: 16px 20px;
-            margin: 30px 0;
-            border-radius: 0 8px 8px 0;
-        }
-        .info-box p {
-            margin: 0;
-            color: #744210;
-            font-size: 14px;
-        }
-        .footer {
-            background: #f7fafc;
-            padding: 30px;
-            text-align: center;
-            border-top: 1px solid #e2e8f0;
-        }
-        .footer .signature {
-            color: #2d3748;
-            font-size: 16px;
-            margin-bottom: 20px;
-        }
-        .footer .contact {
-            color: #718096;
-            font-size: 14px;
-            line-height: 1.8;
-        }
-        .footer a {
-            color: #667eea;
-            text-decoration: none;
-        }
-        .footer a:hover {
-            text-decoration: underline;
-        }
-        .brain-icon {
-            font-size: 48px;
-            margin-bottom: 10px;
-        }
-        @media (max-width: 600px) {
-            .email-container {
-                margin: 10px;
-                border-radius: 8px;
-            }
-            .email-body {
-                padding: 30px 20px;
-            }
-            .pin-code {
-                font-size: 28px;
-                letter-spacing: 4px;
-            }
-            .login-button {
-                display: block;
-                text-align: center;
-                margin: 20px auto;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="email-container">
-        <div class="email-header">
-            <div class="brain-icon">🧠</div>
-            <h1>Anna Braun Lerncoaching</h1>
-            <div class="subtitle">Dein personalisierter Lernbereich</div>
-        </div>
-        
-        <div class="email-body">
-            <h2 class="greeting">Lieber ' . htmlspecialchars($to_name) . ',</h2>
-            
-            <p class="message">
-                hier ist dein Login-Code für das Kundenkonto und den personalisierten Lernbereich!
-            </p>
-            
-            <div class="pin-container">
-                <p class="pin-label">Dein Login-Code</p>
-                <p class="pin-code">' . $pin . '</p>
-                <p class="pin-expiry">⏰ Gültig bis ' . $formatted_expiry . '</p>
-            </div>
-            
-            <div style="text-align: center;">
-                <a href="https://einfachstarten.jetzt/einfachlernen/login.php" class="login-button">
-                    🚀 Jetzt einloggen
-                </a>
-            </div>
-            
-            <div class="info-box">
-                <p><strong>Wichtiger Hinweis:</strong> Der PIN ist bis ' . $formatted_expiry . ' gültig. Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail einfach ignorieren.</p>
-            </div>
-            
-            <p style="color: #718096; font-size: 14px; margin-top: 30px;">
-                Bei Fragen stehe ich dir gerne zur Verfügung! Einfach auf diese E-Mail antworten.
-            </p>
-        </div>
-        
-        <div class="footer">
-            <div class="signature">
-                <strong>Liebe Grüße</strong><br>
-                Anna Braun<br>
-                <em>Ganzheitliches Lerncoaching</em>
-            </div>
-            
-            <div class="contact">
-                <strong>Anna Braun Lerncoaching</strong><br>
-                E-Mail: <a href="mailto:termine@einfachstarten.jetzt">termine@einfachstarten.jetzt</a><br>
-                Web: <a href="https://www.einfachlernen.jetzt">www.einfachlernen.jetzt</a><br><br>
-                <small>Diese E-Mail wurde automatisch generiert.</small>
-            </div>
-        </div>
-    </div>
-</body>
-</html>';
-
-        // UPDATED Plain text version
-        $plain_message = "Lieber {$to_name},\n\n";
-        $plain_message .= "hier ist dein Login-Code für das Kundenkonto und den personalisierten Lernbereich!\n\n";
-        $plain_message .= "🔐 Dein Login-Code: {$pin}\n";
-        $plain_message .= "⏰ Gültig bis: {$formatted_expiry}\n\n";
-        $plain_message .= "► Zum Login: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
-        $plain_message .= "Der PIN ist bis {$formatted_expiry} gültig.\n";
-        $plain_message .= "Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail ignorieren.\n\n";
-        $plain_message .= "Bei Fragen stehe ich dir gerne zur Verfügung.\n\n";
-        $plain_message .= "Liebe Grüße\n";
-        $plain_message .= "Anna Braun\n";
-        $plain_message .= "Ganzheitliches Lerncoaching\n\n";
-        $plain_message .= "---\n";
-        $plain_message .= "Anna Braun Lerncoaching\n";
-        $plain_message .= "E-Mail: termine@einfachstarten.jetzt\n";
-        $plain_message .= "Web: www.einfachlernen.jetzt\n";
-        $plain_message .= "Diese E-Mail wurde automatisch generiert.";
-
-        $mail->Body = $html_message;
-        $mail->AltBody = $plain_message;
+        $mail->Body = $message;
 
         $mail->send();
+        logEmailDelivery($to_email, true, 'Email sent successfully');
         return [true, ''];
     } catch (Exception $e) {
-        return [false, $mail->ErrorInfo ?: $e->getMessage()];
+        $error_message = $mail->ErrorInfo ?: $e->getMessage();
+        logEmailDelivery($to_email, false, $error_message);
+        return [false, $error_message];
     }
 }
 
@@ -384,10 +184,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
 
     if ($mail_sent) {
         $logger->logActivity($cid, 'pin_email_sent', [
-            'email_template' => 'premium_html',
-            'email_format' => 'html_with_fallback',
+            'email_template' => 'plain_text_v1',
+            'email_format' => 'plain_text',
             'pin_expires_at' => $expires,
-            'email_subject' => '🔐 Dein Login-Code für Anna Braun Lerncoaching'
+            'email_subject' => 'Anmelde-Code für Ihren Termin'
         ]);
     }
 
@@ -407,4 +207,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
 }
 
 respond(false, 'Invalid request - missing customer_id');
-

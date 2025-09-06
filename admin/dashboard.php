@@ -85,6 +85,42 @@ function updateVersionInFiles($new_version) {
     }
 }
 
+
+function getEmailDeliveryStats($days = 7) {
+    $log_file = __DIR__ . '/logs/email_delivery.log';
+    if (!file_exists($log_file)) {
+        return ['total' => 0, 'success' => 0, 'failed' => 0, 'success_rate' => 0];
+    }
+
+    $cutoff = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+    $total = 0;
+    $success = 0;
+
+    $handle = fopen($log_file, 'r');
+    if ($handle) {
+        while (($line = fgets($handle)) !== false) {
+            $entry = json_decode(trim($line), true);
+            if ($entry && $entry['timestamp'] >= $cutoff) {
+                $total++;
+                if ($entry['success']) {
+                    $success++;
+                }
+            }
+        }
+        fclose($handle);
+    }
+
+    $failed = $total - $success;
+    $success_rate = $total > 0 ? round(($success / $total) * 100, 1) : 0;
+
+    return [
+        'total' => $total,
+        'success' => $success,
+        'failed' => $failed,
+        'success_rate' => $success_rate
+    ];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_version') {
     $type = $_POST['version_type'] ?? '';
     if (in_array($type, ['major','minor','patch'], true)) {
@@ -129,6 +165,7 @@ foreach($customers as &$c) {
     }
 }
 unset($c);
+$email_stats = getEmailDeliveryStats(7);
 ?>
 <!DOCTYPE html>
 <html>
@@ -255,6 +292,35 @@ $sw_path = __DIR__ . '/../sw.js';
     </div>
 </div>
 
+
+<div style='background:#f8f9fa;padding:1.5rem;margin:2rem 0;border:1px solid #dee2e6;border-radius:8px;'>
+    <h3 style='color:#4a90b8;margin-top:0;'>📧 Email Delivery Monitor</h3>
+    <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin:1rem 0;'>
+        <div style='background:white;padding:1rem;border-radius:6px;border:1px solid #e9ecef;text-align:center;'>
+            <div style='font-size:1.5rem;font-weight:bold;color:#495057;'><?= $email_stats['total'] ?></div>
+            <div style='font-size:0.9rem;color:#6c757d;'>Gesamt (7 Tage)</div>
+        </div>
+        <div style='background:white;padding:1rem;border-radius:6px;border:1px solid #e9ecef;text-align:center;'>
+            <div style='font-size:1.5rem;font-weight:bold;color:#28a745;'><?= $email_stats['success'] ?></div>
+            <div style='font-size:0.9rem;color:#6c757d;'>Erfolgreich</div>
+        </div>
+        <div style='background:white;padding:1rem;border-radius:6px;border:1px solid #e9ecef;text-align:center;'>
+            <div style='font-size:1.5rem;font-weight:bold;color:#dc3545;'><?= $email_stats['failed'] ?></div>
+            <div style='font-size:0.9rem;color:#6c757d;'>Fehlgeschlagen</div>
+        </div>
+        <div style='background:white;padding:1rem;border-radius:6px;border:1px solid #e9ecef;text-align:center;'>
+            <div style='font-size:1.5rem;font-weight:bold;color:<?= $email_stats['success_rate'] >= 90 ? '#28a745' : ($email_stats['success_rate'] >= 70 ? '#ffc107' : '#dc3545') ?>;'>
+                <?= $email_stats['success_rate'] ?>%
+            </div>
+            <div style='font-size:0.9rem;color:#6c757d;'>Erfolgsrate</div>
+        </div>
+    </div>
+    <div style='margin-top:1rem;'>
+        <a href='email_delivery_log.php' style='background:#52b3a4;color:white;padding:0.5rem 1rem;text-decoration:none;border-radius:4px;font-size:0.9rem;'>
+            📊 Vollständiges Delivery-Log anzeigen
+        </a>
+    </div>
+</div>
 <!-- Activities Section bleibt danach -->
 
 <?php

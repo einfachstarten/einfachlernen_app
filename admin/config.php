@@ -13,6 +13,10 @@ return [
     'SMTP_FROM_EMAIL' => 'termine@einfachstarten.jetzt',
     'SMTP_FROM_NAME' => 'Anna Braun Lerncoaching',
     'SMTP_ENCRYPTION' => 'tls',
-    'SMTP_TIMEOUT' => 30
+    'SMTP_TIMEOUT' => 30,
+
+    // PIN Configuration
+    'PIN_DURATION_MINUTES' => 15,  // Production: 525600 (1 year)
+    'PIN_CLEANUP_EXPIRED' => false
 ];
 ?>

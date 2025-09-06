@@ -7,6 +7,8 @@ mb_internal_encoding('UTF-8');
 mb_http_output('UTF-8');
 
 session_start();
+$config = require __DIR__ . '/config.php';
+$duration_minutes = $config['PIN_DURATION_MINUTES'] ?? 15;
 
 echo "<!DOCTYPE html><html><head><title>Send PIN Debug</title></head><body>";
 echo "<h1>DEBUG: send_pin.php</h1>";
@@ -57,6 +59,7 @@ use PHPMailer\PHPMailer\Exception;
 
 function sendSMTPEmail($to_email, $to_name, $pin, $expires) {
     $config = require __DIR__ . '/config.php';
+    $duration_minutes = $config['PIN_DURATION_MINUTES'] ?? 15;
 
     echo "<h4>Professional SMTP Email Sending</h4>";
     echo "<p><strong>SMTP Server:</strong> " . $config['SMTP_HOST'] . ":" . $config['SMTP_PORT'] . "</p>";
@@ -98,7 +101,7 @@ function sendSMTPEmail($to_email, $to_name, $pin, $expires) {
         $message .= "🔐 Ihr Login-Code: {$pin}\n";
         $message .= "⏰ Gültig bis: " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr\n\n";
         $message .= "► Zum Login: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
-        $message .= "Aus Sicherheitsgründen ist dieser Code nur 15 Minuten gültig.\n";
+        $message .= "Aus Sicherheitsgründen ist dieser Code nur {$duration_minutes} Minuten gültig.\n";
         $message .= "Falls Sie diesen Code nicht angefordert haben, können Sie diese E-Mail ignorieren.\n\n";
         $message .= "Bei Fragen stehen wir Ihnen gerne zur Verfügung.\n\n";
         $message .= "Mit freundlichen Grüßen\n";
@@ -167,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
     echo "<p>Generated PIN: <strong>$pin</strong></p>";
 
     $pin_hash = password_hash($pin, PASSWORD_DEFAULT);
-    $expires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+    $expires = date('Y-m-d H:i:s', strtotime("+{$duration_minutes} minutes"));
     echo "<p>PIN expires at: $expires</p>";
 
     echo "<h3>Database Update</h3>";
@@ -189,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
         echo "<div style='background:#d4edda;color:#155724;padding:1.5rem;border-radius:8px;margin:1rem 0;'>";
         echo "<h2>✅ PIN Successfully Sent via SMTP</h2>";
         echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
-        echo "<p><strong>PIN:</strong> <code style='background:#fff;padding:3px 6px;border-radius:3px;'>$pin</code> (valid for 15 minutes)</p>";
+        echo "<p><strong>PIN:</strong> <code style='background:#fff;padding:3px 6px;border-radius:3px;'>$pin</code> (valid for {$duration_minutes} minutes)</p>";
         echo "<p><strong>Expires:</strong> " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr</p>";
         echo "<p><strong>Method:</strong> World4you SMTP Server</p>";
         echo "<p><strong>From:</strong> termine@einfachstarten.jetzt</p>";

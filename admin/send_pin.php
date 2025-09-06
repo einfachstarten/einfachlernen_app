@@ -46,6 +46,53 @@ function getPDO() {
     }
 }
 
+function sendEmailJS($to_email, $to_name, $subject, $message) {
+    $emailjs_data = [
+        'service_id' => 'service_mskznyd',
+        'template_id' => 'template_c8obahd',
+        'user_id' => 'E7m0JpVn9GC6WNcvF',
+        'template_params' => [
+            'to_email' => $to_email,
+            'to_name' => $to_name,
+            'subject' => $subject,
+            'message' => $message
+        ]
+    ];
+
+    $json_data = json_encode($emailjs_data);
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => [
+                'Content-Type: application/json',
+                'Content-Length: ' . strlen($json_data)
+            ],
+            'content' => $json_data,
+            'timeout' => 30
+        ]
+    ]);
+
+    $response = file_get_contents('https://api.emailjs.com/api/v1.0/email/send', false, $context);
+
+    if ($response === false) {
+        return [false, 'EmailJS API request failed'];
+    }
+
+    $http_code = null;
+    if (isset($http_response_header)) {
+        foreach ($http_response_header as $header) {
+            if (strpos($header, 'HTTP/') === 0) {
+                $parts = explode(' ', $header);
+                $http_code = intval($parts[1]);
+                break;
+            }
+        }
+    }
+
+    return [$http_code === 200, $response];
+}
+
 echo "<h3>Request Processing</h3>";
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
     echo "<p style='color:green'>✅ Valid POST request with customer_id</p>";
@@ -96,12 +143,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
     echo "<p>Database update result: " . ($result ? '✅ SUCCESS' : '❌ FAILED') . "</p>";
 
     // Build email
-    echo "<h3>Email Preparation</h3>";
+    echo "<h3>Email Preparation & Sending</h3>";
+
     $subject = 'Ihr Login-Code für Anna Braun Lerncoaching';
 
+    // Professional email message with proper formatting
     $message = "Liebe/r {$cust['first_name']},\n\n";
     $message .= "Sie haben einen Login-Code für Ihr Kundenkonto angefordert.\n\n";
-    $message .= "🔐 Ihr Login-Code: $pin\n";
+    $message .= "🔐 Ihr Login-Code: {$pin}\n";
     $message .= "⏰ Gültig bis: " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr\n\n";
     $message .= "► Zum Login: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
     $message .= "Aus Sicherheitsgründen ist dieser Code nur 15 Minuten gültig.\n";
@@ -118,42 +167,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
 
     echo "<p>Email recipient: " . htmlspecialchars($cust['email']) . "</p>";
     echo "<p>Email subject: " . htmlspecialchars($subject) . "</p>";
+    echo "<p>Sending via: EmailJS (Anna's Outlook account)</p>";
 
-    $headers = 'From: Anna Braun Lerncoaching <info@einfachlernen.jetzt>' . "\r\n" .
-               'Reply-To: info@einfachlernen.jetzt' . "\r\n" .
-               'Return-Path: info@einfachlernen.jetzt' . "\r\n" .
-               'Message-ID: <' . uniqid() . '.' . time() . '@einfachlernen.jetzt>' . "\r\n" .
-               'Date: ' . date('r') . "\r\n" .
-               'X-Mailer: Anna Braun CMS v1.0' . "\r\n" .
-               'X-Priority: 3 (Normal)' . "\r\n" .
-               'Importance: Normal' . "\r\n" .
-               'Content-Type: text/plain; charset=UTF-8' . "\r\n" .
-               'Content-Transfer-Encoding: 8bit' . "\r\n" .
-               'MIME-Version: 1.0' . "\r\n" .
-               'Organization: Anna Braun Lerncoaching';
+    // Try EmailJS first, fallback to mail() if needed
+    list($emailjs_success, $emailjs_response) = sendEmailJS(
+        $cust['email'],
+        $cust['first_name'],
+        $subject,
+        $message
+    );
 
-    echo "<h3>Email Sending</h3>";
-    echo "<p>Calling mail() function...</p>";
-    $mail_result = mail($cust['email'], $subject, $message, $headers);
-    echo "<p>mail() returned: " . ($mail_result ? '✅ TRUE' : '❌ FALSE') . "</p>";
-
-    if ($mail_result) {
+    if ($emailjs_success) {
         echo "<div style='background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin:1rem 0;'>";
-        echo "<h2>✅ PIN Successfully Sent</h2>";
+        echo "<h2>✅ PIN Successfully Sent via EmailJS</h2>";
         echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
-        echo "<p><strong>PIN:</strong> <code>$pin</code> (valid for 15 minutes)</p>";
-        echo "<p><strong>Expires:</strong> $expires</p>";
+        echo "<p><strong>PIN:</strong> <code>{$pin}</code> (valid for 15 minutes)</p>";
+        echo "<p><strong>Expires:</strong> {$expires}</p>";
+        echo "<p><strong>Method:</strong> EmailJS → Anna's Outlook Account</p>";
+        echo "<p><strong>Deliverability:</strong> High (professional email service)</p>";
         echo "</div>";
-        echo "<p><a href='dashboard.php?success=" . urlencode('PIN sent to ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
+        echo "<p><a href='dashboard.php?success=" . urlencode('PIN sent via EmailJS to ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
     } else {
-        echo "<div style='background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;margin:1rem 0;'>";
-        echo "<h2>❌ Email Sending Failed</h2>";
-        echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
-        $error = error_get_last();
-        echo "<p><strong>Last PHP Error:</strong> " . ($error['message'] ?? 'No error details') . "</p>";
-        echo "<p><strong>Server:</strong> " . $_SERVER['SERVER_NAME'] . "</p>";
+        echo "<div style='background:#fff3cd;color:#856404;padding:1rem;border-radius:5px;margin:1rem 0;'>";
+        echo "<h3>⚠️ EmailJS Failed - Trying Fallback</h3>";
+        echo "<p>EmailJS Error: " . htmlspecialchars($emailjs_response) . "</p>";
         echo "</div>";
-        echo "<p><a href='dashboard.php?error=" . urlencode('Email sending failed for ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
+
+        // Fallback to mail()
+        $headers = 'From: Anna Braun Lerncoaching <info@einfachlernen.jetzt>' . "\r\n" .
+                   'Reply-To: info@einfachlernen.jetzt' . "\r\n" .
+                   'Content-Type: text/plain; charset=UTF-8' . "\r\n" .
+                   'MIME-Version: 1.0';
+
+        $mail_result = mail($cust['email'], $subject, $message, $headers);
+
+        if ($mail_result) {
+            echo "<div style='background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin:1rem 0;'>";
+            echo "<h2>✅ PIN Sent via Fallback (PHP mail)</h2>";
+            echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
+            echo "<p><strong>PIN:</strong> <code>{$pin}</code></p>";
+            echo "<p><strong>Method:</strong> PHP mail() fallback</p>";
+            echo "</div>";
+            echo "<p><a href='dashboard.php?success=" . urlencode('PIN sent via fallback to ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
+        } else {
+            echo "<div style='background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;margin:1rem 0;'>";
+            echo "<h2>❌ Both EmailJS and mail() Failed</h2>";
+            echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
+            echo "<p><strong>EmailJS Error:</strong> " . htmlspecialchars($emailjs_response) . "</p>";
+            $error = error_get_last();
+            echo "<p><strong>mail() Error:</strong> " . ($error['message'] ?? 'Unknown error') . "</p>";
+            echo "</div>";
+            echo "<p><a href='dashboard.php?error=" . urlencode('Email sending failed for ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
+        }
     }
 
 } else {

@@ -46,6 +46,85 @@ function getPDO() {
     }
 }
 
+// Include PHPMailer classes
+require_once __DIR__ . '/phpmailer/Exception.php';
+require_once __DIR__ . '/phpmailer/PHPMailer.php';
+require_once __DIR__ . '/phpmailer/SMTP.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
+
+function sendSMTPEmail($to_email, $to_name, $pin, $expires) {
+    $config = require __DIR__ . '/config.php';
+
+    echo "<h4>Professional SMTP Email Sending</h4>";
+    echo "<p><strong>SMTP Server:</strong> " . $config['SMTP_HOST'] . ":" . $config['SMTP_PORT'] . "</p>";
+    echo "<p><strong>From:</strong> " . $config['SMTP_FROM_EMAIL'] . "</p>";
+    echo "<p><strong>To:</strong> " . htmlspecialchars($to_email) . "</p>";
+
+    $mail = new PHPMailer(true);
+
+    try {
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host = $config['SMTP_HOST'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $config['SMTP_USERNAME'];
+        $mail->Password = $config['SMTP_PASSWORD'];
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port = $config['SMTP_PORT'];
+        $mail->Timeout = $config['SMTP_TIMEOUT'];
+
+        // Enable debug output for troubleshooting (remove in production)
+        $mail->SMTPDebug = SMTP::DEBUG_CONNECTION;
+        $mail->Debugoutput = function($str, $level) {
+            echo "<p style='color: #666; font-size: 0.85em; font-family: monospace;'>SMTP: " . htmlspecialchars(trim($str)) . "</p>";
+        };
+
+        // Recipients
+        $mail->setFrom($config['SMTP_FROM_EMAIL'], $config['SMTP_FROM_NAME']);
+        $mail->addAddress($to_email, $to_name);
+        $mail->addReplyTo($config['SMTP_FROM_EMAIL'], $config['SMTP_FROM_NAME']);
+
+        // Content
+        $mail->isHTML(false); // Send as plain text
+        $mail->Subject = 'Ihr Login-Code für Anna Braun Lerncoaching';
+        $mail->CharSet = 'UTF-8';
+
+        // Professional email content
+        $message = "Liebe/r {$to_name},\n\n";
+        $message .= "Sie haben einen Login-Code für Ihr Kundenkonto angefordert.\n\n";
+        $message .= "🔐 Ihr Login-Code: {$pin}\n";
+        $message .= "⏰ Gültig bis: " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr\n\n";
+        $message .= "► Zum Login: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
+        $message .= "Aus Sicherheitsgründen ist dieser Code nur 15 Minuten gültig.\n";
+        $message .= "Falls Sie diesen Code nicht angefordert haben, können Sie diese E-Mail ignorieren.\n\n";
+        $message .= "Bei Fragen stehen wir Ihnen gerne zur Verfügung.\n\n";
+        $message .= "Mit freundlichen Grüßen\n";
+        $message .= "Anna Braun\n";
+        $message .= "Ganzheitliches Lerncoaching\n\n";
+        $message .= "---\n";
+        $message .= "Anna Braun Lerncoaching\n";
+        $message .= "E-Mail: termine@einfachstarten.jetzt\n";
+        $message .= "Web: www.einfachlernen.jetzt\n";
+        $message .= "Diese E-Mail wurde automatisch generiert.";
+
+        $mail->Body = $message;
+
+        echo "<p>Initiating SMTP connection...</p>";
+        $result = $mail->send();
+
+        echo "<p style='color: green; font-weight: bold;'>✅ Email sent successfully via World4you SMTP</p>";
+        return [true, 'Email sent successfully via SMTP'];
+
+    } catch (Exception $e) {
+        echo "<p style='color: red; font-weight: bold;'>❌ SMTP Error: " . htmlspecialchars($mail->ErrorInfo) . "</p>";
+        echo "<p style='color: red;'>Exception: " . htmlspecialchars($e->getMessage()) . "</p>";
+        return [false, $mail->ErrorInfo];
+    }
+}
+
 
 echo "<h3>Request Processing</h3>";
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
@@ -96,53 +175,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
     $result = $upd->execute([$pin_hash, $expires, $cid]);
     echo "<p>Database update result: " . ($result ? '✅ SUCCESS' : '❌ FAILED') . "</p>";
 
-    // Send email directly via PHP mail(). Temporary until SMTP integration is implemented.
-    echo "<h3>Email Sending</h3>";
+    echo "<h3>Email Sending via World4you SMTP</h3>";
 
-    $subject = 'Ihr Login-Code für Anna Braun Lerncoaching';
-    $message = "Liebe/r {$cust['first_name']},\n\n";
-    $message .= "Sie haben einen Login-Code für Ihr Kundenkonto angefordert.\n\n";
-    $message .= "🔐 Ihr Login-Code: {$pin}\n";
-    $message .= "⏰ Gültig bis: " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr\n\n";
-    $message .= "► Zum Login: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
-    $message .= "Aus Sicherheitsgründen ist dieser Code nur 15 Minuten gültig.\n";
-    $message .= "Falls Sie diesen Code nicht angefordert haben, können Sie diese E-Mail ignorieren.\n\n";
-    $message .= "Bei Fragen stehen wir Ihnen gerne zur Verfügung.\n\n";
-    $message .= "Mit freundlichen Grüßen\n";
-    $message .= "Anna Braun\n";
-    $message .= "Ganzheitliches Lerncoaching\n\n";
-    $message .= "---\n";
-    $message .= "Anna Braun Lerncoaching\n";
-    $message .= "E-Mail: termine@einfachstarten.jetzt\n";
-    $message .= "Web: www.einfachlernen.jetzt";
+    // Try SMTP first
+    list($smtp_success, $smtp_message) = sendSMTPEmail(
+        $cust['email'],
+        $cust['first_name'],
+        $pin,
+        $expires
+    );
 
-    $headers = 'From: Anna Braun Lerncoaching <termine@einfachstarten.jetzt>' . "\r\n" .
-               'Reply-To: termine@einfachstarten.jetzt' . "\r\n" .
-               'Content-Type: text/plain; charset=UTF-8' . "\r\n" .
-               'MIME-Version: 1.0';
-
-    echo "<p>Sending email to: " . htmlspecialchars($cust['email']) . "</p>";
-    echo "<p>Using: PHP mail() function</p>";
-
-    $mail_result = mail($cust['email'], $subject, $message, $headers);
-
-    if($mail_result){
-        echo "<div style='background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin:1rem 0;'>";
-        echo "<h2>✅ PIN Successfully Sent</h2>";
+    if ($smtp_success) {
+        echo "<div style='background:#d4edda;color:#155724;padding:1.5rem;border-radius:8px;margin:1rem 0;'>";
+        echo "<h2>✅ PIN Successfully Sent via SMTP</h2>";
         echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
-        echo "<p><strong>PIN:</strong> <code>$pin</code> (valid for 15 minutes)</p>";
-        echo "<p><strong>Expires:</strong> $expires</p>";
-        echo "<p><strong>Method:</strong> PHP mail() function</p>";
+        echo "<p><strong>PIN:</strong> <code style='background:#fff;padding:3px 6px;border-radius:3px;'>$pin</code> (valid for 15 minutes)</p>";
+        echo "<p><strong>Expires:</strong> " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr</p>";
+        echo "<p><strong>Method:</strong> World4you SMTP Server</p>";
+        echo "<p><strong>From:</strong> termine@einfachstarten.jetzt</p>";
+        echo "<p><strong>Deliverability:</strong> High (professional SMTP)</p>";
         echo "</div>";
-        echo "<p><a href='dashboard.php?success=" . urlencode('PIN sent to ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
+        echo "<p><a href='dashboard.php?success=" . urlencode('PIN sent via SMTP to ' . $cust['email']) . "' class='btn-success'>← Back to Dashboard</a></p>";
+
     } else {
-        echo "<div style='background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;margin:1rem 0;'>";
-        echo "<h2>❌ Email Sending Failed</h2>";
-        echo "<p><strong>Recipient:</strong> " . htmlspecialchars($cust['email']) . "</p>";
-        $error = error_get_last();
-        echo "<p><strong>Error:</strong> " . ($error['message'] ?? 'Unknown mail error') . "</p>";
+        echo "<div style='background:#fff3cd;color:#856404;padding:1.5rem;border-radius:8px;margin:1rem 0;'>";
+        echo "<h3>⚠️ SMTP Failed - Using Fallback</h3>";
+        echo "<p><strong>SMTP Error:</strong> " . htmlspecialchars($smtp_message) . "</p>";
+        echo "<p>Attempting fallback to basic mail() function...</p>";
         echo "</div>";
-        echo "<p><a href='dashboard.php?error=" . urlencode('Email sending failed for ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
+
+        // Fallback to mail()
+        $subject = 'Ihr Login-Code für Anna Braun Lerncoaching';
+        $fallback_message = "Liebe/r {$cust['first_name']},\n\nIhr Login-Code: {$pin}\nGültig bis: " . date('d.m.Y H:i', strtotime($expires)) . "\n\nAnna Braun Lerncoaching";
+        $headers = 'From: Anna Braun Lerncoaching <termine@einfachstarten.jetzt>' . "\r\n" .
+                   'Reply-To: termine@einfachstarten.jetzt' . "\r\n" .
+                   'Content-Type: text/plain; charset=UTF-8';
+
+        $fallback_result = mail($cust['email'], $subject, $fallback_message, $headers);
+
+        if ($fallback_result) {
+            echo "<div style='background:#d1ecf1;color:#0c5460;padding:1rem;border-radius:8px;margin:1rem 0;'>";
+            echo "<h3>📧 PIN Sent via Fallback</h3>";
+            echo "<p><strong>Method:</strong> PHP mail() function</p>";
+            echo "<p><strong>Note:</strong> Lower deliverability than SMTP</p>";
+            echo "</div>";
+            echo "<p><a href='dashboard.php?success=" . urlencode('PIN sent via fallback to ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
+        } else {
+            echo "<div style='background:#f8d7da;color:#721c24;padding:1.5rem;border-radius:8px;margin:1rem 0;'>";
+            echo "<h2>❌ Both SMTP and Fallback Failed</h2>";
+            echo "<p><strong>SMTP Error:</strong> " . htmlspecialchars($smtp_message) . "</p>";
+            $mail_error = error_get_last();
+            echo "<p><strong>mail() Error:</strong> " . ($mail_error['message'] ?? 'Unknown error') . "</p>";
+            echo "<p><strong>Recommendation:</strong> Check SMTP credentials or contact World4you support</p>";
+            echo "</div>";
+            echo "<p><a href='dashboard.php?error=" . urlencode('All email methods failed for ' . $cust['email']) . "'>← Back to Dashboard</a></p>";
+        }
     }
 
 } else {

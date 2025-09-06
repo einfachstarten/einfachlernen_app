@@ -63,12 +63,7 @@ if(!empty($_SESSION['customer'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="manifest" href="../manifest.json">
-    <meta name="theme-color" content="#2563eb">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="<?php echo SITE_NAME; ?>">
-    <link rel="apple-touch-icon" href="../icons/icon-192x192.png">
+    <meta name="theme-color" content="#4a90b8">
     <title>Mein Bereich - Anna Braun Lerncoaching</title>
     
     <style>
@@ -176,30 +171,8 @@ if(!empty($_SESSION['customer'])) {
             font-size: 0.9rem;
         }
 
-        .header-actions {
-            margin-left: auto;
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
-
-        .install-btn {
-            background: transparent;
-            border: 2px solid #2563eb;
-            color: #2563eb;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .install-btn:hover {
-            background: #2563eb;
-            color: white;
-        }
-
         .logout-btn {
+            margin-left: auto;
             background: rgba(255, 255, 255, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.3);
             color: white;
@@ -684,8 +657,7 @@ if(!empty($_SESSION['customer'])) {
             .app-content {
                 padding: 1rem;
             }
-            .logout-btn,
-            .install-btn {
+            .logout-btn {
                 padding: 0.4rem 0.8rem;
                 font-size: 0.8rem;
             }
@@ -697,17 +669,12 @@ if(!empty($_SESSION['customer'])) {
                 align-items: flex-start;
                 gap: 1rem;
             }
-
-            .header-actions {
-                width: 100%;
-            }
-
-            .logout-btn,
-            .install-btn {
-                flex: 1;
+            
+            .logout-btn {
+                align-self: stretch;
                 justify-content: center;
             }
-
+            
             .welcome-section {
                 padding: 1rem;
             }
@@ -811,12 +778,9 @@ if(!empty($_SESSION['customer'])) {
                     <h1>Willkommen, <?= htmlspecialchars($customer['first_name']) ?>!</h1>
                     <p>Ihr persönlicher Lernbereich</p>
                 </div>
-                <div class="header-actions">
-                    <button id="install-app-btn" class="install-btn" style="display: none;">📱 App installieren</button>
-                    <a href="?logout=1" class="logout-btn" onclick="return confirm('Möchten Sie sich wirklich abmelden?')">
-                        <span>🚪</span> Abmelden
-                    </a>
-                </div>
+                <a href="?logout=1" class="logout-btn" onclick="return confirm('Möchten Sie sich wirklich abmelden?')">
+                    <span>🚪</span> Abmelden
+                </a>
             </div>
         </header>
 
@@ -1059,45 +1023,6 @@ if(!empty($_SESSION['customer'])) {
                 }, { passive: true });
             });
         });
-    </script>
-
-    <script>
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('../sw.js')
-                .then(reg => console.log('SW registered: ', reg))
-                .catch(err => console.log('SW registration failed: ', err));
-        });
-    }
-
-    let deferredPrompt;
-    const installBtn = document.getElementById('install-app-btn');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        if (installBtn) {
-            installBtn.style.display = 'block';
-        }
-    });
-
-    installBtn?.addEventListener('click', async () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') {
-                installBtn.style.display = 'none';
-            }
-            deferredPrompt = null;
-        }
-    });
-
-    window.addEventListener('appinstalled', () => {
-        if (installBtn) {
-            installBtn.style.display = 'none';
-        }
-    });
     </script>
 </body>
 </html>

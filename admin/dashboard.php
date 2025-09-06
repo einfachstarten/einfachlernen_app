@@ -179,6 +179,33 @@ $email_stats = getEmailDeliveryStats(7);
         table{width:100%;border-collapse:collapse}
         th,td{border:1px solid #ccc;padding:.4em;text-align:left}
         th{background:#4a90b8;color:#fff}
+
+        /* Today's Schedule Styles */
+        .schedule-item-now {
+            animation: pulse 2s infinite;
+            background: #fff5f5 !important;
+        }
+
+        .schedule-item-soon {
+            background: #fffbf0 !important;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+
+        .schedule-refresh-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -324,6 +351,14 @@ function testManualUpdate() {
     }, 2000);
 }
 </script>
+
+<?php
+// Today's Schedule Widget - HINZUFÜGEN
+echo "<div style='background:#f8f9fa;padding:1rem;margin:1rem 0;border:1px solid #dee2e6;border-radius:5px;'>";
+echo "<h4 style='color:#495057;margin-bottom:1rem;'>📅 Heutiger Terminplan <button class='schedule-refresh-btn' onclick='refreshTodaysSchedule()'>⟳ Aktualisieren</button></h4>";
+echo "<div id='todaysSchedule'>Termine werden geladen...</div>";
+echo "</div>";
+?>
 
 <div style='background:#f8f9fa;padding:1.5rem;margin:2rem 0;border:1px solid #dee2e6;border-radius:8px;'>
     <h3 style='color:#4a90b8;margin-top:0;'>📧 Email Delivery Monitor</h3>
@@ -995,6 +1030,92 @@ document.getElementById('bookingsModal').addEventListener('click', function(e) {
         closeBookingsModal();
     }
 });
+</script>
+<script>
+// Today's Schedule functionality
+async function loadTodaysSchedule() {
+    try {
+        const response = await fetch('todays_schedule.php');
+        const data = await response.json();
+
+        if (data.success) {
+            displayTodaysSchedule(data);
+        } else {
+            document.getElementById('todaysSchedule').innerHTML =
+                `<span style="color:#dc3545;">❌ ${data.error}</span>`;
+        }
+    } catch (error) {
+        document.getElementById('todaysSchedule').innerHTML =
+            `<span style="color:#dc3545;">❌ Fehler beim Laden der Termine</span>`;
+    }
+}
+
+function displayTodaysSchedule(data) {
+    const container = document.getElementById('todaysSchedule');
+
+    if (data.events.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center;color:#6c757d;padding:1rem;">
+                🌅 Heute keine Termine geplant<br>
+                <small>Zeit für Administrative Aufgaben!</small>
+            </div>
+        `;
+        return;
+    }
+
+    let html = `
+        <div style="margin-bottom:0.8rem;font-size:0.9em;color:#6c757d;">
+            <strong>Heute (${data.today}):</strong> ${data.total_events} Termine | 
+            <strong>Noch kommend:</strong> ${data.upcoming_today} | 
+            <strong>Aktuelle Zeit:</strong> ${data.current_time}
+        </div>
+    `;
+
+    data.events.forEach(event => {
+        const statusClass = event.is_now ? 'border-left:4px solid #dc3545' : 
+                           event.is_soon ? 'border-left:4px solid #ffc107' : 
+                           'border-left:4px solid #28a745';
+
+        const statusIcon = event.is_now ? '🔴 JETZT' : 
+                          event.is_soon ? '🟡 BALD' : '🟢';
+
+        html += `
+            <div style="background:white;padding:0.8rem;margin-bottom:0.5rem;border-radius:4px;${statusClass};">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="flex:1;">
+                        <strong style="color:#495057;">${event.start_time} - ${event.end_time}</strong>
+                        <span style="margin-left:0.5rem;color:#6c757d;">(${event.duration})</span>
+                        <div style="margin-top:0.3rem;">
+                            <strong>${event.name}</strong><br>
+                            <span style="color:#6c757d;">👤 ${event.invitee_name}</span>
+                            ${event.invitee_email ? `<br><small style="color:#6c757d;">📧 ${event.invitee_email}</small>` : ''}
+                        </div>
+                    </div>
+                    <div style="text-align:right;font-size:0.8em;">
+                        <span>${statusIcon}</span><br>
+                        <small style="color:#6c757d;">📍 ${event.location}</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// Auto-load schedule when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadTodaysSchedule();
+
+    // Refresh every 5 minutes
+    setInterval(loadTodaysSchedule, 5 * 60 * 1000);
+});
+
+// Refresh button for manual update
+function refreshTodaysSchedule() {
+    document.getElementById('todaysSchedule').innerHTML = 'Termine werden aktualisiert...';
+    loadTodaysSchedule();
+}
 </script>
 <script>
 function confirmDelete(email) {

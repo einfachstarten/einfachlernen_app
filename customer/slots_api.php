@@ -4,6 +4,10 @@ require __DIR__.'/auth.php';
 // Ensure user is authenticated
 $customer = require_customer_login();
 
+require_once __DIR__ . '/../admin/ActivityLogger.php';
+$pdo = getPDO();
+$logger = new ActivityLogger($pdo);
+
 // Session timeout check
 if(isset($_SESSION['customer_last_activity']) && (time() - $_SESSION['customer_last_activity'] > 14400)){
     destroy_customer_session();
@@ -81,16 +85,63 @@ function build_calendly_link($baseUrl, $startIso, $customer_email) {
     return $baseUrl . $sep . 'month=' . rawurlencode($month) . '&email=' . rawurlencode($customer_email);
 }
 
+function logBookingError($customer_id, $service_slug, $error_type, $error_details) {
+    require_once __DIR__ . '/../admin/ActivityLogger.php';
+    $pdo = getPDO();
+    $logger = new ActivityLogger($pdo);
+
+    $logger->logActivity($customer_id, 'booking_failed', [
+        'service_slug' => $service_slug,
+        'failure_reason' => $error_type,
+        'error_details' => $error_details,
+        'api_error' => true
+    ]);
+}
+
 // Validate input
 $service_slug = $_GET['service'] ?? '';
 $target_count = min(10, max(1, intval($_GET['count'] ?? 3)));
 $current_week = intval($_GET['week'] ?? 0);
 
+// Log API call
+$logger->logActivity($customer['id'], 'slots_api_called', [
+    'service_slug' => $service_slug,
+    'target_count' => $target_count,
+    'current_week' => $current_week,
+    'api_endpoint' => $_SERVER['REQUEST_URI'] ?? '',
+    'calendly_token_configured' => !empty($CALENDLY_TOKEN) && $CALENDLY_TOKEN !== 'PASTE_YOUR_TOKEN_HERE'
+]);
+
+if (isset($services[$service_slug])) {
+    $logger->logActivity($customer['id'], 'service_viewed', [
+        'service_slug' => $service_slug,
+        'service_name' => $services[$service_slug]['name'],
+        'service_duration' => $services[$service_slug]['dur'],
+        'calendly_uri' => $services[$service_slug]['uri']
+    ]);
+}
+
+if (!empty($service_slug) && isset($services[$service_slug])) {
+    $logger->logActivity($customer['id'], 'booking_initiated', [
+        'service_slug' => $service_slug,
+        'service_name' => $services[$service_slug]['name'],
+        'week_offset' => $current_week,
+        'slots_requested' => $target_count
+    ]);
+}
+
 if (!isset($services[$service_slug])) {
+    logBookingError($customer['id'], $service_slug, 'unknown_service', 'Service not found');
     json_error('Unbekannter Service: ' . $service_slug);
 }
 
-if (!$CALENDLY_TOKEN || !$ORG_URI) {
+if ($CALENDLY_TOKEN === 'PASTE_YOUR_TOKEN_HERE') {
+    logBookingError($customer['id'], $service_slug, 'api_not_configured', 'Calendly token not set');
+    json_error('API not configured', 500);
+}
+
+if (!$ORG_URI) {
+    logBookingError($customer['id'], $service_slug, 'org_uri_missing', 'Organization URI not configured');
     json_error('Server-Konfigurationsfehler', 500);
 }
 
@@ -98,7 +149,7 @@ try {
     $service = $services[$service_slug];
     $slots_by_date = [];
     $found_dates = [];
-    
+
     // Calculate time range for current week
     $base = new DateTimeImmutable("tomorrow midnight", new DateTimeZone("UTC"));
     $start = $base->modify("+$current_week week");
@@ -110,9 +161,32 @@ try {
          . "&end_time=" . $end->format("Y-m-d\TH:i:s\Z")
          . "&timezone=Europe/Vienna";
 
-    $data = call_api($url, $CALENDLY_TOKEN);
-    
-    foreach ($data["collection"] ?? [] as $slot) {
+    $api_start = microtime(true);
+    $api_response = call_api($url, $CALENDLY_TOKEN);
+    $api_response_time = microtime(true) - $api_start;
+
+    if (empty($api_response)) {
+        logBookingError($customer['id'], $service_slug, 'api_timeout', 'Calendly API timeout or connection error');
+        json_error('Booking service temporarily unavailable');
+    }
+
+    if ($api_response && !empty($api_response['collection'])) {
+        $logger->logActivity($customer['id'], 'booking_completed', [
+            'service_slug' => $service_slug,
+            'slots_found' => count($api_response['collection']),
+            'api_success' => true,
+            'calendly_response_time' => $api_response_time
+        ]);
+    } else {
+        $logger->logActivity($customer['id'], 'booking_failed', [
+            'service_slug' => $service_slug,
+            'failure_reason' => 'no_slots_available',
+            'api_response_empty' => empty($api_response),
+            'error_details' => $api_response['error'] ?? 'unknown'
+        ]);
+    }
+
+    foreach ($api_response["collection"] ?? [] as $slot) {
         if (!isset($slot["start_time"])) continue;
         
         $startIso = $slot["start_time"];
@@ -169,6 +243,7 @@ try {
     ]);
     
 } catch (Throwable $e) {
+    logBookingError($customer['id'], $service_slug, 'exception', $e->getMessage());
     error_log("Secure Slots API Error: " . $e->getMessage());
     json_error('Interner Server-Fehler', 500);
 }

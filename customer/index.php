@@ -64,6 +64,11 @@ if(!empty($_SESSION['customer'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#4a90b8">
+    <!-- PWA Install - ADD THESE 4 LINES ONLY -->
+    <link rel="manifest" href="../manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="../icons/icon-192x192.png">
+    <link rel="icon" href="../favicon.ico">
     <title>Mein Bereich - Anna Braun Lerncoaching</title>
     
     <style>
@@ -1024,5 +1029,42 @@ if(!empty($_SESSION['customer'])) {
             });
         });
     </script>
+<!-- PWA Install Button - ADD THIS SCRIPT BLOCK ONLY -->
+<script>
+let installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    
+    // Create simple install button
+    const btn = document.createElement('button');
+    btn.textContent = '📱 App installieren';
+    btn.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 999;
+        background: #2563eb; color: white; border: none;
+        padding: 8px 12px; border-radius: 4px; cursor: pointer;
+        font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    `;
+    
+    btn.onclick = async () => {
+        if (installPrompt) {
+            installPrompt.prompt();
+            const result = await installPrompt.userChoice;
+            if (result.outcome === 'accepted') {
+                btn.remove();
+            }
+            installPrompt = null;
+        }
+    };
+    
+    document.body.appendChild(btn);
+});
+
+// Hide if already installed
+if (window.matchMedia('(display-mode: standalone)').matches) {
+    // Already running as PWA, don't show button
+}
+</script>
 </body>
 </html>

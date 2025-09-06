@@ -124,289 +124,84 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
         $mail->Subject = 'Dein Login-Code für Anna Braun Lerncoaching';
         $mail->CharSet = 'UTF-8';
 
-        // SCHÖNES HTML EMAIL DESIGN mit Dark/Light Mode Support
+        // Simple HTML email with Anna Braun design
         $formatted_expires = date('d.m.Y \u\m H:i \U\h\r', strtotime($expires));
 
         $mail->Body = "
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <meta name='color-scheme' content='light dark'>
-            <style>
-                :root {
-                    color-scheme: light dark;
-                }
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+</head>
+<body style='margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f7fa; color: #333333;'>
+    <table width='100%' cellpadding='0' cellspacing='0' style='max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
+        <!-- Header -->
+        <tr>
+            <td style='background: linear-gradient(135deg, #4a90b8 0%, #52b3a4 100%); padding: 40px 30px; text-align: center;'>
+                <div style='font-size: 50px; margin-bottom: 15px;'>🧠</div>
+                <h1 style='margin: 0; color: #ffffff; font-size: 26px; font-weight: normal;'>Anna Braun Lerncoaching</h1>
+                <p style='margin: 10px 0 0 0; color: #ffffff; opacity: 0.9; font-size: 16px;'>Dein personalisierter Lernbereich</p>
+            </td>
+        </tr>
+        
+        <!-- Content -->
+        <tr>
+            <td style='padding: 40px 30px; background-color: #ffffff;'>
+                <p style='margin: 0 0 20px 0; color: #333333; font-size: 18px; font-weight: 500;'>Liebe/r {$to_name},</p>
                 
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-                    line-height: 1.6;
-                    margin: 0;
-                    padding: 20px;
-                    background-color: #f5f7fa;
-                    color: #333;
-                }
+                <p style='margin: 0 0 30px 0; color: #666666; font-size: 16px; line-height: 1.6;'>hier ist dein Login-Code für das Kundenkonto und den personalisierten Lernbereich!</p>
                 
-                @media (prefers-color-scheme: dark) {
-                    body {
-                        background-color: #1a1a1a !important;
-                        color: #e0e0e0 !important;
-                    }
-                }
+                <!-- Code Box -->
+                <table width='100%' cellpadding='0' cellspacing='0' style='margin: 30px 0;'>
+                    <tr>
+                        <td style='background-color: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; padding: 30px; text-align: center;'>
+                            <p style='margin: 0 0 15px 0; color: #6c757d; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;'>DEIN LOGIN-CODE</p>
+                            <p style='margin: 0; color: #4a90b8; font-size: 32px; font-weight: 700; letter-spacing: 6px; font-family: monospace;'>{$pin}</p>
+                            <p style='margin: 15px 0 0 0; color: #dc3545; font-size: 14px; font-weight: 500;'>Gültig bis {$formatted_expires}</p>
+                        </td>
+                    </tr>
+                </table>
                 
-                .container {
-                    max-width: 600px;
-                    margin: 0 auto;
-                    background: white;
-                    border-radius: 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-                }
+                <!-- Login Button -->
+                <table width='100%' cellpadding='0' cellspacing='0' style='margin: 30px 0;'>
+                    <tr>
+                        <td style='text-align: center;'>
+                            <a href='https://einfachstarten.jetzt/einfachlernen/login.php' style='display: inline-block; background: linear-gradient(135deg, #4a90b8 0%, #52b3a4 100%); color: #ffffff; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600; font-size: 16px;'>Jetzt anmelden →</a>
+                        </td>
+                    </tr>
+                </table>
                 
-                @media (prefers-color-scheme: dark) {
-                    .container {
-                        background: #2a2a2a !important;
-                        box-shadow: 0 4px 20px rgba(255,255,255,0.1);
-                    }
-                }
+                <!-- Note -->
+                <table width='100%' cellpadding='0' cellspacing='0' style='margin: 25px 0;'>
+                    <tr>
+                        <td style='background-color: #e3f2fd; padding: 20px; border-radius: 8px; border-left: 4px solid #4a90b8;'>
+                            <p style='margin: 0; color: #333333; font-size: 14px;'><strong>Hinweis:</strong> Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail einfach ignorieren.</p>
+                        </td>
+                    </tr>
+                </table>
                 
-                .header {
-                    background: linear-gradient(135deg, #4a90b8 0%, #52b3a4 100%);
-                    padding: 40px 30px;
-                    text-align: center;
-                    color: white;
-                }
+                <p style='margin: 30px 0 0 0; color: #666666; font-size: 14px;'>Bei Fragen stehe ich dir gerne zur Verfügung!</p>
+            </td>
+        </tr>
+        
+        <!-- Footer -->
+        <tr>
+            <td style='background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;'>
+                <p style='margin: 0 0 10px 0; color: #333333; font-weight: 600; font-size: 16px;'>Anna Braun</p>
+                <p style='margin: 0 0 15px 0; color: #666666; font-size: 14px;'>Ganzheitliches Lerncoaching</p>
                 
-                .brain-emoji {
-                    font-size: 60px;
-                    margin-bottom: 20px;
-                    display: block;
-                }
+                <p style='margin: 0; font-size: 14px;'>
+                    <a href='mailto:termine@einfachstarten.jetzt' style='color: #4a90b8; text-decoration: none; margin: 0 10px;'>E-Mail</a>
+                    <a href='https://www.einfachlernen.jetzt' style='color: #4a90b8; text-decoration: none; margin: 0 10px;'>Website</a>
+                </p>
                 
-                .header h1 {
-                    margin: 0;
-                    font-size: 28px;
-                    font-weight: 600;
-                }
-                
-                .header p {
-                    margin: 10px 0 0 0;
-                    opacity: 0.9;
-                    font-size: 16px;
-                }
-                
-                .content {
-                    padding: 40px 30px;
-                }
-                
-                .greeting {
-                    font-size: 18px;
-                    margin-bottom: 20px;
-                    color: #333;
-                }
-                
-                @media (prefers-color-scheme: dark) {
-                    .greeting {
-                        color: #e0e0e0 !important;
-                    }
-                }
-                
-                .message {
-                    font-size: 16px;
-                    margin-bottom: 30px;
-                    color: #666;
-                    line-height: 1.6;
-                }
-                
-                @media (prefers-color-scheme: dark) {
-                    .message {
-                        color: #b0b0b0 !important;
-                    }
-                }
-                
-                .code-container {
-                    background: #f8f9fa;
-                    border: 2px solid #e9ecef;
-                    border-radius: 12px;
-                    padding: 30px;
-                    text-align: center;
-                    margin: 30px 0;
-                }
-                
-                @media (prefers-color-scheme: dark) {
-                    .code-container {
-                        background: #3a3a3a !important;
-                        border-color: #555 !important;
-                    }
-                }
-                
-                .code-label {
-                    font-size: 14px;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                    color: #6c757d;
-                    margin-bottom: 15px;
-                    font-weight: 600;
-                }
-                
-                @media (prefers-color-scheme: dark) {
-                    .code-label {
-                        color: #b0b0b0 !important;
-                    }
-                }
-                
-                .code {
-                    font-size: 36px;
-                    font-weight: 700;
-                    color: #4a90b8;
-                    letter-spacing: 8px;
-                    margin: 15px 0;
-                    font-family: 'Monaco', 'Menlo', monospace;
-                }
-                
-                .expiry {
-                    color: #dc3545;
-                    font-size: 14px;
-                    margin-top: 15px;
-                    font-weight: 500;
-                }
-                
-                .login-link {
-                    display: inline-block;
-                    background: linear-gradient(135deg, #4a90b8 0%, #52b3a4 100%);
-                    color: white;
-                    text-decoration: none;
-                    padding: 15px 30px;
-                    border-radius: 8px;
-                    font-weight: 600;
-                    margin: 20px 0;
-                    transition: transform 0.2s;
-                }
-                
-                .login-link:hover {
-                    transform: translateY(-2px);
-                    color: white;
-                    text-decoration: none;
-                }
-                
-                .note {
-                    font-size: 14px;
-                    color: #6c757d;
-                    background: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin: 25px 0;
-                    border-left: 4px solid #4a90b8;
-                }
-                
-                @media (prefers-color-scheme: dark) {
-                    .note {
-                        background: #3a3a3a !important;
-                        color: #b0b0b0 !important;
-                    }
-                }
-                
-                .footer {
-                    background: #f8f9fa;
-                    padding: 30px;
-                    text-align: center;
-                    font-size: 14px;
-                    color: #6c757d;
-                    border-top: 1px solid #e9ecef;
-                }
-                
-                @media (prefers-color-scheme: dark) {
-                    .footer {
-                        background: #2a2a2a !important;
-                        color: #b0b0b0 !important;
-                        border-top-color: #555 !important;
-                    }
-                }
-                
-                .footer-links {
-                    margin-top: 15px;
-                }
-                
-                .footer-links a {
-                    color: #4a90b8;
-                    text-decoration: none;
-                    margin: 0 10px;
-                }
-                
-                @media (max-width: 600px) {
-                    .container {
-                        margin: 10px;
-                        border-radius: 8px;
-                    }
-                    
-                    .header {
-                        padding: 30px 20px;
-                    }
-                    
-                    .content {
-                        padding: 30px 20px;
-                    }
-                    
-                    .code {
-                        font-size: 28px;
-                        letter-spacing: 4px;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <div class='brain-emoji'>🧠</div>
-                    <h1>Anna Braun Lerncoaching</h1>
-                    <p>Dein personalisierter Lernbereich</p>
-                </div>
-                
-                <div class='content'>
-                    <div class='greeting'>Liebe/r {$to_name},</div>
-                    
-                    <div class='message'>
-                        hier ist dein Login-Code für das Kundenkonto und den personalisierten Lernbereich!
-                    </div>
-                    
-                    <div class='code-container'>
-                        <div class='code-label'>Dein Login-Code</div>
-                        <div class='code'>{$pin}</div>
-                        <div class='expiry'>Gültig bis {$formatted_expires}</div>
-                    </div>
-                    
-                    <center>
-                        <a href='https://einfachstarten.jetzt/einfachlernen/login.php' class='login-link'>
-                            Jetzt anmelden →
-                        </a>
-                    </center>
-                    
-                    <div class='note'>
-                        <strong>Hinweis:</strong> Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail einfach ignorieren.
-                    </div>
-                    
-                    <p style='color: #666; font-size: 14px; margin-top: 30px;'>
-                        Bei Fragen stehe ich dir gerne zur Verfügung!
-                    </p>
-                </div>
-                
-                <div class='footer'>
-                    <strong>Anna Braun</strong><br>
-                    Ganzheitliches Lerncoaching
-                    
-                    <div class='footer-links'>
-                        <a href='mailto:termine@einfachstarten.jetzt'>E-Mail</a>
-                        <a href='https://www.einfachlernen.jetzt'>Website</a>
-                    </div>
-                    
-                    <p style='margin-top: 20px; font-size: 12px; opacity: 0.7;'>
-                        Diese E-Mail wurde automatisch generiert.
-                    </p>
-                </div>
-            </div>
-        </body>
-        </html>";
-
+                <p style='margin: 20px 0 0 0; font-size: 12px; color: #999999;'>Diese E-Mail wurde automatisch generiert.</p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
         // Plain text version für alte Email-Clients
         $mail->AltBody = "Liebe/r {$to_name},\n\n";
         $mail->AltBody .= "du hast einen Login-Code für dein Kundenkonto angefordert.\n\n";

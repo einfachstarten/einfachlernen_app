@@ -429,6 +429,235 @@ $conversion_rates = [
             100% { transform: rotate(360deg); }
         }
     </style>
+    <style>
+        /* Analytics-specific Styles */
+        .analytics-container {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 1rem 0;
+            overflow: hidden;
+        }
+
+        .analytics-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 1.5rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .analytics-header h2 {
+            margin: 0;
+            color: #495057;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .analytics-summary {
+            display: flex;
+            gap: 2rem;
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .analytics-metric {
+            text-align: center;
+            flex: 1;
+        }
+
+        .analytics-metric h3 {
+            margin: 0 0 0.25rem 0;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .analytics-metric small {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .analytics-metric.revenue h3 {
+            color: #28a745;
+        }
+
+        .analytics-metric.bookings h3 {
+            color: #007bff;
+        }
+
+        .analytics-metric.average h3 {
+            color: #ffc107;
+        }
+
+        .analytics-metric.capacity h3 {
+            color: #17a2b8;
+        }
+
+        .analytics-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .analytics-table th {
+            background: #495057;
+            color: white;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .analytics-table th:last-child {
+            text-align: right;
+        }
+
+        .analytics-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #f8f9fa;
+            background: white;
+        }
+
+        .analytics-table tr:hover td {
+            background: #f8f9fa;
+        }
+
+        .analytics-table td:last-child {
+            text-align: right;
+            font-weight: 600;
+        }
+
+        .service-bar-container {
+            margin-top: 0.5rem;
+            background: #e9ecef;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .service-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .capacity-bar-container {
+            background: #e9ecef;
+            height: 24px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .capacity-bar {
+            height: 100%;
+            border-radius: 12px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .capacity-bar.low {
+            background: linear-gradient(90deg, #28a745, #20c997);
+        }
+
+        .capacity-bar.medium {
+            background: linear-gradient(90deg, #ffc107, #ffca2c);
+        }
+
+        .capacity-bar.high {
+            background: linear-gradient(90deg, #dc3545, #e74c3c);
+        }
+
+        .capacity-percentage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11px;
+            font-weight: bold;
+            color: #333;
+            z-index: 1;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.frei {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.mittel {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-badge.voll {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .analytics-recommendation {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1rem 1.5rem;
+            margin: 1rem;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .analytics-recommendation strong {
+            color: #856404;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .analytics-summary {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .analytics-table {
+                font-size: 0.9rem;
+            }
+
+            .analytics-table th,
+            .analytics-table td {
+                padding: 0.75rem 0.5rem;
+            }
+        }
+    </style>
+    <style>
+        /* Override existing admin table styles for analytics */
+        .analytics-container table {
+            background: white !important;
+        }
+
+        .analytics-container th {
+            background: #495057 !important;
+            color: white !important;
+        }
+
+        .analytics-container td {
+            background: white !important;
+            border-bottom: 1px solid #f8f9fa !important;
+        }
+
+        .analytics-container tr:hover td {
+            background: #f8f9fa !important;
+        }
+    </style>
 </head>
 <body>
     <div class="dashboard-container">
@@ -615,10 +844,8 @@ $conversion_rates = [
                 <?php endif; ?>
             </div>
         </div>
-        <h2>📊 Service Analytics (Last <?= $days ?> days)</h2>
         <div id="serviceAnalytics">Service Analytics werden geladen...</div>
 
-        <h2>📈 Weekly Capacity Overview</h2>
         <div id="weeklyCapacity">Kapazitätsplanung wird geladen...</div>
     </div>
 
@@ -821,122 +1048,139 @@ $conversion_rates = [
 
     function displayServiceAnalytics(data) {
         let html = `
-            <div style='background:#f8f9fa;padding:1rem;border-radius:8px;margin-bottom:1rem;'>
-                <div style='display:flex;justify-content:space-between;margin-bottom:1rem;'>
-                    <div style='text-align:center;'>
-                        <h3 style='color:#28a745;margin:0;'>${data.total_bookings}</h3>
+            <div class="analytics-container">
+                <div class="analytics-header">
+                    <h2>📊 Service Performance</h2>
+                </div>
+                
+                <div class="analytics-summary">
+                    <div class="analytics-metric bookings">
+                        <h3>${data.total_bookings}</h3>
                         <small>Gesamtbuchungen</small>
                     </div>
-                    <div style='text-align:center;'>
-                        <h3 style='color:#17a2b8;margin:0;'>€${data.total_revenue}</h3>
+                    <div class="analytics-metric revenue">
+                        <h3>€${data.total_revenue}</h3>
                         <small>Gesamtumsatz</small>
                     </div>
-                    <div style='text-align:center;'>
-                        <h3 style='color:#ffc107;margin:0;'>€${data.avg_booking_value}</h3>
+                    <div class="analytics-metric average">
+                        <h3>€${data.avg_booking_value}</h3>
                         <small>⌀ Buchungswert</small>
                     </div>
                 </div>
-            </div>
-
-            <table style='width:100%;border-collapse:collapse;'>
-                <tr style='background:#4a90b8;color:white;'>
-                    <th style='padding:0.8rem;text-align:left;'>Service</th>
-                    <th style='padding:0.8rem;text-align:center;'>Buchungen</th>
-                    <th style='padding:0.8rem;text-align:center;'>Anteil</th>
-                    <th style='padding:0.8rem;text-align:right;'>Umsatz</th>
-                </tr>
+                
+                <table class="analytics-table">
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th style="text-align:center;">Buchungen</th>
+                            <th style="text-align:center;">Anteil</th>
+                            <th style="text-align:right;">Umsatz</th>
+                        </tr>
+                    </thead>
+                    <tbody>
         `;
-
+        
         Object.entries(data.services).forEach(([service, stats]) => {
-            const barWidth = stats.percentage;
             html += `
-                <tr style='border-bottom:1px solid #ddd;'>
-                    <td style='padding:0.8rem;'>
-                        <strong>${service}</strong>
-                        <div style='background:#e9ecef;height:6px;margin-top:4px;border-radius:3px;'>
-                            <div style='background:#28a745;height:100%;width:${barWidth}%;border-radius:3px;'></div>
+                <tr>
+                    <td>
+                        <strong style="color:#495057;">${service}</strong>
+                        <div class="service-bar-container">
+                            <div class="service-bar" style="width:${stats.percentage}%;"></div>
                         </div>
                     </td>
-                    <td style='padding:0.8rem;text-align:center;'>${stats.count}</td>
-                    <td style='padding:0.8rem;text-align:center;'>${stats.percentage}%</td>
-                    <td style='padding:0.8rem;text-align:right;font-weight:bold;'>€${stats.revenue}</td>
+                    <td style="text-align:center;">${stats.count}</td>
+                    <td style="text-align:center;font-weight:600;">${stats.percentage}%</td>
+                    <td style="text-align:right;color:#28a745;font-weight:bold;">€${stats.revenue}</td>
                 </tr>
             `;
         });
-
-        html += '</table>';
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
         document.getElementById('serviceAnalytics').innerHTML = html;
     }
 
     function displayWeeklyCapacity(data) {
         let html = `
-            <div style='background:#f8f9fa;padding:1rem;border-radius:8px;margin-bottom:1rem;'>
-                <div style='display:flex;justify-content:space-between;'>
-                    <div style='text-align:center;'>
-                        <h3 style='color:#17a2b8;margin:0;'>€${data.total_upcoming_revenue}</h3>
+            <div class="analytics-container">
+                <div class="analytics-header">
+                    <h2>📈 Kapazitätsplanung</h2>
+                </div>
+                
+                <div class="analytics-summary">
+                    <div class="analytics-metric revenue">
+                        <h3>€${data.total_upcoming_revenue}</h3>
                         <small>Kommender Umsatz</small>
                     </div>
-                    <div style='text-align:center;'>
-                        <h3 style='color:#28a745;margin:0;'>${data.average_capacity}%</h3>
+                    <div class="analytics-metric capacity">
+                        <h3>${data.average_capacity}%</h3>
                         <small>⌀ Auslastung</small>
                     </div>
                 </div>
-            </div>
-
-            <table style='width:100%;border-collapse:collapse;'>
-                <tr style='background:#4a90b8;color:white;'>
-                    <th style='padding:0.8rem;text-align:left;'>Woche</th>
-                    <th style='padding:0.8rem;text-align:center;'>Auslastung</th>
-                    <th style='padding:0.8rem;text-align:center;'>Gebucht/Max</th>
-                    <th style='padding:0.8rem;text-align:right;'>Umsatz</th>
-                    <th style='padding:0.8rem;text-align:center;'>Status</th>
-                </tr>
+                
+                <table class="analytics-table">
+                    <thead>
+                        <tr>
+                            <th>Woche</th>
+                            <th style="text-align:center;">Auslastung</th>
+                            <th style="text-align:center;">Gebucht/Max</th>
+                            <th style="text-align:right;">Umsatz</th>
+                            <th style="text-align:center;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
         `;
-
+        
         data.weeks.forEach(week => {
-            const statusColor = week.status === 'full' ? '#dc3545' :
-                               week.status === 'medium' ? '#ffc107' : '#28a745';
+            const capacityClass = week.capacity_percentage >= 70 ? 'high' :
+                                 week.capacity_percentage >= 40 ? 'medium' : 'low';
             const statusText = week.status === 'full' ? 'Voll' :
                               week.status === 'medium' ? 'Mittel' : 'Frei';
-
+            
             html += `
-                <tr style='border-bottom:1px solid #ddd;'>
-                    <td style='padding:0.8rem;'>
-                        <strong>Woche ${week.week_number}</strong><br>
-                        <small>${week.week_start} - ${week.week_end}</small>
+                <tr>
+                    <td>
+                        <strong style="color:#495057;">Woche ${week.week_number}</strong><br>
+                        <small style="color:#6c757d;">${week.week_start} - ${week.week_end}</small>
                     </td>
-                    <td style='padding:0.8rem;text-align:center;'>
-                        <div style='background:#e9ecef;height:20px;border-radius:10px;position:relative;'>
-                            <div style='background:${statusColor};height:100%;width:${week.capacity_percentage}%;border-radius:10px;'></div>
-                            <span style='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:12px;font-weight:bold;'>
-                                ${week.capacity_percentage}%
-                            </span>
+                    <td style="text-align:center;">
+                        <div class="capacity-bar-container">
+                            <div class="capacity-bar ${capacityClass}" style="width:${week.capacity_percentage}%;"></div>
+                            <span class="capacity-percentage">${week.capacity_percentage}%</span>
                         </div>
                     </td>
-                    <td style='padding:0.8rem;text-align:center;'>${week.booked_slots}/${week.max_capacity}</td>
-                    <td style='padding:0.8rem;text-align:right;font-weight:bold;'>€${week.revenue}</td>
-                    <td style='padding:0.8rem;text-align:center;'>
-                        <span style='background:${statusColor};color:white;padding:2px 8px;border-radius:12px;font-size:11px;'>
-                            ${statusText}
-                        </span>
+                    <td style="text-align:center;font-weight:600;">${week.booked_slots}/${week.max_capacity}</td>
+                    <td style="text-align:right;color:#28a745;font-weight:bold;">€${week.revenue}</td>
+                    <td style="text-align:center;">
+                        <span class="status-badge ${statusText.toLowerCase()}">${statusText}</span>
                     </td>
                 </tr>
             `;
         });
-
-        html += '</table>';
-
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        // Empfehlungen hinzufügen
         const lowWeeks = data.weeks.filter(w => w.status === 'low');
         if (lowWeeks.length > 0) {
             html += `
-                <div style='background:#fff3cd;padding:1rem;border-radius:8px;margin-top:1rem;border-left:4px solid #ffc107;'>
+                <div class="analytics-recommendation">
                     <strong>💡 Marketing-Empfehlung:</strong><br>
                     Wochen mit niedriger Auslastung: ${lowWeeks.map(w => w.week_number).join(', ')}. 
                     Erwägen Sie gezielte Marketing-Aktionen oder Sonderangebote.
                 </div>
             `;
         }
-
+        
         document.getElementById('weeklyCapacity').innerHTML = html;
     }
     </script>

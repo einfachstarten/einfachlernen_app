@@ -724,6 +724,95 @@ if(!empty($_SESSION['customer'])) {
                 transform: translateY(0);
             }
         }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-dark);
+        }
+
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .char-counter {
+            text-align: right;
+            font-size: 0.8rem;
+            color: var(--gray-medium);
+            margin-top: 0.25rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .btn-primary, .btn-secondary {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(82, 179, 164, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: var(--gray-dark);
+            border: 1px solid #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        @media (max-width: 768px) {
+            .modal-footer {
+                flex-direction: column;
+            }
+            
+            .btn-primary, .btn-secondary {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -771,13 +860,13 @@ if(!empty($_SESSION['customer'])) {
                     </a>
 
                     <!-- 3. Nachricht senden -->
-                    <a href="mailto:annabraun@outlook.com?subject=Nachricht%20von%20<?= urlencode($customer['first_name'] . ' ' . $customer['last_name']) ?>&body=Hallo%20Anna,%0A%0A" class="action-card">
+                    <div class="action-card" onclick="openContactModal()">
                         <div class="action-icon">💬</div>
                         <div class="action-content">
                             <h3>Nachricht senden</h3>
-                            <p>Direkte E-Mail an Anna Braun</p>
+                            <p>Kontaktformular für Ihr Anliegen</p>
                         </div>
-                    </a>
+                    </div>
                 </div>
             </section>
 
@@ -862,6 +951,56 @@ if(!empty($_SESSION['customer'])) {
                     Schließen
                 </button>
             </div>
+    </div>
+    </div>
+
+    <!-- Contact Modal -->
+    <div class="modal-overlay" id="contactModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <div class="modal-avatar">💬</div>
+                    <div>
+                        <h2>Nachricht senden</h2>
+                        <p>Wir sind für Sie da</p>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeContactModal()">
+                    <span>✕</span>
+                </button>
+            </div>
+            
+            <form id="contactForm" class="modal-content">
+                <div class="form-group">
+                    <label for="contactCategory">Art des Anliegens</label>
+                    <select id="contactCategory" name="category" required>
+                        <option value="">Bitte wählen...</option>
+                        <option value="lerncoaching">Frage zu Lerncoaching</option>
+                        <option value="app">Frage zur App</option>
+                        <option value="sonstiges">Sonstiges</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contactMessage">Ihre Nachricht</label>
+                    <textarea id="contactMessage" name="message" rows="6" 
+                              placeholder="Beschreiben Sie Ihr Anliegen..." 
+                              maxlength="2000" required></textarea>
+                    <div class="char-counter">
+                        <span id="charCount">0</span>/2000 Zeichen
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" onclick="closeContactModal()" class="btn-secondary">
+                        Abbrechen
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        <span id="sendBtnText">Nachricht senden</span>
+                        <span id="sendBtnLoader" style="display:none;">Wird gesendet...</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -887,6 +1026,79 @@ if(!empty($_SESSION['customer'])) {
             modal.classList.remove('active');
             document.body.style.overflow = '';
         }
+
+        function openContactModal() {
+            const modal = document.getElementById('contactModal');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('contactCategory').focus();
+        }
+
+        function closeContactModal() {
+            const modal = document.getElementById('contactModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            document.getElementById('contactForm').reset();
+            document.getElementById('charCount').textContent = '0';
+        }
+
+        // Zeichen-Counter
+        document.getElementById('contactMessage').addEventListener('input', function() {
+            const count = this.value.length;
+            document.getElementById('charCount').textContent = count;
+            
+            if (count > 1800) {
+                document.getElementById('charCount').style.color = '#ff6b6b';
+            } else {
+                document.getElementById('charCount').style.color = 'var(--gray-medium)';
+            }
+        });
+
+        // Form-Submission
+        document.getElementById('contactForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const btnText = document.getElementById('sendBtnText');
+            const btnLoader = document.getElementById('sendBtnLoader');
+            
+            // Loading State
+            submitBtn.disabled = true;
+            btnText.style.display = 'none';
+            btnLoader.style.display = 'inline';
+            
+            const formData = new FormData(this);
+            
+            try {
+                const response = await fetch('contact_form.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ ' + result.message);
+                    closeContactModal();
+                } else {
+                    alert('❌ ' + result.message);
+                }
+            } catch (error) {
+                alert('❌ Verbindungsfehler. Bitte versuchen Sie es später erneut.');
+            } finally {
+                // Reset Loading State
+                submitBtn.disabled = false;
+                btnText.style.display = 'inline';
+                btnLoader.style.display = 'none';
+            }
+        });
+
+        // Modal außerhalb schließen
+        document.getElementById('contactModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeContactModal();
+            }
+        });
 
         document.addEventListener('DOMContentLoaded', function() {
             const observerOptions = {

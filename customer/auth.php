@@ -23,20 +23,78 @@ function create_customer_session($customer_id){
     cleanup_sessions($pdo);
     $token = bin2hex(random_bytes(32));
     $expires = date('Y-m-d H:i:s', strtotime('+7 days'));
+
+    // Store in database
     $stmt = $pdo->prepare('INSERT INTO customer_sessions (customer_id, session_token, expires_at) VALUES (?, ?, ?)');
     $stmt->execute([$customer_id, $token, $expires]);
-    setcookie('customer_session', $token, time()+7*24*3600, '/einfachlernen/', '', true, true);
-}
-function get_current_customer(){
-    if(empty($_COOKIE['customer_session'])){
-        return null;
+
+    // FIXED: iOS-compatible cookie settings
+    $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $sameSite = 'Lax'; // iOS Safari compatible
+
+    // Modern setcookie with all attributes
+    if (PHP_VERSION_ID >= 70300) {
+        // PHP 7.3+ supports SameSite attribute
+        setcookie('customer_session', $token, [
+            'expires' => time() + 7*24*3600,
+            'path' => '/einfachlernen/',
+            'domain' => '',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => $sameSite
+        ]);
+    } else {
+        // Fallback for older PHP versions
+        setcookie('customer_session', $token, time() + 7*24*3600, '/einfachlernen/; SameSite=' . $sameSite, '', $secure, true);
     }
+
+    // ADDITIONAL: Also store in PHP session as fallback
+    $_SESSION['customer_token'] = $token;
+    $_SESSION['customer_id'] = $customer_id;
+
+    // Log cookie setting for debugging
+    error_log("Cookie set for customer $customer_id: token=" . substr($token, 0, 10) . "... secure=$secure sameSite=$sameSite");
+}
+
+function get_current_customer(){
     $pdo = getPDO();
     cleanup_sessions($pdo);
-    $token = $_COOKIE['customer_session'];
+
+    // Try to get token from cookie first
+    $token = $_COOKIE['customer_session'] ?? null;
+
+    // FALLBACK: If no cookie token, try session token
+    if (!$token && isset($_SESSION['customer_token'])) {
+        $token = $_SESSION['customer_token'];
+        error_log("Using session token fallback for customer " . ($_SESSION['customer_id'] ?? 'unknown'));
+    }
+
+    if (!$token) {
+        return null;
+    }
+
     $stmt = $pdo->prepare('SELECT c.* FROM customer_sessions s JOIN customers c ON c.id = s.customer_id WHERE s.session_token = ? AND s.expires_at > NOW()');
-    $stmt->execute([$token]);
-    return $stmt->fetch(PDO::FETCH_ASSOC);
+    $customer = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // If found via session token but cookie is missing, reset cookie
+    if ($customer && !isset($_COOKIE['customer_session']) && isset($_SESSION['customer_token'])) {
+        $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        if (PHP_VERSION_ID >= 70300) {
+            setcookie('customer_session', $token, [
+                'expires' => time() + 7*24*3600,
+                'path' => '/einfachlernen/',
+                'domain' => '',
+                'secure' => $secure,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]);
+        } else {
+            setcookie('customer_session', $token, time() + 7*24*3600, '/einfachlernen/; SameSite=Lax', '', $secure, true);
+        }
+        error_log("Cookie restored for customer " . $customer['id']);
+    }
+
+    return $customer;
 }
 function require_customer_login(){
     $cust = get_current_customer();

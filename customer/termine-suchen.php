@@ -455,24 +455,33 @@ logPageView($customer['id'], 'termine_suchen', [
         });
 
         async function searchSlots(service, count) {
-            const maxWeeks = 8;
             let allSlots = [];
             let foundDates = new Set();
-            
-            for (let week = 0; week < maxWeeks && foundDates.size < count; week++) {
-                updateProgress(week, maxWeeks, `Woche ${week + 1} wird durchsucht...`);
-                
+            let week = 0;
+            const maxWeeks = 26;
+
+            while (foundDates.size < count && week < maxWeeks) {
+                updateProgress(week, maxWeeks, `Durchsuche Woche ${week + 1}...`);
+
                 try {
                     const response = await fetch(`slots_api.php?service=${service}&count=${count}&week=${week}`);
-                    const data = await response.json();
-                    
-                    if (data.error) {
-                        console.error('API Error:', data.error);
+
+                    if (!response.ok) {
+                        console.error(`HTTP ${response.status}: ${response.statusText}`);
+                        week++;
                         continue;
                     }
-                    
+
+                    const data = await response.json();
+
+                    if (data.error) {
+                        console.error('API Error:', data.error);
+                        week++;
+                        continue;
+                    }
+
                     if (data.slots && data.slots.length > 0) {
-                        // Add new unique dates
+                        // Add new unique dates (bis count erreicht)
                         data.slots.forEach(slot => {
                             if (!foundDates.has(slot.date) && foundDates.size < count) {
                                 foundDates.add(slot.date);
@@ -480,15 +489,21 @@ logPageView($customer['id'], 'termine_suchen', [
                             }
                         });
                     }
+
+                    if (foundDates.size >= count) {
+                        break;
+                    }
                 } catch (error) {
                     console.error('Week fetch error:', error);
                 }
-                
+
+                week++;
+
                 // Small delay for better UX
-                await new Promise(resolve => setTimeout(resolve, 200));
+                await new Promise(resolve => setTimeout(resolve, 300));
             }
-            
-            updateProgress(100, 100, 'Termine gefunden!');
+
+            updateProgress(100, 100, `${foundDates.size} Termine gefunden!`);
             setTimeout(() => showResults(allSlots, count, service), 500);
         }
 

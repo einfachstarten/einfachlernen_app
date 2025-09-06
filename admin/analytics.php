@@ -25,6 +25,35 @@ require_once 'ActivityLogger.php';
 $pdo = getPDO();
 $logger = new ActivityLogger($pdo);
 
+// Additional analytics helpers
+function getActivityTrends($pdo, $days = 30) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            DATE(created_at) as date,
+            activity_type,
+            COUNT(*) as count
+        FROM customer_activities 
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+        GROUP BY DATE(created_at), activity_type
+        ORDER BY date DESC
+    ");
+    $stmt->execute([$days]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getConversionMetrics($pdo, $days = 30) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            COUNT(CASE WHEN activity_type = 'slots_found' THEN 1 END) as slots_viewed,
+            COUNT(CASE WHEN activity_type = 'booking_initiated' THEN 1 END) as bookings_started,
+            COUNT(CASE WHEN activity_type = 'booking_completed' THEN 1 END) as bookings_completed
+        FROM customer_activities 
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+    ");
+    $stmt->execute([$days]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
 $days = $_GET['days'] ?? 30;
 $stats = $logger->getActivityStats($days);
 $top_customers = $logger->getTopActiveCustomers($days);

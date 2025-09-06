@@ -63,8 +63,6 @@ class ActivityLogger {
      * Get activity statistics for admin
      */
     public function getActivityStats($days = 30) {
-        echo "<p>Debug: Getting activity stats for $days days</p>";
-
         try {
             $stmt = $this->pdo->prepare("
             SELECT
@@ -77,15 +75,11 @@ class ActivityLogger {
             GROUP BY activity_type, DATE(created_at)
             ORDER BY activity_date DESC, count DESC
         ");
-
             $stmt->execute([$days]);
-            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            echo "<p>Debug: Found " . count($result) . " activity records</p>";
-            return $result;
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         } catch (PDOException $e) {
-            echo "<p style='color:red'>SQL Error in getActivityStats: " . htmlspecialchars($e->getMessage()) . "</p>";
+            error_log("getActivityStats error: " . $e->getMessage());
             return [];
         }
     }
@@ -94,9 +88,14 @@ class ActivityLogger {
      * Get most active customers
      */
     public function getTopActiveCustomers($days = 30, $limit = 10) {
-        echo "<p>Debug: Getting top active customers for $days days</p>";
+        // Ensure limit is integer and within safe bounds
+        $limit = (int)$limit;
+        if ($limit < 1 || $limit > 100) {
+            $limit = 10; // Default fallback
+        }
 
         try {
+            // Use string interpolation for LIMIT since PDO can't parameterize it properly
             $stmt = $this->pdo->prepare("
             SELECT
                 c.email,
@@ -109,17 +108,15 @@ class ActivityLogger {
             WHERE ca.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
             GROUP BY c.id, c.email, c.first_name, c.last_name
             ORDER BY activity_count DESC
-            LIMIT ?
+            LIMIT {$limit}
         ");
 
-            $stmt->execute([$days, $limit]);
-            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            echo "<p>Debug: Found " . count($result) . " active customers</p>";
-            return $result;
+            // Only bind the days parameter
+            $stmt->execute([$days]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         } catch (PDOException $e) {
-            echo "<p style='color:red'>SQL Error in getTopActiveCustomers: " . htmlspecialchars($e->getMessage()) . "</p>";
+            error_log("getTopActiveCustomers error: " . $e->getMessage());
             return [];
         }
     }

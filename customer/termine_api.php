@@ -1,26 +1,31 @@
 <?php
-if (isset($_GET['email'])) {
-    http_response_code(403);
-    echo json_encode([
-        'error' => 'Diese API ist nicht mehr verfügbar. Bitte verwenden Sie die authentifizierte Version.',
-        'redirect' => '/einfachlernen/login.php'
-    ]);
+require __DIR__.'/auth.php';
+
+// Ensure user is authenticated
+$customer = require_customer_login();
+
+// Session timeout check
+if(isset($_SESSION['customer_last_activity']) && (time() - $_SESSION['customer_last_activity'] > 14400)){
+    destroy_customer_session();
+    http_response_code(401);
+    echo json_encode(['error' => 'Session expired']);
     exit;
 }
 
-// calendly_api.php - Separate API endpoint for Calendly data
-// ========================= CONFIG =========================
+// Update activity timestamp
+$_SESSION['customer_last_activity'] = time();
+
+// Get email from authenticated session (SECURE)
+$email = $customer['email'];
+
+// Include existing calendly_api.php logic but with session authentication
 $CALENDLY_TOKEN = getenv('CALENDLY_TOKEN') ?: 'PASTE_YOUR_TOKEN_HERE';
-$ORG_URI        = getenv('CALENDLY_ORG_URI') ?: 'https://api.calendly.com/organizations/PASTE_ORG_ID';
-$DAYS_AHEAD     = 365;
-$TIMEZONE_OUT   = 'Europe/Vienna';
+$ORG_URI = getenv('CALENDLY_ORG_URI') ?: 'https://api.calendly.com/organizations/PASTE_ORG_ID';
+$DAYS_AHEAD = 365;
+$TIMEZONE_OUT = 'Europe/Vienna';
 $INCLUDE_INVITEE_STATUS = true;
-// ==========================================================
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET');
-header('Access-Control-Allow-Headers: Content-Type');
 
 function json_error($msg, $code = 400) {
     http_response_code($code);
@@ -32,9 +37,9 @@ function api_get($url, $token) {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => ["Authorization: Bearer $token"],
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer $token"],
         CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT        => 25,
+        CURLOPT_TIMEOUT => 25,
     ]);
     $res = curl_exec($ch);
     if ($res === false) { 
@@ -56,23 +61,7 @@ function api_get($url, $token) {
     return [$json, null];
 }
 
-function iso_to_local($iso, $tzOut) {
-    try {
-        $dt = new DateTimeImmutable(str_replace('Z','+00:00',$iso));
-        return $dt->setTimezone(new DateTimeZone($tzOut));
-    } catch(Throwable $e) {
-        return null;
-    }
-}
-
-// Validate input
-$email = isset($_GET['email']) ? trim($_GET['email']) : '';
-if ($email === '') {
-    json_error('Fehlender Parameter: email');
-}
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    json_error('Ungültige E-Mail-Adresse');
-}
+// Validate configuration
 if (!$CALENDLY_TOKEN || !$ORG_URI) {
     json_error('Server-Konfigurationsfehler', 500);
 }
@@ -80,7 +69,7 @@ if (!$CALENDLY_TOKEN || !$ORG_URI) {
 try {
     // Calculate time range
     $todayUtc = (new DateTimeImmutable('now', new DateTimeZone('UTC')))->setTime(0,0,0);
-    $toUtc    = $todayUtc->modify("+{$DAYS_AHEAD} days")->setTime(23,59,59);
+    $toUtc = $todayUtc->modify("+{$DAYS_AHEAD} days")->setTime(23,59,59);
     
     $min_start = $todayUtc->format('Y-m-d\TH:i:s\Z');
     $max_start = $toUtc->format('Y-m-d\TH:i:s\Z');
@@ -92,16 +81,15 @@ try {
     $events = [];
     
     do {
-        $url = $base.'/scheduled_events?'
-             . http_build_query([
-                'organization'   => $ORG_URI,
-                'status'         => 'active',
-                'invitee_email'  => $email,
-                'min_start_time' => $min_start,
-                'max_start_time' => $max_start,
-                'count'          => $count,
-                'page_token'     => $page_token ?: null
-              ]);
+        $url = $base.'/scheduled_events?' . http_build_query([
+            'organization' => $ORG_URI,
+            'status' => 'active',
+            'invitee_email' => $email, // SECURE: Email from session
+            'min_start_time' => $min_start,
+            'max_start_time' => $max_start,
+            'count' => $count,
+            'page_token' => $page_token ?: null
+        ]);
         $url = preg_replace('/(&page_token=)$/','',$url);
         
         list($data, $err) = api_get($url, $CALENDLY_TOKEN);
@@ -135,12 +123,12 @@ try {
                 if ($em === strtolower($email)) {
                     $invitee_uuid = basename($i['uri'] ?? '');
                     $inviteeStatusMap[$uuid] = [
-                        'name'          => $i['name'] ?? '',
-                        'email'         => $i['email'] ?? '',
-                        'status'        => $i['status'] ?? '',
+                        'name' => $i['name'] ?? '',
+                        'email' => $i['email'] ?? '',
+                        'status' => $i['status'] ?? '',
                         'is_reschedule' => $i['is_reschedule'] ?? ($i['rescheduled'] ?? false),
-                        'invitee_uuid'  => $invitee_uuid,
-                        'cancel_url'    => $invitee_uuid ? "https://calendly.com/cancellations/{$invitee_uuid}" : null,
+                        'invitee_uuid' => $invitee_uuid,
+                        'cancel_url' => $invitee_uuid ? "https://calendly.com/cancellations/{$invitee_uuid}" : null,
                         'reschedule_url' => $invitee_uuid ? "https://calendly.com/reschedulings/{$invitee_uuid}" : null,
                     ];
                     break;
@@ -155,24 +143,6 @@ try {
         $uuid = basename($ev['uri']);
         $inv = $inviteeStatusMap[$uuid] ?? null;
         
-        // Construct cancel/reschedule URLs based on Calendly patterns
-        $cancel_url = null;
-        $reschedule_url = null;
-        
-        if ($inv && isset($inv['cancel_url'])) {
-            $cancel_url = $inv['cancel_url'];
-        } else {
-            // Fallback: construct URL based on event UUID
-            $cancel_url = "https://calendly.com/cancellations/{$uuid}";
-        }
-        
-        if ($inv && isset($inv['reschedule_url'])) {
-            $reschedule_url = $inv['reschedule_url'];
-        } else {
-            // Fallback: construct URL based on event UUID  
-            $reschedule_url = "https://calendly.com/reschedulings/{$uuid}";
-        }
-        
         $formatted_events[] = [
             'id' => $uuid,
             'name' => $ev['name'] ?? '',
@@ -181,8 +151,8 @@ try {
             'created_at' => $ev['created_at'] ?? '',
             'status' => $ev['status'] ?? 'active',
             'location' => $ev['location'] ?? [],
-            'cancel_url' => $cancel_url,
-            'reschedule_url' => $reschedule_url,
+            'cancel_url' => $inv['cancel_url'] ?? null,
+            'reschedule_url' => $inv['reschedule_url'] ?? null,
             'invitee_name' => $inv['name'] ?? '',
             'invitee_status' => $inv['status'] ?? '',
             'is_reschedule' => $inv['is_reschedule'] ?? false,
@@ -195,13 +165,11 @@ try {
         'events' => $formatted_events,
         'total' => count($formatted_events),
         'email' => $email,
-        'date_range' => [
-            'from' => $todayUtc->format('Y-m-d'),
-            'to' => $toUtc->format('Y-m-d')
-        ]
+        'authenticated' => true
     ]);
     
 } catch (Throwable $e) {
-    error_log("Calendly API Error: " . $e->getMessage());
+    error_log("Secure Calendly API Error: " . $e->getMessage());
     json_error('Interner Server-Fehler', 500);
 }
+?>

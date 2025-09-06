@@ -68,6 +68,7 @@ unset($c);
 <nav>
     <a href="add_customer.php">Add Customer</a>
     <a href="test_mail.php">Test Email</a>
+    <a href="analytics.php">Customer Analytics</a>
     <a href="migrate.php">Database Migration</a>
     <a href="?logout=1">Logout</a>
 </nav>
@@ -82,7 +83,7 @@ unset($c);
 <?php endif; ?>
 <p>Total customers: <?=$total?></p>
 <table>
-    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th></tr>
+    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th><th>Activity</th></tr>
     <?php foreach($customers as $c): ?>
     <tr>
         <td><?=htmlspecialchars($c['email'])?></td>
@@ -97,8 +98,41 @@ unset($c);
                 <button type="submit">Send PIN</button>
             </form>
         </td>
+        <td><a href='?view_activity=<?=$c['id']?>'>View Activity</a></td>
     </tr>
     <?php endforeach; ?>
 </table>
+
+<?php
+if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
+    require_once 'ActivityLogger.php';
+    $customer_id = (int)$_GET['view_activity'];
+    $logger = new ActivityLogger($pdo);
+    $activities = $logger->getCustomerActivities($customer_id, 20);
+
+    echo "<h3>Recent Activity</h3>";
+    echo "<table border='1' cellpadding='5' style='border-collapse: collapse;'>";
+    echo "<tr><th>Date/Time</th><th>Activity</th><th>Details</th><th>IP Address</th></tr>";
+
+    foreach ($activities as $activity) {
+        $data = json_decode($activity['activity_data'], true);
+        $details = [];
+        if ($data) {
+            foreach ($data as $key => $value) {
+                $details[] = "$key: $value";
+            }
+        }
+
+        echo "<tr>";
+        echo "<td>" . date('Y-m-d H:i:s', strtotime($activity['created_at'])) . "</td>";
+        echo "<td>" . ucfirst(str_replace('_', ' ', $activity['activity_type'])) . "</td>";
+        echo "<td>" . implode(', ', $details) . "</td>";
+        echo "<td>" . $activity['ip_address'] . "</td>";
+        echo "</tr>";
+    }
+    echo "</table>";
+    echo "<p><a href='dashboard.php'>← Back to Dashboard</a></p>";
+}
+?>
 </body>
 </html>

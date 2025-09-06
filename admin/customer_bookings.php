@@ -106,9 +106,25 @@ try {
     foreach ($all_events as $event) {
         $start_dt = new DateTimeImmutable($event['start_time']);
         $end_dt = new DateTimeImmutable($event['end_time']);
+        $event_uuid = basename($event['uri']);
+
+        // Get invitee details for actions
+        $invitee_url = "https://api.calendly.com/scheduled_events/{$event_uuid}/invitees";
+        list($invitee_data, $invitee_err) = api_get($invitee_url, $CALENDLY_TOKEN);
+
+        $invitee_uuid = null;
+        $can_cancel = false;
+        $can_reschedule = false;
+
+        if (!$invitee_err && isset($invitee_data['collection'][0])) {
+            $invitee = $invitee_data['collection'][0];
+            $invitee_uuid = basename($invitee['uri']);
+            $can_cancel = $start_dt > new DateTimeImmutable('+2 hours'); // Min 2h Vorlauf
+            $can_reschedule = $start_dt > new DateTimeImmutable('+4 hours'); // Min 4h Vorlauf
+        }
 
         $formatted_events[] = [
-            'id' => basename($event['uri']),
+            'id' => $event_uuid,
             'name' => $event['name'],
             'start_time' => $start_dt->setTimezone(new DateTimeZone('Europe/Vienna'))->format('d.m.Y H:i'),
             'end_time' => $end_dt->setTimezone(new DateTimeZone('Europe/Vienna'))->format('H:i'),
@@ -116,8 +132,15 @@ try {
             'location' => $event['location']['location'] ?? 'Online',
             'created_at' => (new DateTimeImmutable($event['created_at']))->format('d.m.Y'),
             'is_future' => $start_dt > new DateTimeImmutable(),
-            'calendly_url' => "https://calendly.com/events/{$event['uri']}",
-            'start_timestamp' => $start_dt->getTimestamp()
+            'calendly_url' => $event['uri'],
+            'start_timestamp' => $start_dt->getTimestamp(),
+            // Quick Action Data
+            'invitee_uuid' => $invitee_uuid,
+            'can_cancel' => $can_cancel,
+            'can_reschedule' => $can_reschedule,
+            'cancel_url' => $invitee_uuid ? "https://calendly.com/cancellations/{$invitee_uuid}" : null,
+            'reschedule_url' => $invitee_uuid ? "https://calendly.com/reschedulings/{$invitee_uuid}" : null,
+            'admin_note' => '',
         ];
     }
 

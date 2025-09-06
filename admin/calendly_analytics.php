@@ -73,26 +73,35 @@ try {
             $total_bookings = count($all_events);
             $total_revenue = 0;
 
-            // Service pricing (könnte aus Config kommen)
+            // Service pricing (real prices from Anna's overview)
             $service_prices = [
-                'Lerntraining' => 80,
-                'Neurofeedback' => 60,
-                'Neurofeedback 20' => 40,
-                'Neurofeedback 40' => 60
+                'Beratungsgespräch' => 45,          // 50 Minuten
+                'Lerntraining' => 45,               // 50 Minuten
+                'Hörwahrnehmungstest' => 65,        // 50 Minuten
+                'Neurofeedback 20' => 45,           // bis 20 Min (halbe Stunde Zeit)
+                'Neurofeedback 40' => 65,           // bis 40 Min (eine Stunde Zeit)
+                'Neurofeedback + Lerntraining' => 65 // kombiniert 50 Minuten
             ];
 
             foreach ($all_events as $event) {
                 $service_name = $event['name'] ?? 'Unknown';
 
                 // Normalize service names
-                if (strpos($service_name, 'Lerntraining') !== false) {
+                if (strpos($service_name, 'Lerntraining') !== false && strpos($service_name, 'Neurofeedback') !== false) {
+                    $service_key = 'Neurofeedback + Lerntraining';
+                } elseif (strpos($service_name, 'Lerntraining') !== false) {
                     $service_key = 'Lerntraining';
-                } elseif (strpos($service_name, '20') !== false) {
+                } elseif (strpos($service_name, 'Beratung') !== false || strpos($service_name, 'Gespräch') !== false) {
+                    $service_key = 'Beratungsgespräch';
+                } elseif (strpos($service_name, 'Hörwahrnehmung') !== false || strpos($service_name, 'Test') !== false) {
+                    $service_key = 'Hörwahrnehmungstest';
+                } elseif (strpos($service_name, '20') !== false || strpos($service_name, 'bis 20') !== false) {
                     $service_key = 'Neurofeedback 20';
-                } elseif (strpos($service_name, '40') !== false) {
+                } elseif (strpos($service_name, '40') !== false || strpos($service_name, 'bis 40') !== false) {
                     $service_key = 'Neurofeedback 40';
                 } else {
-                    $service_key = 'Neurofeedback';
+                    // Fallback for unknown services
+                    $service_key = 'Neurofeedback 40';
                 }
 
                 if (!isset($service_stats[$service_key])) {
@@ -157,16 +166,25 @@ try {
                 $max_capacity = 40;
                 $capacity_percentage = round(($booked_slots / $max_capacity) * 100, 1);
 
-                // Revenue für diese Woche
+                // Revenue für diese Woche basierend auf realen Preisen
                 $week_revenue = 0;
                 foreach ($events as $event) {
                     $service_name = $event['name'] ?? '';
-                    if (strpos($service_name, 'Lerntraining') !== false) {
-                        $week_revenue += 80;
+
+                    if (strpos($service_name, 'Lerntraining') !== false && strpos($service_name, 'Neurofeedback') !== false) {
+                        $week_revenue += 65; // kombiniert
+                    } elseif (strpos($service_name, 'Lerntraining') !== false) {
+                        $week_revenue += 45; // Lerntraining
+                    } elseif (strpos($service_name, 'Beratung') !== false || strpos($service_name, 'Gespräch') !== false) {
+                        $week_revenue += 45; // Beratungsgespräch
+                    } elseif (strpos($service_name, 'Hörwahrnehmung') !== false || strpos($service_name, 'Test') !== false) {
+                        $week_revenue += 65; // Hörwahrnehmungstest
                     } elseif (strpos($service_name, '20') !== false) {
-                        $week_revenue += 40;
+                        $week_revenue += 45; // Neurofeedback 20 Min
+                    } elseif (strpos($service_name, '40') !== false) {
+                        $week_revenue += 65; // Neurofeedback 40 Min
                     } else {
-                        $week_revenue += 60; // Default Neurofeedback
+                        $week_revenue += 65; // Fallback: häufigster Preis
                     }
                 }
 

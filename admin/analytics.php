@@ -437,6 +437,8 @@ $conversion_rates = [
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin: 1rem 0;
             overflow: hidden;
+            position: relative;
+            isolation: isolate;
         }
 
         .analytics-header {
@@ -498,6 +500,9 @@ $conversion_rates = [
             width: 100%;
             border-collapse: collapse;
             background: white;
+            position: relative;
+            z-index: 10;
+            table-layout: fixed;
         }
 
         .analytics-table th {
@@ -519,6 +524,9 @@ $conversion_rates = [
             padding: 1rem;
             border-bottom: 1px solid #f8f9fa;
             background: white;
+            position: relative;
+            z-index: 11;
+            vertical-align: top;
         }
 
         .analytics-table tr:hover td {
@@ -530,19 +538,31 @@ $conversion_rates = [
             font-weight: 600;
         }
 
+        .analytics-table td:first-child {
+            width: 250px;
+            min-width: 250px;
+        }
+
         .service-bar-container {
+            position: relative;
             margin-top: 0.5rem;
             background: #e9ecef;
             height: 8px;
             border-radius: 4px;
             overflow: hidden;
+            width: 100%;
+            max-width: 200px;
         }
 
         .service-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
             height: 100%;
             background: linear-gradient(90deg, #28a745, #20c997);
             border-radius: 4px;
             transition: width 0.3s ease;
+            z-index: 1;
         }
 
         .capacity-bar-container {
@@ -551,15 +571,18 @@ $conversion_rates = [
             border-radius: 12px;
             position: relative;
             overflow: hidden;
+            width: 100%;
+            max-width: 150px;
         }
 
         .capacity-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
             height: 100%;
             border-radius: 12px;
             transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            z-index: 1;
         }
 
         .capacity-bar.low {
@@ -582,7 +605,8 @@ $conversion_rates = [
             font-size: 11px;
             font-weight: bold;
             color: #333;
-            z-index: 1;
+            z-index: 2;
+            pointer-events: none;
         }
 
         .status-badge {
@@ -640,22 +664,59 @@ $conversion_rates = [
     </style>
     <style>
         /* Override existing admin table styles for analytics */
+        .analytics-container * {
+            box-sizing: border-box !important;
+        }
+
         .analytics-container table {
             background: white !important;
+            position: relative !important;
+            z-index: 10 !important;
         }
 
         .analytics-container th {
             background: #495057 !important;
             color: white !important;
+            position: relative !important;
+            z-index: 11 !important;
         }
 
         .analytics-container td {
             background: white !important;
             border-bottom: 1px solid #f8f9fa !important;
+            position: relative !important;
+            z-index: 11 !important;
         }
 
-        .analytics-container tr:hover td {
-            background: #f8f9fa !important;
+        .analytics-container .service-bar,
+        .analytics-container .capacity-bar {
+            max-width: 100% !important;
+            contain: layout style !important;
+        }
+    </style>
+    <style>
+        /* Fallback styles for broken layouts */
+        .service-bar-container,
+        .capacity-bar-container {
+            display: inline-block !important;
+            vertical-align: top !important;
+            position: relative !important;
+            overflow: hidden !important;
+        }
+
+        .service-bar,
+        .capacity-bar {
+            position: relative !important;
+            display: block !important;
+            float: none !important;
+            clear: none !important;
+        }
+
+        @media screen and (max-width: 768px) {
+            .service-bar-container,
+            .capacity-bar-container {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -1081,16 +1142,19 @@ $conversion_rates = [
         `;
         
         Object.entries(data.services).forEach(([service, stats]) => {
+            const percentage = Math.min(100, Math.max(0, stats.percentage));
+            console.log(`Service: ${service}, Percentage: ${percentage}%`);
+
             html += `
                 <tr>
-                    <td>
+                    <td style="width:250px;">
                         <strong style="color:#495057;">${service}</strong>
-                        <div class="service-bar-container">
-                            <div class="service-bar" style="width:${stats.percentage}%;"></div>
+                        <div class="service-bar-container" style="max-width:200px;">
+                            <div class="service-bar" style="width:${percentage}%;"></div>
                         </div>
                     </td>
                     <td style="text-align:center;">${stats.count}</td>
-                    <td style="text-align:center;font-weight:600;">${stats.percentage}%</td>
+                    <td style="text-align:center;font-weight:600;">${percentage}%</td>
                     <td style="text-align:right;color:#28a745;font-weight:bold;">€${stats.revenue}</td>
                 </tr>
             `;

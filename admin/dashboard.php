@@ -290,8 +290,24 @@ $sw_path = __DIR__ . '/../sw.js';
             🗑️ Clear All Caches
         </button>
     </div>
+
+    <div style='margin-top:1rem;'>
+        <button onclick='testManualUpdate()' style='background:#52b3a4;color:white;padding:0.5rem 1rem;text-decoration:none;border:none;border-radius:4px;cursor:pointer;'>
+            🔧 Test Manual Update
+        </button>
+    </div>
 </div>
 
+<script>
+function testManualUpdate() {
+    const newWindow = window.open('/einfachlernen/customer/', '_blank');
+    setTimeout(() => {
+        if (newWindow) {
+            newWindow.postMessage({ type: 'TEST_MANUAL_UPDATE' }, '*');
+        }
+    }, 2000);
+}
+</script>
 
 <div style='background:#f8f9fa;padding:1.5rem;margin:2rem 0;border:1px solid #dee2e6;border-radius:8px;'>
     <h3 style='color:#4a90b8;margin-top:0;'>📧 Email Delivery Monitor</h3>

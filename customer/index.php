@@ -144,6 +144,22 @@ if(!empty($_SESSION['customer'])) {
             border: 2px solid rgba(255, 255, 255, 0.3);
         }
 
+        .user-avatar.clickable {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .user-avatar.clickable:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.6);
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
+        }
+
+        .user-avatar.clickable:active {
+            transform: scale(0.98);
+        }
+
         .user-info h1 {
             font-size: 1.4rem;
             font-weight: 600;
@@ -199,13 +215,6 @@ if(!empty($_SESSION['customer'])) {
         .welcome-section p {
             color: var(--gray-medium);
             font-size: 0.9rem;
-        }
-
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
         }
 
         .info-card {
@@ -354,6 +363,209 @@ if(!empty($_SESSION['customer'])) {
             color: var(--gray-medium);
         }
 
+        .main-features {
+            margin-top: 2rem;
+        }
+
+        .feature-placeholder {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .placeholder-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px var(--shadow);
+            border: 1px solid #f0f0f0;
+            text-align: center;
+            position: relative;
+            opacity: 0.7;
+            transition: all 0.3s ease;
+        }
+
+        .placeholder-card:hover {
+            opacity: 0.8;
+            transform: translateY(-2px);
+        }
+
+        .placeholder-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 1rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            opacity: 0.6;
+        }
+
+        .placeholder-card h3 {
+            margin: 0 0 0.5rem 0;
+            color: var(--gray-dark);
+            font-size: 1.1rem;
+        }
+
+        .placeholder-card p {
+            margin: 0 0 1rem 0;
+            color: var(--gray-medium);
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .coming-soon {
+            display: inline-block;
+            background: #e3f2fd;
+            color: var(--primary);
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Modal Container */
+        .modal-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow: hidden;
+            transform: translateY(30px) scale(0.95);
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active .modal-container {
+            transform: translateY(0) scale(1);
+        }
+
+        /* Modal Header */
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .modal-avatar {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .modal-title h2 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .modal-title p {
+            margin: 0.25rem 0 0 0;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .modal-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.2rem;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+
+        /* Modal Content */
+        .modal-content {
+            padding: 1.5rem;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .modal-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* Modal Footer */
+        .modal-footer {
+            border-top: 1px solid #f0f0f0;
+            padding: 1rem 1.5rem;
+            text-align: center;
+            background: var(--gray-light);
+        }
+
+        .modal-footer-btn {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(74, 144, 184, 0.3);
+        }
+
+        .modal-footer-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 144, 184, 0.4);
+        }
+
         .app-footer {
             margin-top: auto;
             padding: 1.5rem;
@@ -395,11 +607,6 @@ if(!empty($_SESSION['customer'])) {
                 padding: 1rem;
             }
             
-            .info-grid {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-            }
-            
             .action-grid {
                 grid-template-columns: 1fr;
             }
@@ -435,6 +642,56 @@ if(!empty($_SESSION['customer'])) {
             }
         }
 
+        @media (max-width: 768px) {
+            .modal-container {
+                margin: 0.5rem;
+                max-height: 95vh;
+            }
+
+            .modal-header {
+                padding: 1rem;
+            }
+
+            .modal-title h2 {
+                font-size: 1.1rem;
+            }
+
+            .modal-content {
+                padding: 1rem;
+            }
+
+            .modal-info-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .modal-footer {
+                padding: 1rem;
+            }
+
+            .feature-placeholder {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .modal-overlay {
+                padding: 0.5rem;
+            }
+
+            .modal-title {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+
+            .modal-avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
+        }
+
         .app-container {
             animation: fadeInUp 0.6s ease-out;
         }
@@ -455,7 +712,7 @@ if(!empty($_SESSION['customer'])) {
     <div class="app-container">
         <header class="app-header">
             <div class="header-content">
-                <div class="user-avatar">👤</div>
+                <div class="user-avatar clickable" onclick="toggleUserModal()">👤</div>
                 <div class="user-info">
                     <h1>Willkommen, <?= htmlspecialchars($customer['first_name']) ?>!</h1>
                     <p>Ihr persönlicher Lernbereich</p>
@@ -469,55 +726,7 @@ if(!empty($_SESSION['customer'])) {
         <main class="app-content">
             <section class="welcome-section">
                 <h2>🎯 Herzlich willkommen in Ihrem Lernbereich</h2>
-                <p>Hier finden Sie alle wichtigen Informationen zu Ihrem Lerncoaching bei Anna Braun.</p>
-            </section>
-
-            <section class="info-grid">
-                <div class="info-card">
-                    <div class="card-header">
-                        <div class="card-icon profile">👤</div>
-                        <h3 class="card-title">Persönliche Daten</h3>
-                    </div>
-                    <div class="card-content">
-                        <div class="label">Name</div>
-                        <div class="value"><?= htmlspecialchars(trim($customer['first_name'] . ' ' . $customer['last_name'])) ?></div>
-                        
-                        <div class="label" style="margin-top: 0.75rem;">E-Mail</div>
-                        <div class="value"><?= htmlspecialchars($customer['email']) ?></div>
-                    </div>
-                </div>
-
-                <div class="info-card">
-                    <div class="card-header">
-                        <div class="card-icon contact">📞</div>
-                        <h3 class="card-title">Kontaktdaten</h3>
-                    </div>
-                    <div class="card-content">
-                        <div class="label">Telefon</div>
-                        <div class="value"><?= htmlspecialchars($customer['phone'] ?: 'Nicht hinterlegt') ?></div>
-                        
-                        <div class="label" style="margin-top: 0.75rem;">Kunde seit</div>
-                        <div class="value"><?= date('d.m.Y', strtotime($customer['created_at'])) ?></div>
-                    </div>
-                </div>
-
-                <div class="info-card">
-                    <div class="card-header">
-                        <div class="card-icon status">⚡</div>
-                        <h3 class="card-title">Status</h3>
-                    </div>
-                    <div class="card-content">
-                        <div class="label">Account-Status</div>
-                        <div class="status-badge active">
-                            <span>✅</span> <?= ucfirst(htmlspecialchars($customer['status'])) ?>
-                        </div>
-                        
-                        <?php if(!empty($customer['last_login'])): ?>
-                        <div class="label" style="margin-top: 0.75rem;">Letzter Login</div>
-                        <div class="value"><?= date('d.m.Y, H:i', strtotime($customer['last_login'])) ?> Uhr</div>
-                        <?php endif; ?>
-                    </div>
-                </div>
+                <p>Hier finden Sie alle wichtigen Funktionen für Ihr Lerncoaching bei Anna Braun.</p>
             </section>
 
             <section class="quick-actions">
@@ -559,6 +768,35 @@ if(!empty($_SESSION['customer'])) {
                     </a>
                 </div>
             </section>
+
+            <section class="main-features">
+                <h2 class="section-title">
+                    <span>📚</span> Ihre Lernreise
+                </h2>
+
+                <div class="feature-placeholder">
+                    <div class="placeholder-card">
+                        <div class="placeholder-icon">🎯</div>
+                        <h3>Lernfortschritt</h3>
+                        <p>Verfolgen Sie Ihren Lernfortschritt und erreichte Meilensteine.</p>
+                        <span class="coming-soon">Bald verfügbar</span>
+                    </div>
+
+                    <div class="placeholder-card">
+                        <div class="placeholder-icon">📝</div>
+                        <h3>Aufgaben</h3>
+                        <p>Bearbeiten Sie Ihre individuellen Lernaufgaben und Übungen.</p>
+                        <span class="coming-soon">Bald verfügbar</span>
+                    </div>
+
+                    <div class="placeholder-card">
+                        <div class="placeholder-icon">📊</div>
+                        <h3>Berichte</h3>
+                        <p>Detaillierte Berichte über Ihre Lernerfolge und Entwicklung.</p>
+                        <span class="coming-soon">Bald verfügbar</span>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <footer class="app-footer">
@@ -566,7 +804,103 @@ if(!empty($_SESSION['customer'])) {
         </footer>
     </div>
 
+    <!-- User Info Modal -->
+    <div class="modal-overlay" id="userModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <div class="modal-avatar">👤</div>
+                    <div>
+                        <h2>Ihre Kontoinformationen</h2>
+                        <p>Persönliche Daten und Status-Übersicht</p>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeUserModal()">
+                    <span>✕</span>
+                </button>
+            </div>
+
+            <div class="modal-content">
+                <section class="modal-info-grid">
+                    <div class="info-card">
+                        <div class="card-header">
+                            <div class="card-icon profile">👤</div>
+                            <h3 class="card-title">Persönliche Daten</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="label">Name</div>
+                            <div class="value"><?= htmlspecialchars(trim($customer['first_name'] . ' ' . $customer['last_name'])) ?></div>
+
+                            <div class="label" style="margin-top: 0.75rem;">E-Mail</div>
+                            <div class="value"><?= htmlspecialchars($customer['email']) ?></div>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <div class="card-header">
+                            <div class="card-icon contact">📞</div>
+                            <h3 class="card-title">Kontaktdaten</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="label">Telefon</div>
+                            <div class="value"><?= htmlspecialchars($customer['phone'] ?: 'Nicht hinterlegt') ?></div>
+
+                            <div class="label" style="margin-top: 0.75rem;">Kunde seit</div>
+                            <div class="value"><?= date('d.m.Y', strtotime($customer['created_at'])) ?></div>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <div class="card-header">
+                            <div class="card-icon status">⚡</div>
+                            <h3 class="card-title">Status</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="label">Account-Status</div>
+                            <div class="status-badge active">
+                                <span>✅</span> <?= ucfirst(htmlspecialchars($customer['status'])) ?>
+                            </div>
+
+                            <?php if(!empty($customer['last_login'])): ?>
+                            <div class="label" style="margin-top: 0.75rem;">Letzter Login</div>
+                            <div class="value"><?= date('d.m.Y, H:i', strtotime($customer['last_login'])) ?> Uhr</div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="modal-footer">
+                <button class="modal-footer-btn" onclick="closeUserModal()">
+                    Schließen
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Modal Control Functions
+        function toggleUserModal() {
+            const modal = document.getElementById('userModal');
+            if (modal.classList.contains('active')) {
+                closeUserModal();
+            } else {
+                openUserModal();
+            }
+        }
+
+        function openUserModal() {
+            const modal = document.getElementById('userModal');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeUserModal() {
+            const modal = document.getElementById('userModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const observerOptions = {
                 threshold: 0.1,
@@ -582,7 +916,7 @@ if(!empty($_SESSION['customer'])) {
                 });
             }, observerOptions);
 
-            document.querySelectorAll('.info-card, .action-card').forEach(card => {
+            document.querySelectorAll('.action-card').forEach(card => {
                 card.style.opacity = '0';
                 card.style.transform = 'translateY(20px)';
                 card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
@@ -596,6 +930,20 @@ if(!empty($_SESSION['customer'])) {
                         this.style.transform = '';
                     }, 150);
                 });
+            });
+
+            const modal = document.getElementById('userModal');
+
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeUserModal();
+                }
+            });
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && modal.classList.contains('active')) {
+                    closeUserModal();
+                }
             });
 
             let lastActivity = Date.now();

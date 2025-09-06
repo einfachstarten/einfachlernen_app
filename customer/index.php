@@ -587,6 +587,26 @@ if(!empty($_SESSION['customer'])) {
             font-size: 0.75rem;
         }
 
+        #app-version {
+            font-size: 0.7rem;
+            opacity: 0.8;
+            cursor: pointer;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        #app-version:hover {
+            background: rgba(74, 144, 184, 0.1);
+            opacity: 1;
+            transform: scale(1.05);
+        }
+
+        #app-version:active {
+            transform: scale(0.95);
+        }
+
         #appVersion {
             font-weight: 500;
             color: var(--primary);
@@ -874,8 +894,12 @@ if(!empty($_SESSION['customer'])) {
 
         <footer class="app-footer">
             <p>&copy; <?= date('Y') ?> Anna Braun Lerncoaching - Dein Partner für ganzheitliche Lernunterstützung</p>
-            <p class="app-version">
-                <small>App Version: <span id="appVersion">Lädt...</span></small>
+            <p style="margin-top: 0.5rem;">
+                <span id="app-version"
+                    onclick="checkForUpdatesManually()"
+                    title="Klicken um nach Updates zu suchen">
+                    App Version: <span id="appVersion">Lädt...</span>
+                </span>
             </p>
         </footer>
     </div>
@@ -1190,6 +1214,33 @@ if(!empty($_SESSION['customer'])) {
     }
 
     document.addEventListener('DOMContentLoaded', loadAppVersion);
+    </script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const versionElement = document.getElementById('app-version');
+        if (versionElement) {
+            versionElement.addEventListener('mousedown', () => {
+                versionElement.style.background = 'rgba(74, 144, 184, 0.2)';
+            });
+
+            versionElement.addEventListener('mouseup', () => {
+                setTimeout(() => {
+                    versionElement.style.background = '';
+                }, 150);
+            });
+
+            versionElement.addEventListener('touchstart', () => {
+                versionElement.style.background = 'rgba(74, 144, 184, 0.2)';
+            });
+
+            versionElement.addEventListener('touchend', () => {
+                setTimeout(() => {
+                    versionElement.style.background = '';
+                }, 150);
+            });
+        }
+    });
     </script>
     <!-- PWA Install Button - ADD THIS SCRIPT BLOCK ONLY -->
     <script>

@@ -120,25 +120,26 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
         $mail->MessageID = '<ab_' . uniqid() . '.' . time() . '@einfachstarten.jetzt>';
 
         $mail->isHTML(false);
-        $mail->Subject = 'Anmelde-Code für Ihren Termin';
+        $mail->Subject = 'Dein Login-Code für Anna Braun Lerncoaching';
         $mail->CharSet = 'UTF-8';
 
-        // Optimized Content
-        $message = "Hallo {$to_name},\n\n";
-        $message .= "hier ist Ihr angeforderter Anmelde-Code für das Kundenkonto:\n\n";
-        $message .= "Anmelde-Code: {$pin}\n";
-        $message .= "Gültig bis: " . date('d.m.Y \u\m H:i', strtotime($expires)) . " Uhr\n\n";
-        $message .= "Zur Anmeldung: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
-        $message .= "Dieser Code ist {$duration_minutes} Minuten gültig.\n";
-        $message .= "Falls Sie diesen Code nicht angefordert haben, können Sie diese Nachricht ignorieren.\n\n";
-        $message .= "Bei Fragen erreichen Sie uns unter termine@einfachstarten.jetzt\n\n";
-        $message .= "Freundliche Grüße\n";
+        // Restored design in DU-Form
+        $message = "Liebe/r {$to_name},\n\n";
+        $message .= "du hast einen Login-Code für dein Kundenkonto angefordert.\n\n";
+        $message .= "🔐 Dein Login-Code: {$pin}\n";
+        $message .= "⏰ Gültig bis: " . date('d.m.Y \u\m H:i', strtotime($expires)) . " Uhr\n\n";
+        $message .= "► Zum Login: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
+        $message .= "Aus Sicherheitsgründen ist dieser Code nur {$duration_minutes} Minuten gültig.\n";
+        $message .= "Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail ignorieren.\n\n";
+        $message .= "Bei Fragen stehe ich dir gerne zur Verfügung.\n\n";
+        $message .= "Mit freundlichen Grüßen\n";
         $message .= "Anna Braun\n";
-        $message .= "Lerncoaching\n\n";
+        $message .= "Ganzheitliches Lerncoaching\n\n";
         $message .= "---\n";
         $message .= "Anna Braun Lerncoaching\n";
         $message .= "E-Mail: termine@einfachstarten.jetzt\n";
-        $message .= "Web: www.einfachlernen.jetzt";
+        $message .= "Web: www.einfachlernen.jetzt\n";
+        $message .= "Diese E-Mail wurde automatisch generiert.";
 
         $mail->Body = $message;
 
@@ -187,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
             'email_template' => 'plain_text_v1',
             'email_format' => 'plain_text',
             'pin_expires_at' => $expires,
-            'email_subject' => 'Anmelde-Code für Ihren Termin'
+            'email_subject' => 'Dein Login-Code für Anna Braun Lerncoaching'
         ]);
     }
 

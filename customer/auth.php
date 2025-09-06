@@ -55,4 +55,23 @@ function destroy_customer_session(){
         setcookie('customer_session','',time()-3600,'/einfachlernen/', '', true, true);
     }
 }
+// Handle auth check for PWA
+if (isset($_GET['check']) && $_GET['check'] === '1') {
+    header('Content-Type: application/json');
+
+    $customer = get_current_customer();
+
+    if ($customer) {
+        echo json_encode([
+            'loggedIn' => true,
+            'customer' => [
+                'email' => $customer['email'],
+                'first_name' => $customer['first_name']
+            ]
+        ]);
+    } else {
+        echo json_encode(['loggedIn' => false]);
+    }
+    exit;
+}
 ?>

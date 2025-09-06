@@ -6,8 +6,9 @@ $logger = new ActivityLogger($pdo);
 $error = '';
 
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
-    $email = trim($_POST['email'] ?? '');
-    $pin = trim($_POST['pin'] ?? '');
+    // Support both standard names (for password managers) and custom names
+    $email = trim($_POST['email'] ?? $_POST['username'] ?? '');
+    $pin = trim($_POST['pin'] ?? $_POST['password'] ?? '');
     
     if($email === '' || $pin === ''){
         $error = 'Bitte geben Sie E-Mail und PIN ein.';
@@ -282,6 +283,31 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
             }
         }
 
+        /* Enhanced PIN input styling */
+        #pin {
+            font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+            letter-spacing: 0.2em;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        /* Mobile numeric keyboard styling */
+        #pin:focus {
+            font-size: 1.4rem;
+        }
+
+        @media (max-width: 768px) {
+            #pin {
+                font-size: 1.3rem;
+                padding: 1rem;
+            }
+
+            #pin:focus {
+                font-size: 1.5rem;
+            }
+        }
+
         .loading {
             position: relative;
             overflow: hidden;
@@ -335,27 +361,30 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
             <form method="post" id="loginForm">
                 <div class="form-group">
                     <label class="form-label" for="email">E-Mail-Adresse</label>
-                    <input 
-                        type="email" 
+                    <input
+                        type="email"
                         id="email"
-                        name="email" 
-                        class="form-input" 
+                        name="email"
+                        class="form-input"
                         placeholder="ihre.email@example.com"
-                        value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
+                        value="<?= htmlspecialchars($_POST['email'] ?? $_POST['username'] ?? '') ?>"
+                        autocomplete="username"
                         required
                     >
                 </div>
 
                 <div class="form-group">
                     <label class="form-label" for="pin">PIN (6-stellig)</label>
-                    <input 
-                        type="password" 
+                    <input
+                        type="password"
                         id="pin"
-                        name="pin" 
-                        class="form-input" 
+                        name="pin"
+                        class="form-input"
                         placeholder="123456"
                         maxlength="6"
                         pattern="[0-9]{6}"
+                        inputmode="numeric"
+                        autocomplete="current-password"
                         required
                     >
                 </div>
@@ -363,6 +392,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
                 <button type="submit" class="login-button" id="submitBtn">
                     <span id="submitText">Anmelden</span>
                 </button>
+                <!-- Hidden fields for optimal password manager recognition -->
+                <input type="hidden" name="username" id="hidden-username">
+                <input type="hidden" name="password" id="hidden-password">
             </form>
         </div>
     </div>
@@ -381,12 +413,19 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
                 e.target.value = value;
                 
                 if (value.length === 6 && emailInput.value) {
+                    // Sync values for password managers
+                    document.getElementById('hidden-username').value = emailInput.value;
+                    document.getElementById('hidden-password').value = value;
                     setTimeout(() => form.submit(), 100);
                 }
             });
 
             // Form submission with loading state
             form.addEventListener('submit', function(e) {
+                // Sync values for password managers before submit
+                document.getElementById('hidden-username').value = emailInput.value;
+                document.getElementById('hidden-password').value = pinInput.value;
+
                 submitBtn.disabled = true;
                 submitBtn.classList.add('loading');
                 submitText.textContent = 'Wird angemeldet...';

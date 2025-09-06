@@ -32,18 +32,35 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
         $mail->addAddress($to_email, $to_name);
         $mail->addReplyTo($config['SMTP_FROM_EMAIL'], $config['SMTP_FROM_NAME']);
 
-        // Enable HTML and UTF-8
         $mail->isHTML(true);
         $mail->Subject = '🔐 Dein Login-Code für Anna Braun Lerncoaching';
         $mail->CharSet = 'UTF-8';
 
-        // Additional headers for better deliverability
-        $mail->addCustomHeader('X-Mailer', 'Anna Braun Lerncoaching System');
-        $mail->addCustomHeader('X-Priority', '1');
-        $mail->addCustomHeader('Importance', 'High');
+        // FIXED: Proper date formatting
+        $expiry_timestamp = strtotime($expires);
+        $formatted_expiry = date('d.m.Y \\u\\m H:i', $expiry_timestamp) . ' Uhr';
 
-        // Premium HTML email template
-        $html_message = '<!DOCTYPE html>
+        // FIXED: Dynamic duration calculation
+        $now = time();
+        $expiry_time = strtotime($expires);
+        $duration_seconds = $expiry_time - $now;
+
+        if ($duration_seconds < 3600) {
+            $duration_text = round($duration_seconds / 60) . ' Minuten';
+        } elseif ($duration_seconds < 86400) {
+            $duration_text = round($duration_seconds / 3600) . ' Stunden';
+        } else {
+            $days = round($duration_seconds / 86400);
+            if ($days > 30) {
+                $months = round($days / 30);
+                $duration_text = $months . ' Monat' . ($months > 1 ? 'e' : '');
+            } else {
+                $duration_text = $days . ' Tag' . ($days > 1 ? 'e' : '');
+            }
+        }
+
+        $html_message = '
+<!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
@@ -220,7 +237,7 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
             <div class="pin-container">
                 <p class="pin-label">Dein Login-Code</p>
                 <p class="pin-code">' . $pin . '</p>
-                <p class="pin-expiry">⏰ Gültig bis ' . date('d.m.Y um H:i', strtotime($expires)) . ' Uhr</p>
+                <p class="pin-expiry">⏰ Gültig bis ' . $formatted_expiry . '</p>
             </div>
             
             <div style="text-align: center;">
@@ -230,7 +247,7 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
             </div>
             
             <div class="info-box">
-                <p><strong>Wichtiger Hinweis:</strong> Aus Sicherheitsgründen ist dieser Code nur ' . $duration_minutes . ' Minuten gültig. Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail einfach ignorieren.</p>
+                <p><strong>Wichtiger Hinweis:</strong> Der PIN ist bis ' . $formatted_expiry . ' gültig. Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail einfach ignorieren.</p>
             </div>
             
             <p style="color: #718096; font-size: 14px; margin-top: 30px;">
@@ -256,13 +273,13 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
 </body>
 </html>';
 
-        // Plain text version for email clients that don't support HTML
+        // UPDATED Plain text version
         $plain_message = "Lieber {$to_name},\n\n";
         $plain_message .= "hier ist dein Login-Code für das Kundenkonto und den personalisierten Lernbereich!\n\n";
         $plain_message .= "🔐 Dein Login-Code: {$pin}\n";
-        $plain_message .= "⏰ Gültig bis: " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr\n\n";
+        $plain_message .= "⏰ Gültig bis: {$formatted_expiry}\n\n";
         $plain_message .= "► Zum Login: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
-        $plain_message .= "Aus Sicherheitsgründen ist dieser Code nur {$duration_minutes} Minuten gültig.\n";
+        $plain_message .= "Der PIN ist bis {$formatted_expiry} gültig.\n";
         $plain_message .= "Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail ignorieren.\n\n";
         $plain_message .= "Bei Fragen stehe ich dir gerne zur Verfügung.\n\n";
         $plain_message .= "Liebe Grüße\n";
@@ -278,8 +295,7 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
         $mail->AltBody = $plain_message;
 
         $mail->send();
-        return [true, 'Email sent successfully via SMTP'];
-
+        return [true, ''];
     } catch (Exception $e) {
         return [false, $mail->ErrorInfo ?: $e->getMessage()];
     }

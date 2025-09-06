@@ -85,16 +85,17 @@ function build_calendly_link($baseUrl, $startIso, $customer_email) {
     return $baseUrl . $sep . 'month=' . rawurlencode($month) . '&email=' . rawurlencode($customer_email);
 }
 
-function logBookingError($customer_id, $service_slug, $error_type, $error_details) {
+function logSlotSearchError($customer_id, $service_slug, $error_type, $error_details) {
     require_once __DIR__ . '/../admin/ActivityLogger.php';
     $pdo = getPDO();
     $logger = new ActivityLogger($pdo);
 
-    $logger->logActivity($customer_id, 'booking_failed', [
+    $logger->logActivity($customer_id, 'slot_search_failed', [
         'service_slug' => $service_slug,
         'failure_reason' => $error_type,
         'error_details' => $error_details,
-        'api_error' => true
+        'api_error' => true,
+        'search_type' => 'availability_check'
     ]);
 }
 
@@ -122,26 +123,27 @@ if (isset($services[$service_slug])) {
 }
 
 if (!empty($service_slug) && isset($services[$service_slug])) {
-    $logger->logActivity($customer['id'], 'booking_initiated', [
+    $logger->logActivity($customer['id'], 'availability_checked', [
         'service_slug' => $service_slug,
         'service_name' => $services[$service_slug]['name'],
         'week_offset' => $current_week,
-        'slots_requested' => $target_count
+        'slots_requested' => $target_count,
+        'check_type' => 'slot_search'
     ]);
 }
 
 if (!isset($services[$service_slug])) {
-    logBookingError($customer['id'], $service_slug, 'unknown_service', 'Service not found');
+    logSlotSearchError($customer['id'], $service_slug, 'unknown_service', 'Service not found');
     json_error('Unbekannter Service: ' . $service_slug);
 }
 
 if ($CALENDLY_TOKEN === 'PASTE_YOUR_TOKEN_HERE') {
-    logBookingError($customer['id'], $service_slug, 'api_not_configured', 'Calendly token not set');
+    logSlotSearchError($customer['id'], $service_slug, 'api_not_configured', 'Calendly token not set');
     json_error('API not configured', 500);
 }
 
 if (!$ORG_URI) {
-    logBookingError($customer['id'], $service_slug, 'org_uri_missing', 'Organization URI not configured');
+    logSlotSearchError($customer['id'], $service_slug, 'org_uri_missing', 'Organization URI not configured');
     json_error('Server-Konfigurationsfehler', 500);
 }
 
@@ -166,23 +168,26 @@ try {
     $api_response_time = microtime(true) - $api_start;
 
     if (empty($api_response)) {
-        logBookingError($customer['id'], $service_slug, 'api_timeout', 'Calendly API timeout or connection error');
+        logSlotSearchError($customer['id'], $service_slug, 'api_timeout', 'Calendly API timeout or connection error');
         json_error('Booking service temporarily unavailable');
     }
 
     if ($api_response && !empty($api_response['collection'])) {
-        $logger->logActivity($customer['id'], 'booking_completed', [
+        $logger->logActivity($customer['id'], 'slots_found', [
             'service_slug' => $service_slug,
-            'slots_found' => count($api_response['collection']),
+            'slots_count' => count($api_response['collection']),
+            'week_offset' => $current_week,
             'api_success' => true,
-            'calendly_response_time' => $api_response_time
+            'calendly_response_time' => $api_response_time,
+            'search_successful' => true
         ]);
     } else {
-        $logger->logActivity($customer['id'], 'booking_failed', [
+        $logger->logActivity($customer['id'], 'slots_not_found', [
             'service_slug' => $service_slug,
-            'failure_reason' => 'no_slots_available',
+            'week_offset' => $current_week,
+            'reason' => 'no_slots_available',
             'api_response_empty' => empty($api_response),
-            'error_details' => $api_response['error'] ?? 'unknown'
+            'search_unsuccessful' => true
         ]);
     }
 
@@ -243,7 +248,7 @@ try {
     ]);
     
 } catch (Throwable $e) {
-    logBookingError($customer['id'], $service_slug, 'exception', $e->getMessage());
+    logSlotSearchError($customer['id'], $service_slug, 'exception', $e->getMessage());
     error_log("Secure Slots API Error: " . $e->getMessage());
     json_error('Interner Server-Fehler', 500);
 }

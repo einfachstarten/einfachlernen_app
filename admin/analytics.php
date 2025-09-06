@@ -29,6 +29,26 @@ $days = $_GET['days'] ?? 30;
 $stats = $logger->getActivityStats($days);
 $top_customers = $logger->getTopActiveCustomers($days);
 
+$activity_descriptions = [
+    'login' => 'Login (PIN)',
+    'login_failed' => 'Login Failed',
+    'logout' => 'Logout',
+    'pin_request' => 'PIN Requested',
+    'session_timeout' => 'Session Timeout',
+    'dashboard_accessed' => 'Dashboard Accessed',
+    'profile_refreshed' => 'Profile Refreshed',
+    'page_view' => 'Page View',
+    'slots_api_called' => 'Slot Search API',
+    'service_viewed' => 'Service Viewed',
+    'availability_checked' => 'Availability Checked',
+    'slots_found' => 'Slots Found',
+    'slots_not_found' => 'No Slots Available',
+    'slot_search_failed' => 'Slot Search Error',
+    'booking_initiated' => 'Real Booking Started',
+    'booking_completed' => 'Booking Confirmed',
+    'booking_failed' => 'Booking Failed'
+];
+
 echo "<h1>Customer Activity Analytics</h1>";
 echo "<nav><a href='dashboard.php'>← Back to Dashboard</a></nav>";
 
@@ -63,8 +83,9 @@ if (empty($stats)) {
     foreach ($activity_totals as $type => $data) {
         $avg_per_day = round($data['count'] / $days, 1);
         $unique_customers = max($data['customers']);
+        $display_name = $activity_descriptions[$type] ?? ucfirst(str_replace('_', ' ', $type));
         echo "<tr>";
-        echo "<td>" . ucfirst(str_replace('_', ' ', $type)) . "</td>";
+        echo "<td>{$display_name}</td>";
         echo "<td>{$data['count']}</td>";
         echo "<td>$unique_customers</td>";
         echo "<td>$avg_per_day</td>";

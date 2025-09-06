@@ -759,7 +759,7 @@ if(!empty($_SESSION['customer'])) {
                         </div>
                     </a>
                     
-                    <a href="../termine.html?email=<?= urlencode($customer['email']) ?>" class="action-card">
+                    <a href="termine.php" class="action-card">
                         <div class="action-icon">📋</div>
                         <div class="action-content">
                             <h3>Meine Termine</h3>

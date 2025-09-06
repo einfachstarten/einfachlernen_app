@@ -318,6 +318,25 @@ if(!empty($_SESSION['customer'])) {
             gap: 1rem;
         }
 
+        /* Optimize for 4 cards */
+        @media (min-width: 768px) {
+            .action-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .action-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 767px) {
+            .action-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .action-card {
             background: white;
             border-radius: 12px;
@@ -348,6 +367,38 @@ if(!empty($_SESSION['customer'])) {
             justify-content: center;
             font-size: 1.4rem;
             background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        /* Enhanced action icons for new functions */
+        .action-card:nth-child(1) .action-icon {
+            background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%);
+        }
+
+        .action-card:nth-child(2) .action-icon {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        .action-card:nth-child(3) .action-icon {
+            background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
+        }
+
+        .action-card:nth-child(4) .action-icon {
+            background: linear-gradient(135deg, #ff7043 0%, #f4511e 100%);
+        }
+
+        /* Hover effects for contact actions */
+        .action-card[href^="mailto:"]:hover {
+            border-left-color: #66bb6a;
+        }
+
+        .action-card[href^="tel:"]:hover {
+            border-left-color: #ff7043;
+        }
+
+        /* Icon animations */
+        .action-card:hover .action-icon {
+            transform: scale(1.1) rotate(5deg);
+            transition: all 0.3s ease;
         }
 
         .action-content h3 {
@@ -606,11 +657,6 @@ if(!empty($_SESSION['customer'])) {
             .app-content {
                 padding: 1rem;
             }
-            
-            .action-grid {
-                grid-template-columns: 1fr;
-            }
-            
             .logout-btn {
                 padding: 0.4rem 0.8rem;
                 font-size: 0.8rem;
@@ -639,6 +685,21 @@ if(!empty($_SESSION['customer'])) {
             
             .action-card {
                 padding: 1rem;
+                gap: 0.75rem;
+            }
+
+            .action-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
+
+            .action-content h3 {
+                font-size: 0.9rem;
+            }
+
+            .action-content p {
+                font-size: 0.8rem;
             }
         }
 
@@ -733,37 +794,40 @@ if(!empty($_SESSION['customer'])) {
                 <h2 class="section-title">
                     <span>⚡</span> Schnellzugriff
                 </h2>
-                
                 <div class="action-grid">
-                    <a href="mailto:info@einfachlernen.jetzt" class="action-card">
-                        <div class="action-icon">📧</div>
-                        <div class="action-content">
-                            <h3>Nachricht senden</h3>
-                            <p>Kontakt zu Anna Braun aufnehmen</p>
-                        </div>
-                    </a>
-                    
-                    <a href="tel:+4369912345678" class="action-card">
-                        <div class="action-icon">📞</div>
-                        <div class="action-content">
-                            <h3>Anrufen</h3>
-                            <p>Direkte telefonische Beratung</p>
-                        </div>
-                    </a>
-                    
-                    <a href="termine-suchen.php" class="action-card">
-                        <div class="action-icon">📅</div>
-                        <div class="action-content">
-                            <h3>Termine suchen</h3>
-                            <p>Verfügbare Coaching-Termine finden</p>
-                        </div>
-                    </a>
-                    
+                    <!-- 1. Meine Termine -->
                     <a href="termine.php" class="action-card">
                         <div class="action-icon">📋</div>
                         <div class="action-content">
                             <h3>Meine Termine</h3>
                             <p>Übersicht gebuchter Termine</p>
+                        </div>
+                    </a>
+
+                    <!-- 2. Termin buchen -->
+                    <a href="termine-suchen.php" class="action-card">
+                        <div class="action-icon">🔍</div>
+                        <div class="action-content">
+                            <h3>Termin buchen</h3>
+                            <p>Neuen Coaching-Termin vereinbaren</p>
+                        </div>
+                    </a>
+
+                    <!-- 3. Nachricht senden -->
+                    <a href="mailto:annabraun@outlook.com?subject=Nachricht%20von%20<?= urlencode($customer['first_name'] . ' ' . $customer['last_name']) ?>&body=Hallo%20Anna,%0A%0A" class="action-card">
+                        <div class="action-icon">💬</div>
+                        <div class="action-content">
+                            <h3>Nachricht senden</h3>
+                            <p>Direkte E-Mail an Anna Braun</p>
+                        </div>
+                    </a>
+
+                    <!-- 4. Anrufen -->
+                    <a href="tel:+436606440636" class="action-card">
+                        <div class="action-icon">📞</div>
+                        <div class="action-content">
+                            <h3>Anrufen</h3>
+                            <p>Direkt mit Anna sprechen</p>
                         </div>
                     </a>
                 </div>

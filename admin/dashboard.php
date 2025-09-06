@@ -72,6 +72,20 @@ unset($c);
     <a href="migrate.php">Database Migration</a>
     <a href="?logout=1">Logout</a>
 </nav>
+<?php
+$app_version = '2.1.0'; // Keep in sync with SW
+$manifest_path = __DIR__ . '/../manifest.json';
+$sw_path = __DIR__ . '/../sw.js';
+
+echo "<div style='background:#e7f3ff;padding:1rem;margin:1rem 0;border:1px solid #0066cc;'>";
+echo "<h4>PWA Version Info</h4>";
+echo "<p><strong>App Version:</strong> $app_version</p>";
+echo "<p><strong>Manifest Last Modified:</strong> " . (file_exists($manifest_path) ? date('Y-m-d H:i:s', filemtime($manifest_path)) : 'Not found') . "</p>";
+echo "<p><strong>Service Worker Last Modified:</strong> " . (file_exists($sw_path) ? date('Y-m-d H:i:s', filemtime($sw_path)) : 'Not found') . "</p>";
+echo "<button onclick='forceClientUpdates()'>🚨 Force Update</button> ";
+echo "<button onclick='clearAllCaches()'>🗑️ Force Clear All Caches</button>";
+echo "</div>";
+?>
 <?php if(!empty($_GET['success'])): ?>
     <div style="background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin-bottom:1rem;">
         ✅ <?=htmlspecialchars($_GET['success'])?>
@@ -168,5 +182,6 @@ if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
     echo "</div>";
 }
 ?>
+<script src="../pwa-update.js"></script>
 </body>
 </html>

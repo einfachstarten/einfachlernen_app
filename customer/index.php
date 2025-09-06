@@ -1100,5 +1100,6 @@ if (window.matchMedia('(display-mode: standalone)').matches) {
     // Already running as PWA, don't show button
 }
 </script>
+<script src="../pwa-update.js"></script>
 </body>
 </html>

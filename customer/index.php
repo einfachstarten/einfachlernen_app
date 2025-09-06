@@ -3,29 +3,20 @@ require __DIR__.'/auth.php';
 
 // Customer session timeout: 4 hours
 if(isset($_SESSION['customer_last_activity']) && (time() - $_SESSION['customer_last_activity'] > 14400)){
-    // Log session timeout before destroying session
-    if(!empty($_SESSION['customer'])){
+    // Log session timeout
+    if(!empty($_SESSION['customer_id'])){
         require_once __DIR__ . '/../admin/ActivityLogger.php';
         $pdo = getPDO();
         $logger = new ActivityLogger($pdo);
-        $logger->logActivity($_SESSION['customer']['id'], 'session_timeout', [
-            'timeout_duration' => 14400, // 4 hours
+        $logger->logActivity($_SESSION['customer_id'], 'session_timeout', [
+            'timeout_duration' => 14400,
             'last_activity_ago' => time() - $_SESSION['customer_last_activity'],
             'auto_logout' => true
         ]);
     }
 
     destroy_customer_session();
-    $_SESSION = [];
-    if (ini_get('session.use_cookies')) {
-        $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000,
-            $params['path'], $params['domain'],
-            $params['secure'], $params['httponly']
-        );
-    }
-    session_destroy();
-    header('Location: ../login.php?message=' . urlencode('Sitzung abgelaufen. Bitte melde dich erneut an.'));
+    header('Location: ../login.php?message=' . urlencode('Sitzung abgelaufen. Bitte melden Sie sich erneut an.'));
     exit;
 }
 
@@ -38,38 +29,13 @@ if(isset($_GET['logout']) && !empty($_SESSION['customer'])){
         'session_duration' => time() - ($_SESSION['customer_login_time'] ?? time())
     ]);
 
-    $_SESSION = [];
-    if (ini_get('session.use_cookies')) {
-        $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000,
-            $params['path'], $params['domain'],
-            $params['secure'], $params['httponly']
-        );
-    }
     destroy_customer_session();
-    session_destroy();
     header('Location: ../login.php?message=' . urlencode('Erfolgreich abgemeldet'));
     exit;
 }
 
 $customer = require_customer_login();
 
-// iOS-specific session validation
-if (isset($_SESSION['ios_login_success']) && $_SESSION['ios_login_success']) {
-    error_log("iOS customer " . $customer['id'] . " successfully reached dashboard");
-    unset($_SESSION['ios_login_success']); // Clean up flag
-}
-
-// Additional validation for iOS
-$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-$is_ios = strpos($user_agent, 'iPhone') !== false || strpos($user_agent, 'iPad') !== false;
-
-if ($is_ios && !isset($_COOKIE['customer_session']) && !isset($_SESSION['customer_token'])) {
-    error_log("iOS session problem detected - no cookie or session token");
-    // Force re-login with message
-    header('Location: ../login.php?error=' . urlencode('iOS Session-Problem erkannt. Bitte erneut einloggen.'));
-    exit;
-}
 
 // Log dashboard access
 require_once __DIR__ . '/../admin/ActivityLogger.php';

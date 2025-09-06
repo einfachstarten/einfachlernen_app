@@ -365,15 +365,15 @@ logPageView($customer['id'], 'termine_suchen', [
                 <div class="service-grid">
                     <div class="service-card" data-service="lerntraining">
                         <h3>Lerntraining</h3>
-                        <p>50 Minuten • Ganzheitliches Lerncoaching</p>
+                        <p>50 Minuten</p>
                     </div>
                     <div class="service-card" data-service="neurofeedback-20">
                         <h3>Neurofeedback</h3>
-                        <p>20 Minuten • Kurzsession</p>
+                        <p>20 Minuten</p>
                     </div>
                     <div class="service-card" data-service="neurofeedback-40">
                         <h3>Neurofeedback</h3>
-                        <p>40 Minuten • Vollsession</p>
+                        <p>40 Minuten</p>
                     </div>
                 </div>
             </div>

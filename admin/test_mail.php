@@ -2,6 +2,73 @@
 session_start();
 if(empty($_SESSION['admin'])){header('Location: login.php');exit;}
 
+// Include PHPMailer classes
+require_once __DIR__ . '/phpmailer/Exception.php';
+require_once __DIR__ . '/phpmailer/PHPMailer.php';
+require_once __DIR__ . '/phpmailer/SMTP.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
+
+function sendSMTPEmail($to_email, $to_name, $pin, $expires) {
+    $config = require __DIR__ . '/config.php';
+
+    $mail = new PHPMailer(true);
+
+    try {
+        // Server settings
+        $mail->isSMTP();
+        $mail->Host = $config['SMTP_HOST'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $config['SMTP_USERNAME'];
+        $mail->Password = $config['SMTP_PASSWORD'];
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port = $config['SMTP_PORT'];
+        $mail->Timeout = $config['SMTP_TIMEOUT'];
+
+        $mail->SMTPDebug = SMTP::DEBUG_CONNECTION;
+        $mail->Debugoutput = function($str, $level) {
+            echo "<p style='color:#666;font-size:0.85em;font-family:monospace;'>SMTP: " . htmlspecialchars(trim($str)) . "</p>";
+        };
+
+        // Recipients
+        $mail->setFrom($config['SMTP_FROM_EMAIL'], $config['SMTP_FROM_NAME']);
+        $mail->addAddress($to_email, $to_name);
+        $mail->addReplyTo($config['SMTP_FROM_EMAIL'], $config['SMTP_FROM_NAME']);
+
+        // Content
+        $mail->isHTML(false);
+        $mail->Subject = 'Ihr Login-Code für Anna Braun Lerncoaching';
+        $mail->CharSet = 'UTF-8';
+
+        $message = "Liebe/r {$to_name},\n\n";
+        $message .= "Sie haben einen Login-Code für Ihr Kundenkonto angefordert.\n\n";
+        $message .= "🔐 Ihr Login-Code: {$pin}\n";
+        $message .= "⏰ Gültig bis: " . date('d.m.Y um H:i', strtotime($expires)) . " Uhr\n\n";
+        $message .= "► Zum Login: https://einfachstarten.jetzt/einfachlernen/login.php\n\n";
+        $message .= "Aus Sicherheitsgründen ist dieser Code nur 15 Minuten gültig.\n";
+        $message .= "Falls Sie diesen Code nicht angefordert haben, können Sie diese E-Mail ignorieren.\n\n";
+        $message .= "Bei Fragen stehen wir Ihnen gerne zur Verfügung.\n\n";
+        $message .= "Mit freundlichen Grüßen\n";
+        $message .= "Anna Braun\n";
+        $message .= "Ganzheitliches Lerncoaching\n\n";
+        $message .= "---\n";
+        $message .= "Anna Braun Lerncoaching\n";
+        $message .= "E-Mail: termine@einfachstarten.jetzt\n";
+        $message .= "Web: www.einfachlernen.jetzt\n";
+        $message .= "Diese E-Mail wurde automatisch generiert.";
+
+        $mail->Body = $message;
+
+        $mail->send();
+        return [true, 'Email sent successfully via SMTP'];
+
+    } catch (Exception $e) {
+        return [false, $mail->ErrorInfo];
+    }
+}
+
 echo "<h2>Email Test Utility</h2>";
 
 echo "<h3>Server Environment</h3>";
@@ -16,48 +83,67 @@ echo "</table>";
 
 if($_SERVER['REQUEST_METHOD'] === 'POST') {
     $test_email = $_POST['test_email'] ?? 'marcus@einfachstarten.jetzt';
+    $use_smtp = isset($_POST['use_smtp']);
 
-    // Temporary mail() implementation until SMTP/PHPMailer is integrated
-    $subject = 'Test-E-Mail von Anna Braun Lerncoaching';
-    $message = "Liebe/r Tester/in,\n\n";
-    $message .= "diese Test-E-Mail wurde erfolgreich versendet.\n\n";
-    $message .= "📧 Zeitpunkt: " . date('d.m.Y um H:i:s') . " Uhr\n";
-    $message .= "🖥️ Server: " . $_SERVER['SERVER_NAME'] . "\n";
-    $message .= "🐘 PHP Version: " . phpversion() . "\n\n";
-    $message .= "Falls Sie diese E-Mail erhalten, funktioniert das E-Mail-System korrekt.\n\n";
-    $message .= "Mit freundlichen Grüßen\n";
-    $message .= "Anna Braun Lerncoaching System";
+    if ($use_smtp) {
+        echo "<h3>Testing World4you SMTP...</h3>";
+        list($success, $message) = sendSMTPEmail(
+            $test_email,
+            'Test User',
+            '123456',
+            date('Y-m-d H:i:s', strtotime('+15 minutes'))
+        );
 
-    $headers = 'From: Anna Braun Lerncoaching <info@einfachlernen.jetzt>' . "\r\n" .
-               'Reply-To: info@einfachlernen.jetzt' . "\r\n" .
-               'Return-Path: info@einfachlernen.jetzt' . "\r\n" .
-               'Message-ID: <' . uniqid() . '.' . time() . '@einfachlernen.jetzt>' . "\r\n" .
-               'Date: ' . date('r') . "\r\n" .
-               'X-Mailer: Anna Braun CMS v1.0' . "\r\n" .
-               'X-Priority: 3 (Normal)' . "\r\n" .
-               'Importance: Normal' . "\r\n" .
-               'Content-Type: text/plain; charset=UTF-8' . "\r\n" .
-               'Content-Transfer-Encoding: 8bit' . "\r\n" .
-               'MIME-Version: 1.0' . "\r\n" .
-               'Organization: Anna Braun Lerncoaching';
-
-    $result = mail($test_email, $subject, $message, $headers);
-
-    if($result) {
-        echo "<p style='color:green'>✅ mail() returned TRUE - check email delivery</p>";
+        if($success) {
+            echo "<p style='color:green; font-weight:bold;'>✅ SMTP test successful!</p>";
+        } else {
+            echo "<p style='color:red; font-weight:bold;'>❌ SMTP test failed: " . htmlspecialchars($message) . "</p>";
+        }
     } else {
-        echo "<p style='color:red'>❌ mail() returned FALSE</p>";
-        $error = error_get_last();
-        echo "<p>Last error: " . ($error['message'] ?? 'No error details') . "</p>";
+        // Keep existing mail() test
+        $subject = 'Test-E-Mail von Anna Braun Lerncoaching';
+        $message = "Liebe/r Tester/in,\n\n";
+        $message .= "diese Test-E-Mail wurde erfolgreich versendet.\n\n";
+        $message .= "📧 Zeitpunkt: " . date('d.m.Y um H:i:s') . " Uhr\n";
+        $message .= "🖥️ Server: " . $_SERVER['SERVER_NAME'] . "\n";
+        $message .= "🐘 PHP Version: " . phpversion() . "\n\n";
+        $message .= "Falls Sie diese E-Mail erhalten, funktioniert das E-Mail-System korrekt.\n\n";
+        $message .= "Mit freundlichen Grüßen\n";
+        $message .= "Anna Braun Lerncoaching System";
+
+        $headers = 'From: Anna Braun Lerncoaching <info@einfachlernen.jetzt>' . "\r\n" .
+                   'Reply-To: info@einfachlernen.jetzt' . "\r\n" .
+                   'Return-Path: info@einfachlernen.jetzt' . "\r\n" .
+                   'Message-ID: <' . uniqid() . '.' . time() . '@einfachlernen.jetzt>' . "\r\n" .
+                   'Date: ' . date('r') . "\r\n" .
+                   'X-Mailer: Anna Braun CMS v1.0' . "\r\n" .
+                   'X-Priority: 3 (Normal)' . "\r\n" .
+                   'Importance: Normal' . "\r\n" .
+                   'Content-Type: text/plain; charset=UTF-8' . "\r\n" .
+                   'Content-Transfer-Encoding: 8bit' . "\r\n" .
+                   'MIME-Version: 1.0' . "\r\n" .
+                   'Organization: Anna Braun Lerncoaching';
+
+        $result = mail($test_email, $subject, $message, $headers);
+
+        if($result) {
+            echo "<p style='color:green'>✅ mail() returned TRUE - check email delivery</p>";
+        } else {
+            echo "<p style='color:red'>❌ mail() returned FALSE</p>";
+            $error = error_get_last();
+            echo "<p>Last error: " . ($error['message'] ?? 'No error details') . "</p>";
+        }
     }
 }
-?>
 
-<form method="post">
-    <label>Test Email Address:</label><br>
-    <input type="email" name="test_email" value="marcus@einfachstarten.jetzt" required><br><br>
-    <button type="submit">Send Test Email (mail() function)</button>
-</form>
+echo "<form method='post'>";
+echo "<label>Test Email Address:</label><br>";
+echo "<input type='email' name='test_email' value='marcus@einfachstarten.jetzt' required style='width:300px;padding:5px;'><br><br>";
+echo "<label style='display:block;margin:10px 0;'>";
+echo "<input type='checkbox' name='use_smtp' checked> Use World4you SMTP (Recommended)";
+echo "</label>";
+echo "<button type='submit' style='padding:10px 20px;'>Send Test Email</button>";
+echo "</form>";
 
-<p><a href="dashboard.php">← Back to Dashboard</a></p>
+echo "<p><a href='dashboard.php'>← Back to Dashboard</a></p>";
 

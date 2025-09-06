@@ -25,7 +25,7 @@ if(isset($_SESSION['customer_last_activity']) && (time() - $_SESSION['customer_l
         );
     }
     session_destroy();
-    header('Location: ../login.php?message=' . urlencode('Sitzung abgelaufen. Bitte melden Sie sich erneut an.'));
+    header('Location: ../login.php?message=' . urlencode('Sitzung abgelaufen. Bitte melde dich erneut an.'));
     exit;
 }
 
@@ -353,26 +353,14 @@ if(!empty($_SESSION['customer'])) {
 
         .action-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Better for 3 items */
             gap: 1rem;
+            margin-top: 1rem;
         }
 
-        /* Optimize for 4 cards */
-        @media (min-width: 768px) {
+        @media (max-width: 768px) {
             .action-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (min-width: 1024px) {
-            .action-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-
-        @media (max-width: 767px) {
-            .action-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr; /* Stack on mobile */
             }
         }
 
@@ -453,69 +441,6 @@ if(!empty($_SESSION['customer'])) {
             color: var(--gray-medium);
         }
 
-        .main-features {
-            margin-top: 2rem;
-        }
-
-        .feature-placeholder {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-top: 1rem;
-        }
-
-        .placeholder-card {
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 20px var(--shadow);
-            border: 1px solid #f0f0f0;
-            text-align: center;
-            position: relative;
-            opacity: 0.7;
-            transition: all 0.3s ease;
-        }
-
-        .placeholder-card:hover {
-            opacity: 0.8;
-            transform: translateY(-2px);
-        }
-
-        .placeholder-icon {
-            width: 60px;
-            height: 60px;
-            margin: 0 auto 1rem;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.8rem;
-            opacity: 0.6;
-        }
-
-        .placeholder-card h3 {
-            margin: 0 0 0.5rem 0;
-            color: var(--gray-dark);
-            font-size: 1.1rem;
-        }
-
-        .placeholder-card p {
-            margin: 0 0 1rem 0;
-            color: var(--gray-medium);
-            font-size: 0.9rem;
-            line-height: 1.4;
-        }
-
-        .coming-soon {
-            display: inline-block;
-            background: #e3f2fd;
-            color: var(--primary);
-            padding: 0.25rem 0.75rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
 
         /* Modal Overlay */
         .modal-overlay {
@@ -658,16 +583,30 @@ if(!empty($_SESSION['customer'])) {
 
         .app-footer {
             margin-top: auto;
+            background: var(--gray-light);
             padding: 1.5rem;
             text-align: center;
-            background: var(--gray-light);
-            border-top: 1px solid #e0e0e0;
+            border-top: 1px solid #e9ecef;
         }
 
         .app-footer p {
-            color: var(--gray-medium);
-            font-size: 0.8rem;
             margin: 0;
+            color: var(--gray-medium);
+            font-size: 0.85rem;
+        }
+
+        .app-version {
+            margin-top: 0.5rem !important;
+            opacity: 0.8;
+        }
+
+        .app-version small {
+            font-size: 0.75rem;
+        }
+
+        #appVersion {
+            font-weight: 500;
+            color: var(--primary);
         }
 
         @media (max-width: 768px) {
@@ -768,10 +707,6 @@ if(!empty($_SESSION['customer'])) {
             .modal-footer {
                 padding: 1rem;
             }
-
-            .feature-placeholder {
-                grid-template-columns: 1fr;
-            }
         }
 
         @media (max-width: 480px) {
@@ -815,9 +750,9 @@ if(!empty($_SESSION['customer'])) {
                 <div class="user-avatar clickable" onclick="toggleUserModal()">👤</div>
                 <div class="user-info">
                     <h1>Willkommen, <?= htmlspecialchars($customer['first_name']) ?>!</h1>
-                    <p>Ihr persönlicher Lernbereich</p>
+                    <p>Dein persönlicher Lernbereich</p>
                 </div>
-                <a href="?logout=1" class="logout-btn" onclick="return confirm('Möchten Sie sich wirklich abmelden?')">
+                <a href="?logout=1" class="logout-btn" onclick="return confirm('Möchtest du dich wirklich abmelden?')">
                     <span>🚪</span> Abmelden
                 </a>
             </div>
@@ -825,8 +760,8 @@ if(!empty($_SESSION['customer'])) {
 
         <main class="app-content">
             <section class="welcome-section">
-                <h2>🎯 Herzlich willkommen in Ihrem Lernbereich</h2>
-                <p>Hier finden Sie alle wichtigen Funktionen für Ihr Lerncoaching bei Anna Braun.</p>
+                <h2>🎯 Herzlich willkommen in deinem Lernbereich</h2>
+                <p>Hier findest du alle wichtigen Funktionen für dein Lerncoaching bei Anna Braun.</p>
             </section>
 
             <section class="quick-actions">
@@ -860,50 +795,16 @@ if(!empty($_SESSION['customer'])) {
                             <p>Direkte E-Mail an Anna Braun</p>
                         </div>
                     </a>
-
-                    <!-- 4. Anrufen -->
-                    <a href="tel:+436606440636" class="action-card">
-                        <div class="action-icon">📞</div>
-                        <div class="action-content">
-                            <h3>Anrufen</h3>
-                            <p>Direkt mit Anna sprechen</p>
-                        </div>
-                    </a>
                 </div>
             </section>
 
-            <section class="main-features">
-                <h2 class="section-title">
-                    <span>📚</span> Ihre Lernreise
-                </h2>
-
-                <div class="feature-placeholder">
-                    <div class="placeholder-card">
-                        <div class="placeholder-icon">🎯</div>
-                        <h3>Lernfortschritt</h3>
-                        <p>Verfolgen Sie Ihren Lernfortschritt und erreichte Meilensteine.</p>
-                        <span class="coming-soon">Bald verfügbar</span>
-                    </div>
-
-                    <div class="placeholder-card">
-                        <div class="placeholder-icon">📝</div>
-                        <h3>Aufgaben</h3>
-                        <p>Bearbeiten Sie Ihre individuellen Lernaufgaben und Übungen.</p>
-                        <span class="coming-soon">Bald verfügbar</span>
-                    </div>
-
-                    <div class="placeholder-card">
-                        <div class="placeholder-icon">📊</div>
-                        <h3>Berichte</h3>
-                        <p>Detaillierte Berichte über Ihre Lernerfolge und Entwicklung.</p>
-                        <span class="coming-soon">Bald verfügbar</span>
-                    </div>
-                </div>
-            </section>
         </main>
 
         <footer class="app-footer">
-            <p>&copy; <?= date('Y') ?> Anna Braun Lerncoaching - Ihr Partner für ganzheitliche Lernunterstützung</p>
+            <p>&copy; <?= date('Y') ?> Anna Braun Lerncoaching - Dein Partner für ganzheitliche Lernunterstützung</p>
+            <p class="app-version">
+                <small>App Version: <span id="appVersion">Lädt...</span></small>
+            </p>
         </footer>
     </div>
 
@@ -914,7 +815,7 @@ if(!empty($_SESSION['customer'])) {
                 <div class="modal-title">
                     <div class="modal-avatar">👤</div>
                     <div>
-                        <h2>Ihre Kontoinformationen</h2>
+                        <h2>Deine Kontoinformationen</h2>
                         <p>Persönliche Daten und Status-Übersicht</p>
                     </div>
                 </div>
@@ -1063,8 +964,40 @@ if(!empty($_SESSION['customer'])) {
             });
         });
     </script>
-<!-- PWA Install Button - ADD THIS SCRIPT BLOCK ONLY -->
-<script>
+
+    <script>
+    // Fetch app version from service worker
+    async function loadAppVersion() {
+        try {
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'CHECK_VERSION' });
+
+                navigator.serviceWorker.addEventListener('message', event => {
+                    if (event.data.type === 'VERSION_INFO') {
+                        document.getElementById('appVersion').textContent = event.data.version;
+                    }
+                });
+            } else {
+                const response = await fetch('../sw.js');
+                const swContent = await response.text();
+                const versionMatch = swContent.match(/VERSION\s*=\s*['"](.*?)['"]/);
+
+                if (versionMatch) {
+                    document.getElementById('appVersion').textContent = versionMatch[1];
+                } else {
+                    document.getElementById('appVersion').textContent = 'Unknown';
+                }
+            }
+        } catch (error) {
+            console.log('Could not load app version:', error);
+            document.getElementById('appVersion').textContent = 'Unknown';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadAppVersion);
+    </script>
+    <!-- PWA Install Button - ADD THIS SCRIPT BLOCK ONLY -->
+    <script>
 let installPrompt = null;
 
 window.addEventListener('beforeinstallprompt', (e) => {

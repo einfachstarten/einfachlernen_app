@@ -118,69 +118,458 @@ echo "</div>";
 </table>
 
 <?php
-// ORIGINAL VIEW_ACTIVITY CODE (keep existing but add error handling)
+// ENHANCED ACTIVITY VIEW (replace existing view_activity section)
 if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
-    echo "<div style='margin-top:2rem;'>";
-    echo "<h3>Recent Activity for Customer ID: " . (int)$_GET['view_activity'] . "</h3>";
+    $customer_id = (int)$_GET['view_activity'];
 
-    try {
+    // Get customer info
+    $customer_stmt = $pdo->prepare("SELECT first_name, last_name, email FROM customers WHERE id = ?");
+    $customer_stmt->execute([$customer_id]);
+    $customer_info = $customer_stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$customer_info) {
+        echo "<div class='error'>Customer not found</div>";
+    } else {
         require_once 'ActivityLogger.php';
-        $customer_id = (int)$_GET['view_activity'];
         $logger = new ActivityLogger($pdo);
-        $activities = $logger->getCustomerActivities($customer_id, 20);
+        $activities = $logger->getCustomerActivities($customer_id, 100); // More activities
 
-        if (empty($activities)) {
-            echo "<div style='background:#fff3cd;color:#856404;padding:1rem;border-radius:5px;'>";
-            echo "<p>⚠️ No activities found for this customer.</p>";
-            echo "<p>This could mean:</p>";
-            echo "<ul>";
-            echo "<li>Customer hasn't logged in yet</li>";
-            echo "<li>No PINs have been sent to this customer</li>";
-            echo "<li>Activities were logged before the tracking system was implemented</li>";
-            echo "</ul>";
-            echo "</div>";
-        } else {
-            echo "<table border='1' cellpadding='8' style='border-collapse: collapse; width: 100%; margin: 1rem 0;'>";
-            echo "<tr style='background: #4a90b8; color: white;'>";
-            echo "<th>Date/Time</th><th>Activity Type</th><th>Details</th><th>IP Address</th><th>Session ID</th>";
-            echo "</tr>";
+        // Activity categorization and stats
+        $activity_categories = [
+            'auth' => ['login', 'login_failed', 'logout', 'pin_request', 'session_timeout'],
+            'navigation' => ['dashboard_accessed', 'page_view', 'profile_refreshed'],
+            'booking' => ['slots_api_called', 'service_viewed', 'availability_checked', 'slots_found', 'slots_not_found', 'booking_initiated', 'booking_completed', 'booking_failed'],
+            'system' => ['slot_search_failed', 'pwa_installed', 'pwa_launched']
+        ];
 
-            foreach ($activities as $activity) {
-                $data = json_decode($activity['activity_data'], true);
-                $details = [];
-                if ($data) {
-                    foreach ($data as $key => $value) {
-                        if (is_bool($value)) {
-                            $value = $value ? 'true' : 'false';
-                        }
-                        $details[] = "$key: $value";
+        $stats = [
+            'total' => count($activities),
+            'auth' => 0,
+            'navigation' => 0,
+            'booking' => 0,
+            'system' => 0,
+            'today' => 0,
+            'week' => 0
+        ];
+
+        $today = date('Y-m-d');
+        $week_ago = date('Y-m-d', strtotime('-7 days'));
+
+        foreach ($activities as $activity) {
+            $type = $activity['activity_type'];
+            $date = date('Y-m-d', strtotime($activity['created_at']));
+
+            // Categorize
+            foreach ($activity_categories as $category => $types) {
+                if (in_array($type, $types)) {
+                    $stats[$category]++;
+                    break;
+                }
+            }
+
+            // Time-based stats
+            if ($date === $today) $stats['today']++;
+            if ($date >= $week_ago) $stats['week']++;
+        }
+?>
+
+<style>
+.activity-dashboard {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 24px;
+    margin: 24px 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.customer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.customer-info h2 {
+    margin: 0;
+    color: #1e293b;
+    font-size: 24px;
+}
+
+.customer-info .email {
+    color: #64748b;
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+.activity-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: white;
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+    border-left: 4px solid;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.stat-card.total { border-left-color: #3b82f6; }
+.stat-card.auth { border-left-color: #10b981; }
+.stat-card.navigation { border-left-color: #f59e0b; }
+.stat-card.booking { border-left-color: #8b5cf6; }
+.stat-card.system { border-left-color: #ef4444; }
+.stat-card.today { border-left-color: #06b6d4; }
+.stat-card.week { border-left-color: #84cc16; }
+
+.stat-number {
+    font-size: 24px;
+    font-weight: bold;
+    color: #1e293b;
+    margin: 0;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #64748b;
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+
+.activity-filters {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 8px 16px;
+    border: 2px solid #e2e8f0;
+    background: white;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover, .filter-btn.active {
+    border-color: #3b82f6;
+    background: #3b82f6;
+    color: white;
+}
+
+.activity-timeline {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.timeline-item {
+    display: flex;
+    padding: 16px;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background-color 0.2s;
+}
+
+.timeline-item:hover {
+    background: #f8fafc;
+}
+
+.timeline-item:last-child {
+    border-bottom: none;
+}
+
+.timeline-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 16px;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.icon-auth { background: #dcfce7; color: #16a34a; }
+.icon-navigation { background: #fef3c7; color: #d97706; }
+.icon-booking { background: #ede9fe; color: #7c3aed; }
+.icon-system { background: #fee2e2; color: #dc2626; }
+
+.timeline-content {
+    flex: 1;
+}
+
+.activity-title {
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 4px 0;
+}
+
+.activity-time {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.activity-details {
+    background: #f8fafc;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    border-left: 3px solid #e2e8f0;
+}
+
+.detail-item {
+    margin: 2px 0;
+}
+
+.detail-key {
+    font-weight: 500;
+    color: #374151;
+}
+
+.detail-value {
+    color: #6b7280;
+}
+
+.no-activities {
+    text-align: center;
+    padding: 60px 20px;
+    color: #64748b;
+}
+
+.back-btn {
+    background: #3b82f6;
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.back-btn:hover {
+    background: #2563eb;
+    color: white;
+}
+
+/* ADD mobile responsiveness */
+@media (max-width: 768px) {
+    .activity-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .customer-header {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+    }
+
+    .activity-filters {
+        justify-content: center;
+    }
+
+    .filter-btn {
+        font-size: 12px;
+        padding: 6px 12px;
+    }
+
+    .timeline-item {
+        padding: 12px;
+    }
+
+    .timeline-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+}
+</style>
+
+<div class="activity-dashboard">
+    <div class="customer-header">
+        <div class="customer-info">
+            <h2><?= htmlspecialchars($customer_info['first_name'] . ' ' . $customer_info['last_name']) ?></h2>
+            <div class="email"><?= htmlspecialchars($customer_info['email']) ?></div>
+        </div>
+        <a href="dashboard.php" class="back-btn">
+            ← Zurück zum Dashboard
+        </a>
+    </div>
+
+    <!-- Activity Statistics -->
+    <div class="activity-stats">
+        <div class="stat-card total">
+            <div class="stat-number"><?= $stats['total'] ?></div>
+            <div class="stat-label">Total Activities</div>
+        </div>
+        <div class="stat-card auth">
+            <div class="stat-number"><?= $stats['auth'] ?></div>
+            <div class="stat-label">Authentication</div>
+        </div>
+        <div class="stat-card navigation">
+            <div class="stat-number"><?= $stats['navigation'] ?></div>
+            <div class="stat-label">Navigation</div>
+        </div>
+        <div class="stat-card booking">
+            <div class="stat-number"><?= $stats['booking'] ?></div>
+            <div class="stat-label">Booking</div>
+        </div>
+        <div class="stat-card system">
+            <div class="stat-number"><?= $stats['system'] ?></div>
+            <div class="stat-label">System</div>
+        </div>
+        <div class="stat-card today">
+            <div class="stat-number"><?= $stats['today'] ?></div>
+            <div class="stat-label">Today</div>
+        </div>
+        <div class="stat-card week">
+            <div class="stat-number"><?= $stats['week'] ?></div>
+            <div class="stat-label">This Week</div>
+        </div>
+    </div>
+
+    <!-- Activity Filters -->
+    <div class="activity-filters">
+        <button class="filter-btn active" data-filter="all">All Activities</button>
+        <button class="filter-btn" data-filter="auth">🔐 Authentication</button>
+        <button class="filter-btn" data-filter="navigation">🧭 Navigation</button>
+        <button class="filter-btn" data-filter="booking">📅 Booking</button>
+        <button class="filter-btn" data-filter="system">⚙️ System</button>
+    </div>
+
+    <?php if (empty($activities)): ?>
+        <div class="no-activities">
+            <h3>Keine Activities gefunden</h3>
+            <p>Dieser Customer hat noch keine getrackte Aktivitäten.</p>
+        </div>
+    <?php else: ?>
+        <!-- Activity Timeline -->
+        <div class="activity-timeline">
+            <?php foreach ($activities as $activity):
+                $data = json_decode($activity['activity_data'], true) ?: [];
+                $type = $activity['activity_type'];
+
+                // Determine category and icon
+                $category = 'system';
+                foreach ($activity_categories as $cat => $types) {
+                    if (in_array($type, $types)) {
+                        $category = $cat;
+                        break;
                     }
                 }
 
-                echo "<tr>";
-                echo "<td>" . date('Y-m-d H:i:s', strtotime($activity['created_at'])) . "</td>";
-                echo "<td><strong>" . ucfirst(str_replace('_', ' ', $activity['activity_type'])) . "</strong></td>";
-                echo "<td>" . (empty($details) ? '—' : implode('<br>', $details)) . "</td>";
-                echo "<td>" . htmlspecialchars($activity['ip_address']) . "</td>";
-                echo "<td style='font-size:0.8em;'>" . htmlspecialchars(substr($activity['session_id'], 0, 10)) . "...</td>";
-                echo "</tr>";
+                // Activity icons
+                $icons = [
+                    'login' => '🔓', 'login_failed' => '❌', 'logout' => '🔒', 'pin_request' => '📧',
+                    'session_timeout' => '⏰', 'dashboard_accessed' => '🏠', 'page_view' => '👁️',
+                    'profile_refreshed' => '🔄', 'slots_api_called' => '🔌', 'service_viewed' => '👀',
+                    'availability_checked' => '📅', 'slots_found' => '✅', 'slots_not_found' => '❌',
+                    'booking_initiated' => '🚀', 'booking_completed' => '🎉', 'booking_failed' => '💥'
+                ];
+
+                $icon = $icons[$type] ?? '📝';
+
+                // Format activity title
+                $titles = [
+                    'login' => 'Successfully logged in',
+                    'login_failed' => 'Login attempt failed',
+                    'logout' => 'Logged out',
+                    'pin_request' => 'PIN requested by admin',
+                    'session_timeout' => 'Session timed out',
+                    'dashboard_accessed' => 'Accessed dashboard',
+                    'page_view' => 'Viewed page',
+                    'profile_refreshed' => 'Profile data refreshed',
+                    'slots_api_called' => 'Searched for available slots',
+                    'service_viewed' => 'Viewed service details',
+                    'availability_checked' => 'Checked availability',
+                    'slots_found' => 'Found available slots',
+                    'slots_not_found' => 'No slots available',
+                    'booking_initiated' => 'Started booking process',
+                    'booking_completed' => 'Booking confirmed',
+                    'booking_failed' => 'Booking failed'
+                ];
+
+                $title = $titles[$type] ?? ucfirst(str_replace('_', ' ', $type));
+            ?>
+                <div class="timeline-item" data-category="<?= $category ?>">
+                    <div class="timeline-icon icon-<?= $category ?>">
+                        <?= $icon ?>
+                    </div>
+                    <div class="timeline-content">
+                        <h4 class="activity-title"><?= $title ?></h4>
+                        <div class="activity-time">
+                            <?= date('d.m.Y H:i:s', strtotime($activity['created_at'])) ?>
+                            • <?= htmlspecialchars($activity['ip_address']) ?>
+                        </div>
+
+                        <?php if (!empty($data)): ?>
+                            <div class="activity-details">
+                                <?php foreach ($data as $key => $value):
+                                    if (is_bool($value)) $value = $value ? 'true' : 'false';
+                                    if (is_array($value)) $value = json_encode($value);
+
+                                    // Format key names
+                                    $formatted_key = ucfirst(str_replace('_', ' ', $key));
+                                ?>
+                                    <div class="detail-item">
+                                        <span class="detail-key"><?= htmlspecialchars($formatted_key) ?>:</span>
+                                        <span class="detail-value"><?= htmlspecialchars($value) ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<script>
+// Activity filtering
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Update active button
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const filter = btn.dataset.filter;
+        const items = document.querySelectorAll('.timeline-item');
+
+        items.forEach(item => {
+            if (filter === 'all' || item.dataset.category === filter) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
             }
-            echo "</table>";
-        }
+        });
+    });
+});
 
-    } catch (Exception $e) {
-        echo "<div style='background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;'>";
-        echo "<h4>Error Loading Activities</h4>";
-        echo "<p><strong>Error:</strong> " . htmlspecialchars($e->getMessage()) . "</p>";
-        echo "<p>Please check the error logs or contact support.</p>";
-        echo "</div>";
+// Auto-refresh every 30 seconds for live updates
+setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        window.location.reload();
     }
+}, 30000);
+</script>
 
-    echo "<p style='margin-top:1rem;'>";
-    echo "<a href='dashboard.php' style='background:#52b3a4;color:white;padding:0.5rem 1rem;text-decoration:none;border-radius:3px;'>← Back to Dashboard</a>";
-    echo "</p>";
-    echo "</div>";
-}
+<?php
+    } // End customer found check
+} // End activity view section
 ?>
 <script src="../pwa-update.js"></script>
 </body>

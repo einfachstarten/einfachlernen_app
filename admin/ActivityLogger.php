@@ -42,23 +42,27 @@ class ActivityLogger {
      * Get customer activity history
      */
     public function getCustomerActivities($customer_id, $limit = 50, $activity_type = null) {
+        // Ensure limit is integer and safe
+        $limit = (int)$limit;
+        if ($limit < 1 || $limit > 1000) {
+            $limit = 50; // Default fallback
+        }
+
         $sql = "SELECT * FROM customer_activities WHERE customer_id = ?";
         $params = [$customer_id];
-        
+
         if ($activity_type) {
             $sql .= " AND activity_type = ?";
             $params[] = $activity_type;
         }
-        
-        $sql .= " ORDER BY created_at DESC LIMIT ?";
-        $params[] = (int)$limit;  // Ensure limit is integer
+
+        // Use string interpolation for LIMIT since PDO can't parameterize it properly
+        $sql .= " ORDER BY created_at DESC LIMIT {$limit}";
 
         try {
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute($params);
-            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            return $result;
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             error_log("getCustomerActivities error: " . $e->getMessage());
             return [];

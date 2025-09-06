@@ -42,16 +42,38 @@ $customers = $pdo->query('SELECT * FROM customers ORDER BY created_at DESC')->fe
     <a href="add_customer.php">Add Customer</a>
     <a href="?logout=1">Logout</a>
 </nav>
+<?php if(!empty($_GET['success'])): ?>
+    <p style="color:green;"><?=htmlspecialchars($_GET['success'])?></p>
+<?php elseif(!empty($_GET['error'])): ?>
+    <p style="color:red;"><?=htmlspecialchars($_GET['error'])?></p>
+<?php endif; ?>
 <p>Total customers: <?=$total?></p>
 <table>
-    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th></tr>
+    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th></tr>
     <?php foreach($customers as $c): ?>
+    <?php
+        $pinStatus = 'No PIN';
+        if(!empty($c['pin']) && !empty($c['pin_expires'])){
+            if(strtotime($c['pin_expires']) < time()){
+                $pinStatus = 'PIN expired';
+            }else{
+                $pinStatus = 'PIN sent (expires: '.htmlspecialchars($c['pin_expires']).')';
+            }
+        }
+    ?>
     <tr>
         <td><?=htmlspecialchars($c['email'])?></td>
         <td><?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']))?></td>
         <td><?=htmlspecialchars($c['phone'])?></td>
         <td><?=htmlspecialchars($c['status'])?></td>
         <td><?=htmlspecialchars($c['created_at'])?></td>
+        <td><?=$pinStatus?></td>
+        <td>
+            <form method="post" action="send_pin.php" style="margin:0;">
+                <input type="hidden" name="customer_id" value="<?=$c['id']?>">
+                <button type="submit">Send PIN</button>
+            </form>
+        </td>
     </tr>
     <?php endforeach; ?>
 </table>

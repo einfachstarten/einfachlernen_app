@@ -21,6 +21,22 @@ if(isset($_GET['logout'])){session_destroy();header('Location: login.php');exit;
 $countStmt = $pdo->query('SELECT COUNT(*) FROM customers');
 $total = $countStmt->fetchColumn();
 $customers = $pdo->query('SELECT * FROM customers ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+foreach($customers as &$c) {
+    if(!empty($c['pin']) && !empty($c['pin_expires'])) {
+        if(strtotime($c['pin_expires']) < time()) {
+            $c['pin_status'] = '<span style="color:red">🔴 PIN Expired (expired: ' . htmlspecialchars($c['pin_expires']) . ')</span>';
+            $c['pin_status_raw'] = 'expired';
+        } else {
+            $remaining = round((strtotime($c['pin_expires']) - time()) / 60);
+            $c['pin_status'] = '<span style="color:green">🟢 Active (' . $remaining . ' min left, expires: ' . htmlspecialchars($c['pin_expires']) . ')</span>';
+            $c['pin_status_raw'] = 'active';
+        }
+    } else {
+        $c['pin_status'] = '<span style="color:gray">⚪ No PIN sent</span>';
+        $c['pin_status_raw'] = 'none';
+    }
+}
+unset($c);
 ?>
 <!DOCTYPE html>
 <html>
@@ -40,34 +56,29 @@ $customers = $pdo->query('SELECT * FROM customers ORDER BY created_at DESC')->fe
 <header><h2 style="color:#4a90b8">Dashboard</h2></header>
 <nav>
     <a href="add_customer.php">Add Customer</a>
+    <a href="test_mail.php">Test Email</a>
     <a href="?logout=1">Logout</a>
 </nav>
 <?php if(!empty($_GET['success'])): ?>
-    <p style="color:green;"><?=htmlspecialchars($_GET['success'])?></p>
+    <div style="background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin-bottom:1rem;">
+        ✅ <?=htmlspecialchars($_GET['success'])?>
+    </div>
 <?php elseif(!empty($_GET['error'])): ?>
-    <p style="color:red;"><?=htmlspecialchars($_GET['error'])?></p>
+    <div style="background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;margin-bottom:1rem;">
+        ❌ <?=htmlspecialchars($_GET['error'])?>
+    </div>
 <?php endif; ?>
 <p>Total customers: <?=$total?></p>
 <table>
     <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th></tr>
     <?php foreach($customers as $c): ?>
-    <?php
-        $pinStatus = 'No PIN';
-        if(!empty($c['pin']) && !empty($c['pin_expires'])){
-            if(strtotime($c['pin_expires']) < time()){
-                $pinStatus = 'PIN expired';
-            }else{
-                $pinStatus = 'PIN sent (expires: '.htmlspecialchars($c['pin_expires']).')';
-            }
-        }
-    ?>
     <tr>
         <td><?=htmlspecialchars($c['email'])?></td>
         <td><?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']))?></td>
         <td><?=htmlspecialchars($c['phone'])?></td>
         <td><?=htmlspecialchars($c['status'])?></td>
         <td><?=htmlspecialchars($c['created_at'])?></td>
-        <td><?=$pinStatus?></td>
+        <td><?=$c['pin_status']?></td>
         <td>
             <form method="post" action="send_pin.php" style="margin:0;">
                 <input type="hidden" name="customer_id" value="<?=$c['id']?>">

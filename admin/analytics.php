@@ -248,14 +248,26 @@ $conversion_rates = [
             gap: 24px;
             margin-bottom: 24px;
         }
-        
+
         .chart-card {
             background: white;
             padding: 24px;
             border-radius: 16px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.1);
         }
-        
+
+        /* CRITICAL FIX: Define chart container height */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .chart-container canvas {
+            max-height: 300px !important;
+        }
+
         .chart-title {
             font-size: 20px;
             font-weight: 600;
@@ -390,22 +402,31 @@ $conversion_rates = [
             .charts-grid {
                 grid-template-columns: 1fr;
             }
-            
+
+            .chart-container {
+                height: 250px;
+            }
+
             .bottom-grid {
                 grid-template-columns: 1fr;
             }
         }
-        
+
         @media (max-width: 768px) {
             .dashboard-header {
                 flex-direction: column;
                 gap: 16px;
                 text-align: center;
             }
-            
+
             .kpi-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -471,7 +492,30 @@ $conversion_rates = [
                     <div class="chart-icon">📈</div>
                     Activity Trends (Last <?= $days ?> days)
                 </h3>
-                <canvas id="trendsChart" width="400" height="200"></canvas>
+                <!-- FIXED: Add proper container with defined height -->
+                <div class="chart-container">
+                    <canvas id="trendsChart" style="display: none;"></canvas>
+                    <div id="chartLoading" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        height: 100%;
+                        color: #718096;
+                    ">
+                        <div style="text-align: center;">
+                            <div style="
+                                width: 40px;
+                                height: 40px;
+                                border: 4px solid #e2e8f0;
+                                border-top: 4px solid #667eea;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                                margin: 0 auto 12px auto;
+                            "></div>
+                            Chart wird geladen...
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Conversion Funnel -->
@@ -575,76 +619,159 @@ $conversion_rates = [
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Activity Trends Chart
+        // CORRECTED Chart.js setup
         const trendsData = <?= json_encode($trends) ?>;
-        const ctx = document.getElementById('trendsChart').getContext('2d');
-        
-        const labels = trendsData.map(item => {
-            const date = new Date(item.date);
-            return date.toLocaleDateString('de-DE', { month: 'short', day: 'numeric' });
-        });
-        
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Total Activities',
-                        data: trendsData.map(item => item.total_activities),
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    },
-                    {
-                        label: 'Booking Activities',
-                        data: trendsData.map(item => item.booking_activities),
-                        borderColor: '#764ba2',
-                        backgroundColor: 'rgba(118, 75, 162, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    },
-                    {
-                        label: 'Auth Activities',
-                        data: trendsData.map(item => item.auth_activities),
-                        borderColor: '#f093fb',
-                        backgroundColor: 'rgba(240, 147, 251, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    }
+        const ctx = document.getElementById('trendsChart');
+
+        if (ctx && trendsData && trendsData.length > 0) {
+            const labels = trendsData.map(item => {
+                const date = new Date(item.date);
+                return date.toLocaleDateString('de-DE', { month: 'short', day: 'numeric' });
+            });
+
+            const chartConfig = {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Total Activities',
+                            data: trendsData.map(item => parseInt(item.total_activities) || 0),
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Booking Activities',
+                            data: trendsData.map(item => parseInt(item.booking_activities) || 0),
+                            borderColor: '#764ba2',
+                            backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Auth Activities',
+                            data: trendsData.map(item => parseInt(item.auth_activities) || 0),
+                            borderColor: '#f093fb',
+                            backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }
+                    ]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: {
-                            color: 'rgba(0,0,0,0.1)'
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: 'white',
+                            bodyColor: 'white',
+                            borderColor: '#667eea',
+                            borderWidth: 1
                         }
                     },
-                    x: {
-                        grid: {
-                            color: 'rgba(0,0,0,0.1)'
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#718096',
+                                font: { size: 12 }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#718096',
+                                font: { size: 12 }
+                            }
+                        }
+                    },
+                    elements: {
+                        line: {
+                            borderWidth: 3
                         }
                     }
                 }
-            }
-        });
+            };
 
-        // Auto-refresh every 2 minutes
+            // ADD error handling around Chart creation
+            try {
+                new Chart(ctx, chartConfig);
+            } catch (error) {
+                console.error('Chart creation failed:', error);
+                document.querySelector('.chart-container').innerHTML = `
+                    <div style="
+                        padding: 40px;
+                        text-align: center;
+                        color: #e53e3e;
+                        background: #fed7d7;
+                        border-radius: 8px;
+                    ">
+                        ⚠️ Chart konnte nicht geladen werden<br>
+                        <small>Bitte Seite neu laden oder Admin kontaktieren</small>
+                    </div>
+                `;
+            }
+        } else {
+            // FALLBACK: Show message if no data
+            document.querySelector('.chart-container').innerHTML = `
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100%;
+                    color: #718096;
+                    font-size: 16px;
+                ">
+                    📊 Keine Chart-Daten verfügbar für den gewählten Zeitraum
+                </div>
+            `;
+        }
+
+        // CHANGE auto-refresh from 2 minutes to 5 minutes to reduce load
         setInterval(() => {
             if (document.visibilityState === 'visible') {
                 window.location.reload();
             }
-        }, 120000);
+        }, 300000);
+
+        // Hide loading when chart is ready
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const loading = document.getElementById('chartLoading');
+                const canvas = document.getElementById('trendsChart');
+                if (loading && canvas) {
+                    loading.style.display = 'none';
+                    canvas.style.display = 'block';
+                }
+            }, 500);
+        });
     </script>
 </body>
 </html>

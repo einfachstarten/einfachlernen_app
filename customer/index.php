@@ -54,6 +54,23 @@ if(isset($_GET['logout']) && !empty($_SESSION['customer'])){
 
 $customer = require_customer_login();
 
+// iOS-specific session validation
+if (isset($_SESSION['ios_login_success']) && $_SESSION['ios_login_success']) {
+    error_log("iOS customer " . $customer['id'] . " successfully reached dashboard");
+    unset($_SESSION['ios_login_success']); // Clean up flag
+}
+
+// Additional validation for iOS
+$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+$is_ios = strpos($user_agent, 'iPhone') !== false || strpos($user_agent, 'iPad') !== false;
+
+if ($is_ios && !isset($_COOKIE['customer_session']) && !isset($_SESSION['customer_token'])) {
+    error_log("iOS session problem detected - no cookie or session token");
+    // Force re-login with message
+    header('Location: ../login.php?error=' . urlencode('iOS Session-Problem erkannt. Bitte erneut einloggen.'));
+    exit;
+}
+
 // Log dashboard access
 require_once __DIR__ . '/../admin/ActivityLogger.php';
 $pdo = getPDO();

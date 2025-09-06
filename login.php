@@ -32,19 +32,80 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
                 ]);
             }
         }else{
+            // Create session
             create_customer_session($cust['id']);
+
+            // Update last login
             $upd = $pdo->prepare('UPDATE customers SET last_login = NOW() WHERE id = ?');
             $upd->execute([$cust['id']]);
+
+            // Set session variables
             $_SESSION['customer'] = $cust;
             $_SESSION['customer_login_time'] = time();
+            $_SESSION['customer_last_activity'] = time();
+
+            // Log successful login
             $logger->logActivity($cust['id'], 'login', [
                 'login_method' => 'pin',
                 'login_success' => true,
-                'pin_attempts' => $_SESSION['pin_attempts'] ?? 1
+                'pin_attempts' => $_SESSION['pin_attempts'] ?? 1,
+                'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+                'is_ios' => strpos($_SERVER['HTTP_USER_AGENT'] ?? '', 'iPhone') !== false || strpos($_SERVER['HTTP_USER_AGENT'] ?? '', 'iPad') !== false
             ]);
+
             unset($_SESSION['pin_attempts']);
-            header('Location: customer/index.php');
-            exit;
+
+            // ENHANCED: iOS-specific redirect handling
+            $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+            $is_ios = strpos($user_agent, 'iPhone') !== false || strpos($user_agent, 'iPad') !== false;
+
+            if ($is_ios) {
+                // iOS needs a bit more time for cookie processing
+                error_log("iOS login detected for customer " . $cust['id'] . " - using enhanced redirect");
+
+                // Set additional session data for iOS
+                $_SESSION['ios_login_success'] = true;
+                $_SESSION['login_timestamp'] = time();
+
+                // Use JavaScript redirect for better iOS compatibility
+                echo '<!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Login erfolgreich</title>
+                </head>
+                <body>
+                    <script>
+                        console.log("iOS login redirect starting...");
+
+                        // Small delay to ensure cookie is set
+                        setTimeout(function() {
+                            console.log("Redirecting to dashboard...");
+                            window.location.href = "customer/index.php";
+                        }, 200);
+
+                        // Fallback after 3 seconds
+                        setTimeout(function() {
+                            if (window.location.href.indexOf("customer/index.php") === -1) {
+                                console.log("Fallback redirect triggered");
+                                window.location.replace("customer/index.php");
+                            }
+                        }, 3000);
+                    </script>
+                    <div style="text-align: center; padding: 50px; font-family: Arial;">
+                        <h2>✅ Login erfolgreich!</h2>
+                        <p>Du wirst weitergeleitet...</p>
+                        <p><a href="customer/index.php">Hier klicken falls die Weiterleitung nicht funktioniert</a></p>
+                    </div>
+                </body>
+                </html>';
+                exit;
+            } else {
+                // Standard redirect for non-iOS
+                header('Location: customer/index.php');
+                exit;
+            }
         }
     }
 }
@@ -401,11 +462,23 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const userAgent = navigator.userAgent;
+            const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+
             const form = document.getElementById('loginForm');
             const emailInput = document.getElementById('email');
             const pinInput = document.getElementById('pin');
             const submitBtn = document.getElementById('submitBtn');
             const submitText = document.getElementById('submitText');
+
+            if (isIOS && form) {
+                console.log('iOS device detected:', userAgent);
+                const iosInput = document.createElement('input');
+                iosInput.type = 'hidden';
+                iosInput.name = 'ios_device';
+                iosInput.value = '1';
+                form.appendChild(iosInput);
+            }
 
             // Auto-format PIN input
             pinInput.addEventListener('input', function(e) {

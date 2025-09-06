@@ -1,4 +1,20 @@
 <?php
+if (!isset($_GET['embedded'])) {
+    session_start();
+    if (!empty($_SESSION['customer'])) {
+        header('Location: customer/termine-suchen.php');
+        exit;
+    }
+
+    if (!isset($_GET['legacy_access'])) {
+        header('HTTP/1.1 302 Found');
+        echo json_encode([
+            'notice' => 'Diese Funktionalität ist jetzt im sicheren Kundenbereich verfügbar.',
+            'redirect' => '/einfachlernen/login.php'
+        ]);
+        exit;
+    }
+}
 // slots.php
 // Freie Calendly-Termine suchen mit Anna Braun Design
 

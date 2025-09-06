@@ -751,11 +751,11 @@ if(!empty($_SESSION['customer'])) {
                         </div>
                     </a>
                     
-                    <a href="https://calendly.com/einfachlernen" target="_blank" class="action-card">
+                    <a href="termine-suchen.php" class="action-card">
                         <div class="action-icon">📅</div>
                         <div class="action-content">
-                            <h3>Termin buchen</h3>
-                            <p>Neuen Coaching-Termin vereinbaren</p>
+                            <h3>Termine suchen</h3>
+                            <p>Verfügbare Coaching-Termine finden</p>
                         </div>
                     </a>
                     

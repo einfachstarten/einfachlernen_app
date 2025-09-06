@@ -14,6 +14,11 @@ $_SESSION['customer_last_activity'] = time();
 
 // Get customer email from authenticated session (SECURE)
 $customer_email = $customer['email'];
+
+// Log page view
+logPageView($customer['id'], 'termine', [
+    'page_section' => 'overview'
+]);
 ?>
 <!DOCTYPE html>
 <html lang="de">

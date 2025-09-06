@@ -55,6 +55,21 @@ function destroy_customer_session(){
         setcookie('customer_session','',time()-3600,'/einfachlernen/', '', true, true);
     }
 }
+
+function logPageView($customer_id, $page_name, $additional_data = []) {
+    require_once __DIR__ . '/../admin/ActivityLogger.php';
+    $pdo = getPDO();
+    $logger = new ActivityLogger($pdo);
+
+    $activity_data = array_merge([
+        'page' => $page_name,
+        'url' => $_SERVER['REQUEST_URI'] ?? '',
+        'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+        'timestamp' => date('Y-m-d H:i:s')
+    ], $additional_data);
+
+    $logger->logActivity($customer_id, 'page_view', $activity_data);
+}
 // Handle auth check for PWA
 if (isset($_GET['check']) && $_GET['check'] === '1') {
     header('Content-Type: application/json');

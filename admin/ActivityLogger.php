@@ -63,28 +63,42 @@ class ActivityLogger {
      * Get activity statistics for admin
      */
     public function getActivityStats($days = 30) {
-        $stmt = $this->pdo->prepare("
-            SELECT 
+        echo "<p>Debug: Getting activity stats for $days days</p>";
+
+        try {
+            $stmt = $this->pdo->prepare("
+            SELECT
                 activity_type,
                 COUNT(*) as count,
                 COUNT(DISTINCT customer_id) as unique_customers,
                 DATE(created_at) as activity_date
-            FROM customer_activities 
+            FROM customer_activities
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
             GROUP BY activity_type, DATE(created_at)
             ORDER BY activity_date DESC, count DESC
         ");
-        
-        $stmt->execute([$days]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $stmt->execute([$days]);
+            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            echo "<p>Debug: Found " . count($result) . " activity records</p>";
+            return $result;
+
+        } catch (PDOException $e) {
+            echo "<p style='color:red'>SQL Error in getActivityStats: " . htmlspecialchars($e->getMessage()) . "</p>";
+            return [];
+        }
     }
     
     /**
      * Get most active customers
      */
     public function getTopActiveCustomers($days = 30, $limit = 10) {
-        $stmt = $this->pdo->prepare("
-            SELECT 
+        echo "<p>Debug: Getting top active customers for $days days</p>";
+
+        try {
+            $stmt = $this->pdo->prepare("
+            SELECT
                 c.email,
                 c.first_name,
                 c.last_name,
@@ -93,13 +107,21 @@ class ActivityLogger {
             FROM customers c
             LEFT JOIN customer_activities ca ON c.id = ca.customer_id
             WHERE ca.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
-            GROUP BY c.id
+            GROUP BY c.id, c.email, c.first_name, c.last_name
             ORDER BY activity_count DESC
             LIMIT ?
         ");
-        
-        $stmt->execute([$days, $limit]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $stmt->execute([$days, $limit]);
+            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            echo "<p>Debug: Found " . count($result) . " active customers</p>";
+            return $result;
+
+        } catch (PDOException $e) {
+            echo "<p style='color:red'>SQL Error in getTopActiveCustomers: " . htmlspecialchars($e->getMessage()) . "</p>";
+            return [];
+        }
     }
     
     /**

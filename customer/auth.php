@@ -25,7 +25,7 @@ function create_customer_session($customer_id){
     $expires = date('Y-m-d H:i:s', strtotime('+7 days'));
     $stmt = $pdo->prepare('INSERT INTO customer_sessions (customer_id, session_token, expires_at) VALUES (?, ?, ?)');
     $stmt->execute([$customer_id, $token, $expires]);
-    setcookie('customer_session', $token, time()+7*24*3600, '/', '', false, true);
+    setcookie('customer_session', $token, time()+7*24*3600, '/einfachlernen/', '', true, true);
 }
 function get_current_customer(){
     if(empty($_COOKIE['customer_session'])){
@@ -41,7 +41,7 @@ function get_current_customer(){
 function require_customer_login(){
     $cust = get_current_customer();
     if(!$cust){
-        header('Location: /login.php');
+        header('Location: ../login.php');
         exit;
     }
     return $cust;
@@ -52,7 +52,7 @@ function destroy_customer_session(){
         $pdo = getPDO();
         $stmt = $pdo->prepare('DELETE FROM customer_sessions WHERE session_token = ?');
         $stmt->execute([$token]);
-        setcookie('customer_session','',time()-3600,'/', '', false, true);
+        setcookie('customer_session','',time()-3600,'/einfachlernen/', '', true, true);
     }
 }
 ?>

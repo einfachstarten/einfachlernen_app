@@ -51,12 +51,18 @@ class ActivityLogger {
         }
         
         $sql .= " ORDER BY created_at DESC LIMIT ?";
-        $params[] = $limit;
-        
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
-        
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $params[] = (int)$limit;  // Ensure limit is integer
+
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
+            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            return $result;
+        } catch (PDOException $e) {
+            error_log("getCustomerActivities error: " . $e->getMessage());
+            return [];
+        }
     }
     
     /**

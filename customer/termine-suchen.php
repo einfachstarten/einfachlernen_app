@@ -381,16 +381,16 @@ logPageView($customer['id'], 'termine_suchen', [
             <!-- Search Controls -->
             <div class="search-controls">
                 <div class="control-group">
-                    <label for="termineAnzahl">Termine benötigt:</label>
+                    <label for="termineAnzahl">Anzahl gewünschter Termine:</label>
                     <select id="termineAnzahl">
-                        <option value="1">1 Termin</option>
-                        <option value="2">2 Termine</option>
-                        <option value="3" selected>3 Termine</option>
-                        <option value="4">4 Termine</option>
-                        <option value="5">5 Termine</option>
+                        <?php for($i = 1; $i <= 15; $i++): ?>
+                            <option value="<?= $i ?>" <?= $i === 5 ? 'selected' : '' ?>>
+                                <?= $i ?> Tag<?= $i > 1 ? 'e' : '' ?> mit freien Terminen
+                            </option>
+                        <?php endfor; ?>
                     </select>
                 </div>
-                
+
                 <button id="searchBtn" class="search-btn" disabled>
                     🔍 Termine suchen
                 </button>
@@ -506,7 +506,7 @@ logPageView($customer['id'], 'termine_suchen', [
                 container.innerHTML = `
                     <div class="error-message">
                         <h3>Keine Termine gefunden</h3>
-                        <p>Leider konnten keine verfügbaren Termine gefunden werden. Bitte versuchen Sie es später erneut oder wählen Sie einen anderen Service.</p>
+                        <p>Leider konnten keine verfügbaren Termine gefunden werden. Bitte versuche es später erneut oder wähle einen anderen Service.</p>
                     </div>
                 `;
             } else {
@@ -517,7 +517,7 @@ logPageView($customer['id'], 'termine_suchen', [
                 container.innerHTML = `
                     <div class="success-message">
                         <h3>${statusText}</h3>
-                        <p>Klicken Sie auf eine Uhrzeit, um den Termin zu buchen.</p>
+                        <p>Klicke auf eine Uhrzeit, um den Termin zu buchen.</p>
                     </div>
                 ` + slots.map(daySlot => {
                     const timeButtons = daySlot.slots.map(slot => {

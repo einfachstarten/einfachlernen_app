@@ -104,34 +104,126 @@ unset($c);
 </table>
 
 <?php
-if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
-    require_once 'ActivityLogger.php';
-    $customer_id = (int)$_GET['view_activity'];
-    $logger = new ActivityLogger($pdo);
-    $activities = $logger->getCustomerActivities($customer_id, 20);
+// ADD DEBUGGING FOR VIEW_ACTIVITY
+if (isset($_GET['view_activity'])) {
+    echo "<div style='background:#e7f3ff;padding:1rem;margin:1rem 0;border:1px solid #0066cc;'>";
+    echo "<h3>🔍 Debug: View Activity Request</h3>";
+    echo "<p><strong>view_activity parameter:</strong> " . htmlspecialchars($_GET['view_activity']) . "</p>";
+    echo "<p><strong>Is numeric:</strong> " . (is_numeric($_GET['view_activity']) ? 'YES' : 'NO') . "</p>";
 
-    echo "<h3>Recent Activity</h3>";
-    echo "<table border='1' cellpadding='5' style='border-collapse: collapse;'>";
-    echo "<tr><th>Date/Time</th><th>Activity</th><th>Details</th><th>IP Address</th></tr>";
+    if (is_numeric($_GET['view_activity'])) {
+        $customer_id = (int)$_GET['view_activity'];
+        echo "<p><strong>Customer ID (cast):</strong> $customer_id</p>";
 
-    foreach ($activities as $activity) {
-        $data = json_decode($activity['activity_data'], true);
-        $details = [];
-        if ($data) {
-            foreach ($data as $key => $value) {
-                $details[] = "$key: $value";
+        echo "<p>Attempting to load ActivityLogger...</p>";
+        try {
+            require_once 'ActivityLogger.php';
+            echo "<p>✅ ActivityLogger loaded successfully</p>";
+
+            $logger = new ActivityLogger($pdo);
+            echo "<p>✅ ActivityLogger instance created</p>";
+
+            echo "<p>Calling getCustomerActivities($customer_id, 20)...</p>";
+            $activities = $logger->getCustomerActivities($customer_id, 20);
+
+            echo "<p><strong>Activities found:</strong> " . count($activities) . "</p>";
+
+            if (empty($activities)) {
+                echo "<p style='color:orange'>⚠️ No activities found for customer $customer_id</p>";
+
+                // Check if customer exists
+                $check_customer = $pdo->prepare("SELECT first_name, last_name, email FROM customers WHERE id = ?");
+                $check_customer->execute([$customer_id]);
+                $customer_info = $check_customer->fetch(PDO::FETCH_ASSOC);
+
+                if ($customer_info) {
+                    echo "<p>Customer exists: " . htmlspecialchars($customer_info['first_name'] . ' ' . $customer_info['last_name']) . " (" . htmlspecialchars($customer_info['email']) . ")</p>";
+
+                    // Check activities in database
+                    $check_activities = $pdo->prepare("SELECT COUNT(*) FROM customer_activities WHERE customer_id = ?");
+                    $check_activities->execute([$customer_id]);
+                    $activity_count = $check_activities->fetchColumn();
+                    echo "<p>Raw activity count in DB: $activity_count</p>";
+                } else {
+                    echo "<p style='color:red'>❌ Customer $customer_id does not exist</p>";
+                }
+            } else {
+                echo "<p style='color:green'>✅ Activities loaded successfully</p>";
+                echo "<pre>" . print_r(array_slice($activities, 0, 2), true) . "</pre>";
             }
+
+        } catch (Exception $e) {
+            echo "<p style='color:red'>❌ Error: " . htmlspecialchars($e->getMessage()) . "</p>";
+            echo "<p>Stack trace: " . htmlspecialchars($e->getTraceAsString()) . "</p>";
+        }
+    } else {
+        echo "<p style='color:red'>❌ view_activity parameter is not numeric</p>";
+    }
+    echo "</div>";
+}
+
+// ORIGINAL VIEW_ACTIVITY CODE (keep existing but add error handling)
+if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
+    echo "<div style='margin-top:2rem;'>";
+    echo "<h3>Recent Activity for Customer ID: " . (int)$_GET['view_activity'] . "</h3>";
+
+    try {
+        require_once 'ActivityLogger.php';
+        $customer_id = (int)$_GET['view_activity'];
+        $logger = new ActivityLogger($pdo);
+        $activities = $logger->getCustomerActivities($customer_id, 20);
+
+        if (empty($activities)) {
+            echo "<div style='background:#fff3cd;color:#856404;padding:1rem;border-radius:5px;'>";
+            echo "<p>⚠️ No activities found for this customer.</p>";
+            echo "<p>This could mean:</p>";
+            echo "<ul>";
+            echo "<li>Customer hasn't logged in yet</li>";
+            echo "<li>No PINs have been sent to this customer</li>";
+            echo "<li>Activities were logged before the tracking system was implemented</li>";
+            echo "</ul>";
+            echo "</div>";
+        } else {
+            echo "<table border='1' cellpadding='8' style='border-collapse: collapse; width: 100%; margin: 1rem 0;'>";
+            echo "<tr style='background: #4a90b8; color: white;'>";
+            echo "<th>Date/Time</th><th>Activity Type</th><th>Details</th><th>IP Address</th><th>Session ID</th>";
+            echo "</tr>";
+
+            foreach ($activities as $activity) {
+                $data = json_decode($activity['activity_data'], true);
+                $details = [];
+                if ($data) {
+                    foreach ($data as $key => $value) {
+                        if (is_bool($value)) {
+                            $value = $value ? 'true' : 'false';
+                        }
+                        $details[] = "$key: $value";
+                    }
+                }
+
+                echo "<tr>";
+                echo "<td>" . date('Y-m-d H:i:s', strtotime($activity['created_at'])) . "</td>";
+                echo "<td><strong>" . ucfirst(str_replace('_', ' ', $activity['activity_type'])) . "</strong></td>";
+                echo "<td>" . (empty($details) ? '—' : implode('<br>', $details)) . "</td>";
+                echo "<td>" . htmlspecialchars($activity['ip_address']) . "</td>";
+                echo "<td style='font-size:0.8em;'>" . htmlspecialchars(substr($activity['session_id'], 0, 10)) . "...</td>";
+                echo "</tr>";
+            }
+            echo "</table>";
         }
 
-        echo "<tr>";
-        echo "<td>" . date('Y-m-d H:i:s', strtotime($activity['created_at'])) . "</td>";
-        echo "<td>" . ucfirst(str_replace('_', ' ', $activity['activity_type'])) . "</td>";
-        echo "<td>" . implode(', ', $details) . "</td>";
-        echo "<td>" . $activity['ip_address'] . "</td>";
-        echo "</tr>";
+    } catch (Exception $e) {
+        echo "<div style='background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;'>";
+        echo "<h4>Error Loading Activities</h4>";
+        echo "<p><strong>Error:</strong> " . htmlspecialchars($e->getMessage()) . "</p>";
+        echo "<p>Please check the error logs or contact support.</p>";
+        echo "</div>";
     }
-    echo "</table>";
-    echo "<p><a href='dashboard.php'>← Back to Dashboard</a></p>";
+
+    echo "<p style='margin-top:1rem;'>";
+    echo "<a href='dashboard.php' style='background:#52b3a4;color:white;padding:0.5rem 1rem;text-decoration:none;border-radius:3px;'>← Back to Dashboard</a>";
+    echo "</p>";
+    echo "</div>";
 }
 ?>
 </body>

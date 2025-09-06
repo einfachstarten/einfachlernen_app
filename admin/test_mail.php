@@ -7,16 +7,29 @@ echo "<h2>World4you mail() Test</h2>";
 if($_SERVER['REQUEST_METHOD'] === 'POST') {
     $test_email = $_POST['test_email'] ?? 'marcus@einfachstarten.jetzt';
     
-    $subject = 'Test Email from Anna Braun CMS';
-    $message = "This is a test email sent at " . date('Y-m-d H:i:s') . "\n\n";
-    $message .= "If you receive this, mail() function is working correctly.\n\n";
-    $message .= "Server: " . $_SERVER['SERVER_NAME'] . "\n";
-    $message .= "PHP Version: " . phpversion();
-    
-    $headers = 'From: Anna Braun Test <noreply@einfachstarten.jetzt>' . "\r\n" .
+    $subject = 'Test-E-Mail von Anna Braun Lerncoaching';
+    $message = "Liebe/r Tester/in,\n\n";
+    $message .= "diese Test-E-Mail wurde erfolgreich versendet.\n\n";
+    $message .= "📧 Zeitpunkt: " . date('d.m.Y um H:i:s') . " Uhr\n";
+    $message .= "🖥️ Server: " . $_SERVER['SERVER_NAME'] . "\n";
+    $message .= "🐘 PHP Version: " . phpversion() . "\n\n";
+    $message .= "Falls Sie diese E-Mail erhalten, funktioniert das E-Mail-System korrekt.\n\n";
+    $message .= "Mit freundlichen Grüßen\n";
+    $message .= "Anna Braun Lerncoaching System";
+
+    $headers = 'From: Anna Braun Lerncoaching <info@einfachlernen.jetzt>' . "\r\n" .
                'Reply-To: info@einfachlernen.jetzt' . "\r\n" .
-               'X-Mailer: PHP/' . phpversion();
-    
+               'Return-Path: info@einfachlernen.jetzt' . "\r\n" .
+               'Message-ID: <' . uniqid() . '.' . time() . '@einfachlernen.jetzt>' . "\r\n" .
+               'Date: ' . date('r') . "\r\n" .
+               'X-Mailer: Anna Braun CMS v1.0' . "\r\n" .
+               'X-Priority: 3 (Normal)' . "\r\n" .
+               'Importance: Normal' . "\r\n" .
+               'Content-Type: text/plain; charset=UTF-8' . "\r\n" .
+               'Content-Transfer-Encoding: 8bit' . "\r\n" .
+               'MIME-Version: 1.0' . "\r\n" .
+               'Organization: Anna Braun Lerncoaching';
+
     $result = mail($test_email, $subject, $message, $headers);
     
     if($result) {

@@ -54,6 +54,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_id'])) {
 
     $pdo = getPDO();
 
+    echo "<h3>Database Schema Verification</h3>";
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM customers LIKE 'pin'");
+        if ($stmt->rowCount() == 0) {
+            echo "<p style='color:red'>❌ Database not migrated! PIN column missing.</p>";
+            echo "<p><a href='migrate.php'>Run Database Migration</a></p>";
+            echo "</body></html>";
+            exit;
+        } else {
+            echo "<p style='color:green'>✅ Database schema OK</p>";
+        }
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>Schema check failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
+
     echo "<h3>Customer Lookup</h3>";
     $stmt = $pdo->prepare('SELECT email, first_name FROM customers WHERE id = ?');
     $stmt->execute([$cid]);

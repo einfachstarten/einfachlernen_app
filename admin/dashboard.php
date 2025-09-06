@@ -57,6 +57,7 @@ unset($c);
 <nav>
     <a href="add_customer.php">Add Customer</a>
     <a href="test_mail.php">Test Email</a>
+    <a href="migrate.php">Database Migration</a>
     <a href="?logout=1">Logout</a>
 </nav>
 <?php if(!empty($_GET['success'])): ?>

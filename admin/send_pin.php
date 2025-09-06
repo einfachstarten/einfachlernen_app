@@ -124,7 +124,7 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
         $mail->Subject = 'Dein Login-Code für Anna Braun Lerncoaching';
         $mail->CharSet = 'UTF-8';
 
-        // Simple HTML email with Anna Braun design
+        // Robust HTML email with solid colors for maximum client compatibility
         $formatted_expires = date('d.m.Y \u\m H:i \U\h\r', strtotime($expires));
 
         $mail->Body = "
@@ -134,69 +134,130 @@ function sendSMTPEmail(string $to_email, string $to_name, string $pin, string $e
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
 </head>
-<body style='margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f7fa; color: #333333;'>
-    <table width='100%' cellpadding='0' cellspacing='0' style='max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
-        <!-- Header -->
+<body style='margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f7fa;'>
+    <table width='100%' cellpadding='0' cellspacing='0' style='max-width: 600px; margin: 0 auto;'>
         <tr>
-            <td style='background: linear-gradient(135deg, #4a90b8 0%, #52b3a4 100%); padding: 40px 30px; text-align: center;'>
-                <div style='font-size: 50px; margin-bottom: 15px;'>🧠</div>
-                <h1 style='margin: 0; color: #ffffff; font-size: 26px; font-weight: normal;'>Anna Braun Lerncoaching</h1>
-                <p style='margin: 10px 0 0 0; color: #ffffff; opacity: 0.9; font-size: 16px;'>Dein personalisierter Lernbereich</p>
-            </td>
-        </tr>
-        
-        <!-- Content -->
-        <tr>
-            <td style='padding: 40px 30px; background-color: #ffffff;'>
-                <p style='margin: 0 0 20px 0; color: #333333; font-size: 18px; font-weight: 500;'>Liebe/r {$to_name},</p>
-                
-                <p style='margin: 0 0 30px 0; color: #666666; font-size: 16px; line-height: 1.6;'>hier ist dein Login-Code für das Kundenkonto und den personalisierten Lernbereich!</p>
-                
-                <!-- Code Box -->
-                <table width='100%' cellpadding='0' cellspacing='0' style='margin: 30px 0;'>
+            <td>
+                <!-- Main Container -->
+                <table width='100%' cellpadding='0' cellspacing='0' style='background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
+
+                    <!-- Header -->
                     <tr>
-                        <td style='background-color: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; padding: 30px; text-align: center;'>
-                            <p style='margin: 0 0 15px 0; color: #6c757d; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;'>DEIN LOGIN-CODE</p>
-                            <p style='margin: 0; color: #4a90b8; font-size: 32px; font-weight: 700; letter-spacing: 6px; font-family: monospace;'>{$pin}</p>
-                            <p style='margin: 15px 0 0 0; color: #dc3545; font-size: 14px; font-weight: 500;'>Gültig bis {$formatted_expires}</p>
+                        <td style='background-color: #4a90b8; padding: 40px 30px; text-align: center;'>
+                            <table width='100%' cellpadding='0' cellspacing='0'>
+                                <tr>
+                                    <td style='text-align: center;'>
+                                        <div style='font-size: 50px; line-height: 1; margin-bottom: 15px;'>🧠</div>
+                                        <h1 style='margin: 0; color: #ffffff; font-size: 26px; font-weight: bold; font-family: Arial, sans-serif;'>Anna Braun Lerncoaching</h1>
+                                        <p style='margin: 10px 0 0 0; color: #ffffff; font-size: 16px; font-family: Arial, sans-serif;'>Dein personalisierter Lernbereich</p>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
                     </tr>
-                </table>
-                
-                <!-- Login Button -->
-                <table width='100%' cellpadding='0' cellspacing='0' style='margin: 30px 0;'>
+
+                    <!-- Content -->
                     <tr>
-                        <td style='text-align: center;'>
-                            <a href='https://einfachstarten.jetzt/einfachlernen/login.php' style='display: inline-block; background: linear-gradient(135deg, #4a90b8 0%, #52b3a4 100%); color: #ffffff; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: 600; font-size: 16px;'>Jetzt anmelden →</a>
+                        <td style='padding: 40px 30px; background-color: #ffffff;'>
+                            <table width='100%' cellpadding='0' cellspacing='0'>
+
+                                <!-- Greeting -->
+                                <tr>
+                                    <td style='padding-bottom: 20px;'>
+                                        <p style='margin: 0; color: #333333; font-size: 18px; font-weight: bold; font-family: Arial, sans-serif;'>Liebe/r {$to_name},</p>
+                                    </td>
+                                </tr>
+
+                                <!-- Message -->
+                                <tr>
+                                    <td style='padding-bottom: 30px;'>
+                                        <p style='margin: 0; color: #666666; font-size: 16px; line-height: 1.6; font-family: Arial, sans-serif;'>hier ist dein Login-Code für das Kundenkonto und den personalisierten Lernbereich!</p>
+                                    </td>
+                                </tr>
+
+                                <!-- Code Box -->
+                                <tr>
+                                    <td style='padding-bottom: 30px;'>
+                                        <table width='100%' cellpadding='0' cellspacing='0'>
+                                            <tr>
+                                                <td style='background-color: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; padding: 30px; text-align: center;'>
+                                                    <p style='margin: 0 0 15px 0; color: #6c757d; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; font-family: Arial, sans-serif;'>DEIN LOGIN-CODE</p>
+                                                    <p style='margin: 0 0 15px 0; color: #4a90b8; font-size: 32px; font-weight: bold; letter-spacing: 6px; font-family: Courier, monospace;'>{$pin}</p>
+                                                    <p style='margin: 0; color: #dc3545; font-size: 14px; font-weight: bold; font-family: Arial, sans-serif;'>Gültig bis {$formatted_expires}</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+
+                                <!-- Login Button -->
+                                <tr>
+                                    <td style='padding-bottom: 30px; text-align: center;'>
+                                        <table cellpadding='0' cellspacing='0' style='margin: 0 auto;'>
+                                            <tr>
+                                                <td style='background-color: #4a90b8; border-radius: 8px;'>
+                                                    <a href='https://einfachstarten.jetzt/einfachlernen/login.php' style='display: block; color: #ffffff; text-decoration: none; padding: 15px 30px; font-weight: bold; font-size: 16px; font-family: Arial, sans-serif;'>Jetzt anmelden →</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+
+                                <!-- Note -->
+                                <tr>
+                                    <td style='padding-bottom: 30px;'>
+                                        <table width='100%' cellpadding='0' cellspacing='0'>
+                                            <tr>
+                                                <td style='background-color: #e3f2fd; padding: 20px; border-radius: 8px; border-left: 4px solid #4a90b8;'>
+                                                    <p style='margin: 0; color: #333333; font-size: 14px; font-family: Arial, sans-serif;'><strong>Hinweis:</strong> Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail einfach ignorieren.</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+
+                                <!-- Final Message -->
+                                <tr>
+                                    <td>
+                                        <p style='margin: 0; color: #666666; font-size: 14px; font-family: Arial, sans-serif;'>Bei Fragen stehe ich dir gerne zur Verfügung!</p>
+                                    </td>
+                                </tr>
+
+                            </table>
                         </td>
                     </tr>
-                </table>
-                
-                <!-- Note -->
-                <table width='100%' cellpadding='0' cellspacing='0' style='margin: 25px 0;'>
+
+                    <!-- Footer -->
                     <tr>
-                        <td style='background-color: #e3f2fd; padding: 20px; border-radius: 8px; border-left: 4px solid #4a90b8;'>
-                            <p style='margin: 0; color: #333333; font-size: 14px;'><strong>Hinweis:</strong> Falls du diesen Code nicht angefordert hast, kannst du diese E-Mail einfach ignorieren.</p>
+                        <td style='background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;'>
+                            <table width='100%' cellpadding='0' cellspacing='0'>
+                                <tr>
+                                    <td style='text-align: center; padding-bottom: 10px;'>
+                                        <p style='margin: 0; color: #333333; font-weight: bold; font-size: 16px; font-family: Arial, sans-serif;'>Anna Braun</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style='text-align: center; padding-bottom: 15px;'>
+                                        <p style='margin: 0; color: #666666; font-size: 14px; font-family: Arial, sans-serif;'>Ganzheitliches Lerncoaching</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style='text-align: center; padding-bottom: 20px;'>
+                                        <a href='mailto:termine@einfachstarten.jetzt' style='color: #4a90b8; text-decoration: none; font-size: 14px; margin: 0 10px; font-family: Arial, sans-serif;'>E-Mail</a>
+                                        <span style='color: #cccccc; margin: 0 5px;'>|</span>
+                                        <a href='https://www.einfachlernen.jetzt' style='color: #4a90b8; text-decoration: none; font-size: 14px; margin: 0 10px; font-family: Arial, sans-serif;'>Website</a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style='text-align: center;'>
+                                        <p style='margin: 0; font-size: 12px; color: #999999; font-family: Arial, sans-serif;'>Diese E-Mail wurde automatisch generiert.</p>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
                     </tr>
+
                 </table>
-                
-                <p style='margin: 30px 0 0 0; color: #666666; font-size: 14px;'>Bei Fragen stehe ich dir gerne zur Verfügung!</p>
-            </td>
-        </tr>
-        
-        <!-- Footer -->
-        <tr>
-            <td style='background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;'>
-                <p style='margin: 0 0 10px 0; color: #333333; font-weight: 600; font-size: 16px;'>Anna Braun</p>
-                <p style='margin: 0 0 15px 0; color: #666666; font-size: 14px;'>Ganzheitliches Lerncoaching</p>
-                
-                <p style='margin: 0; font-size: 14px;'>
-                    <a href='mailto:termine@einfachstarten.jetzt' style='color: #4a90b8; text-decoration: none; margin: 0 10px;'>E-Mail</a>
-                    <a href='https://www.einfachlernen.jetzt' style='color: #4a90b8; text-decoration: none; margin: 0 10px;'>Website</a>
-                </p>
-                
-                <p style='margin: 20px 0 0 0; font-size: 12px; color: #999999;'>Diese E-Mail wurde automatisch generiert.</p>
             </td>
         </tr>
     </table>

@@ -201,7 +201,7 @@ $email_stats = getEmailDeliveryStats(7);
 <?php endif; ?>
 <p>Total customers: <?=$total?></p>
 <table>
-    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th><th>Activity</th><th>Delete</th></tr>
+    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th><th>Activity</th><th>Bookings</th><th>Delete</th></tr>
     <?php foreach($customers as $c): ?>
     <tr>
         <td><?=htmlspecialchars($c['email'])?></td>
@@ -218,9 +218,15 @@ $email_stats = getEmailDeliveryStats(7);
         </td>
         <td><a href='?view_activity=<?=$c['id']?>'>View Activity</a></td>
         <td>
+            <button onclick="showCustomerBookings(<?=$c['id']?>, '<?=htmlspecialchars($c['email'], ENT_QUOTES)?>', '<?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']), ENT_QUOTES)?>')"
+                    style="background:#4a90b8;color:white;border:none;padding:0.3em 0.6em;font-size:0.8em;border-radius:3px;cursor:pointer;">
+                📅 Termine
+            </button>
+        </td>
+        <td>
             <form method="post" action="delete_customer.php" style="margin:0;display:inline;">
                 <input type="hidden" name="customer_id" value="<?=$c['id']?>">
-                <button type="submit" 
+                <button type="submit"
                         style="background:#dc3545;color:white;border:none;padding:0.3em 0.6em;font-size:0.8em;border-radius:3px;cursor:pointer;"
                         onclick="return confirmDelete('<?=htmlspecialchars($c['email'])?>')">
                     🗑️ Delete
@@ -803,6 +809,153 @@ setInterval(() => {
     } // End customer found check
 } // End activity view section
 ?>
+
+<!-- Customer Bookings Modal -->
+<div id="bookingsModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:2rem;border-radius:8px;max-width:800px;width:90%;max-height:80vh;overflow-y:auto;">
+        <h3 id="bookingsTitle">Termine laden...</h3>
+        <button onclick="closeBookingsModal()" style="position:absolute;top:10px;right:15px;background:none;border:none;font-size:20px;cursor:pointer;">&times;</button>
+
+        <div id="bookingsContent">
+            <div style="text-align:center;padding:2rem;">
+                <div style="width:30px;height:30px;border:3px solid #f3f3f3;border-top:3px solid #4a90b8;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>
+                <p style="margin-top:1rem;">Termine werden geladen...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.booking-item {
+    border-bottom: 1px solid #eee;
+    padding: 0.8rem 0;
+}
+.booking-item:last-child {
+    border-bottom: none;
+}
+.booking-future {
+    background: #f8f9fa;
+    border-left: 4px solid #28a745;
+    padding-left: 1rem;
+}
+.booking-past {
+    opacity: 0.7;
+}
+</style>
+
+<script>
+async function showCustomerBookings(customerId, email, name) {
+    const modal = document.getElementById('bookingsModal');
+    const title = document.getElementById('bookingsTitle');
+    const content = document.getElementById('bookingsContent');
+
+    modal.style.display = 'block';
+    title.textContent = `Termine von ${name}`;
+
+    content.innerHTML = `
+        <div style="text-align:center;padding:2rem;">
+            <div style="width:30px;height:30px;border:3px solid #f3f3f3;border-top:3px solid #4a90b8;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>
+            <p style="margin-top:1rem;">Termine werden geladen...</p>
+        </div>
+    `;
+
+    try {
+        const response = await fetch(`customer_bookings.php?customer_id=${customerId}`);
+        const data = await response.json();
+
+        if (data.success) {
+            displayBookings(data);
+        } else {
+            content.innerHTML = `<div style="color:red;padding:1rem;">❌ ${data.error}</div>`;
+        }
+    } catch (error) {
+        content.innerHTML = `<div style="color:red;padding:1rem;">❌ Fehler beim Laden der Termine: ${error.message}</div>`;
+    }
+}
+
+function displayBookings(data) {
+    const content = document.getElementById('bookingsContent');
+    const events = data.events;
+
+    if (events.length === 0) {
+        content.innerHTML = `
+            <div style="text-align:center;padding:2rem;color:#6c757d;">
+                <p>📅 Keine Termine gefunden</p>
+                <p style="font-size:0.9em;margin-top:0.5rem;">Kunde: ${data.customer.email}</p>
+            </div>
+        `;
+        return;
+    }
+
+    const futureEvents = events.filter(e => e.is_future);
+    const pastEvents = events.filter(e => !e.is_future);
+
+    let html = `<div style="margin-bottom:1rem;color:#6c757d;font-size:0.9em;">
+        <strong>Insgesamt:</strong> ${events.length} Termine | 
+        <strong>Kommend:</strong> ${futureEvents.length} | 
+        <strong>Vergangen:</strong> ${pastEvents.length}
+    </div>`;
+
+    if (futureEvents.length > 0) {
+        html += '<h4 style="color:#28a745;margin:1rem 0 0.5rem 0;">🔜 Kommende Termine</h4>';
+        futureEvents.forEach(event => {
+            html += createBookingHTML(event, true);
+        });
+    }
+
+    if (pastEvents.length > 0) {
+        html += '<h4 style="color:#6c757d;margin:1.5rem 0 0.5rem 0;">📅 Vergangene Termine</h4>';
+        pastEvents.slice(0, 10).forEach(event => {
+            html += createBookingHTML(event, false);
+        });
+
+        if (pastEvents.length > 10) {
+            html += `<p style="color:#6c757d;font-style:italic;margin-top:0.5rem;">... und ${pastEvents.length - 10} weitere vergangene Termine</p>`;
+        }
+    }
+
+    content.innerHTML = html;
+}
+
+function createBookingHTML(event, isFuture) {
+    const statusColor = event.status === 'active' ? '#28a745' : '#6c757d';
+    const containerClass = isFuture ? 'booking-future' : 'booking-past';
+
+    return `
+        <div class="booking-item ${containerClass}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="flex:1;">
+                    <strong style="color:#343a40;">${event.name}</strong>
+                    <div style="color:#6c757d;font-size:0.9em;margin-top:0.3rem;">
+                        📅 ${event.start_time} - ${event.end_time}<br>
+                        📍 ${event.location}<br>
+                        🗓️ Gebucht am: ${event.created_at}
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="color:${statusColor};font-weight:bold;font-size:0.8em;">
+                        ${event.status.toUpperCase()}
+                    </span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function closeBookingsModal() {
+    document.getElementById('bookingsModal').style.display = 'none';
+}
+
+document.getElementById('bookingsModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeBookingsModal();
+    }
+});
+</script>
 <script>
 function confirmDelete(email) {
     return confirm(

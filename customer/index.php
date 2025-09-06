@@ -1,8 +1,35 @@
 <?php
 require __DIR__.'/auth.php';
-if(isset($_GET['logout'])){
+
+// Customer session timeout: 4 hours
+if(isset($_SESSION['customer_last_activity']) && (time() - $_SESSION['customer_last_activity'] > 14400)){
     destroy_customer_session();
-    header('Location: /login.php');
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params['path'], $params['domain'],
+            $params['secure'], $params['httponly']
+        );
+    }
+    session_destroy();
+    header('Location: ../login.php?message=' . urlencode('Session expired. Please login again.'));
+    exit;
+}
+$_SESSION['customer_last_activity'] = time();
+
+if(isset($_GET['logout'])){
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params['path'], $params['domain'],
+            $params['secure'], $params['httponly']
+        );
+    }
+    destroy_customer_session();
+    session_destroy();
+    header('Location: ../login.php?message=' . urlencode('Successfully logged out'));
     exit;
 }
 $customer = require_customer_login();
@@ -21,7 +48,7 @@ $customer = require_customer_login();
 </head>
 <body>
 <header><h2>Welcome, <?=htmlspecialchars($customer['first_name'])?></h2></header>
-<nav><a href="?logout=1">Logout</a></nav>
+<nav><a href="?logout=1" onclick="return confirm('Are you sure you want to logout?')">Logout</a></nav>
 <p>Email: <?=htmlspecialchars($customer['email'])?></p>
 <p>Name: <?=htmlspecialchars(trim($customer['first_name'].' '.$customer['last_name']))?></p>
 <p>Phone: <?=htmlspecialchars($customer['phone'])?></p>

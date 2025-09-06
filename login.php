@@ -44,6 +44,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 <body>
 <h2 style="color:#4a90b8">Customer Login</h2>
 <?php if($error): ?><p style="color:red;"><?=$error?></p><?php endif; ?>
+<?php if(!empty($_GET['message'])): ?>
+<div style='background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin-bottom:1rem;'>
+    ✅ <?=htmlspecialchars($_GET['message'])?>
+</div>
+<?php endif; ?>
 <form method="post">
     <label>Email<br><input type="email" name="email" required></label>
     <label>PIN<br><input type="password" name="pin" required></label>

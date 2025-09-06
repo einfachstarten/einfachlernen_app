@@ -35,6 +35,18 @@ try {
         status VARCHAR(20) DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
+    try { $pdo->exec("ALTER TABLE customers ADD COLUMN pin VARCHAR(255) NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE customers ADD COLUMN pin_expires DATETIME NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE customers ADD COLUMN last_login DATETIME NULL"); } catch (Exception $e) {}
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS customer_sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        customer_id INT NOT NULL,
+        session_token VARCHAR(64) UNIQUE NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+    )");
 
     $check = $pdo->prepare('SELECT COUNT(*) FROM admin_users WHERE username = ?');
     $check->execute(['admin']);

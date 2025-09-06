@@ -489,7 +489,7 @@ logPageView($customer['id'], 'termine_suchen', [
             }
             
             updateProgress(100, 100, 'Termine gefunden!');
-            setTimeout(() => showResults(allSlots, count), 500);
+            setTimeout(() => showResults(allSlots, count, service), 500);
         }
 
         function updateProgress(current, max, text) {
@@ -498,7 +498,7 @@ logPageView($customer['id'], 'termine_suchen', [
             document.getElementById('progressText').textContent = text;
         }
 
-        function showResults(slots, targetCount) {
+        function showResults(slots, targetCount, serviceSlug) {
             const container = document.getElementById('slotsContainer');
             const resultsSection = document.getElementById('resultsSection');
             
@@ -521,7 +521,7 @@ logPageView($customer['id'], 'termine_suchen', [
                     </div>
                 ` + slots.map(daySlot => {
                     const timeButtons = daySlot.slots.map(slot => {
-                        return `<a href="${slot.booking_url}" target="_blank" class="time-button">
+                        return `<a href="#" onclick="trackBookingClick('${serviceSlug}', '${slot.booking_url}')" class="time-button">
                             ${slot.time_only} Uhr
                         </a>`;
                     }).join('');
@@ -539,6 +539,22 @@ logPageView($customer['id'], 'termine_suchen', [
             }
             
             resultsSection.style.display = 'block';
+        }
+
+        function trackBookingClick(serviceSlug, calendlyUrl) {
+            fetch('track_booking.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'booking_initiated',
+                    service_slug: serviceSlug,
+                    calendly_url: calendlyUrl
+                })
+            });
+
+            window.open(calendlyUrl, '_blank');
         }
 
         function showError(message) {

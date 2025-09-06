@@ -201,7 +201,7 @@ $email_stats = getEmailDeliveryStats(7);
 <?php endif; ?>
 <p>Total customers: <?=$total?></p>
 <table>
-    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th><th>Activity</th></tr>
+    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th><th>Activity</th><th>Delete</th></tr>
     <?php foreach($customers as $c): ?>
     <tr>
         <td><?=htmlspecialchars($c['email'])?></td>
@@ -217,6 +217,16 @@ $email_stats = getEmailDeliveryStats(7);
             </form>
         </td>
         <td><a href='?view_activity=<?=$c['id']?>'>View Activity</a></td>
+        <td>
+            <form method="post" action="delete_customer.php" style="margin:0;display:inline;">
+                <input type="hidden" name="customer_id" value="<?=$c['id']?>">
+                <button type="submit" 
+                        style="background:#dc3545;color:white;border:none;padding:0.3em 0.6em;font-size:0.8em;border-radius:3px;cursor:pointer;"
+                        onclick="return confirmDelete('<?=htmlspecialchars($c['email'])?>')">
+                    🗑️ Delete
+                </button>
+            </form>
+        </td>
     </tr>
     <?php endforeach; ?>
 </table>
@@ -793,6 +803,21 @@ setInterval(() => {
     } // End customer found check
 } // End activity view section
 ?>
+<script>
+function confirmDelete(email) {
+    return confirm(
+        `🚨 CUSTOMER DELETION WARNING 🚨\n\n` +
+        `You are about to permanently delete:\n` +
+        `Email: ${email}\n\n` +
+        `This action will:\n` +
+        `✗ Delete the customer account\n` +
+        `✗ Delete all session data\n` +
+        `✗ Delete all activity history\n` +
+        `✗ Cannot be undone\n\n` +
+        `Are you absolutely sure?`
+    );
+}
+</script>
 <script src="../pwa-update.js"></script>
 </body>
 </html>

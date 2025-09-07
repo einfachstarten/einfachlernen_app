@@ -95,10 +95,159 @@ function getPopularServices($pdo, $days) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/**
+ * Service Performance Analytics
+ */
+function getServicePerformance($pdo, $year, $month) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            s.service_name,
+            COUNT(b.id) as booking_count,
+            SUM(s.price) as revenue,
+            ROUND((COUNT(b.id) * 100.0 / total.total_bookings), 1) as percentage
+        FROM services s
+        LEFT JOIN bookings b ON s.id = b.service_id 
+            AND YEAR(b.booking_date) = ? 
+            AND MONTH(b.booking_date) = ?
+            AND b.status = 'confirmed'
+        CROSS JOIN (
+            SELECT COUNT(*) as total_bookings 
+            FROM bookings 
+            WHERE YEAR(booking_date) = ? 
+            AND MONTH(booking_date) = ?
+            AND status = 'confirmed'
+        ) as total
+        GROUP BY s.id, s.service_name, total.total_bookings
+        ORDER BY revenue DESC
+    ");
+    $stmt->execute([$year, $month, $year, $month]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Kapazitätsplanung für kommende Wochen
+ */
+function getWeeklyCapacity($pdo, $year, $month) {
+    $first_day = "{$year}-{$month}-01";
+    $last_day = date("Y-m-t", strtotime($first_day));
+
+    $stmt = $pdo->prepare("
+        WITH weeks AS (
+            SELECT 
+                w.week_num,
+                w.week_start,
+                w.week_end,
+                COALESCE(COUNT(b.id), 0) as booked_slots,
+                COALESCE(SUM(s.price), 0) as revenue,
+                ROUND((COALESCE(COUNT(b.id), 0) * 100.0 / 40), 1) as capacity_percentage
+            FROM (
+                SELECT 
+                    ROW_NUMBER() OVER (ORDER BY week_start) as week_num,
+                    week_start,
+                    DATE_ADD(week_start, INTERVAL 6 DAY) as week_end
+                FROM (
+                    SELECT DISTINCT 
+                        DATE(DATE_SUB(d.date, INTERVAL WEEKDAY(d.date) DAY)) as week_start
+                    FROM (
+                        SELECT DATE_ADD(?, INTERVAL seq.n DAY) as date
+                        FROM (
+                            SELECT 0 as n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION 
+                            SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION 
+                            SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION 
+                            SELECT 12 UNION SELECT 13 UNION SELECT 14 UNION SELECT 15 UNION 
+                            SELECT 16 UNION SELECT 17 UNION SELECT 18 UNION SELECT 19 UNION 
+                            SELECT 20 UNION SELECT 21 UNION SELECT 22 UNION SELECT 23 UNION 
+                            SELECT 24 UNION SELECT 25 UNION SELECT 26 UNION SELECT 27 UNION 
+                            SELECT 28 UNION SELECT 29 UNION SELECT 30
+                        ) seq
+                    ) d
+                    WHERE d.date <= ?
+                ) week_boundaries
+            ) w
+            LEFT JOIN bookings b ON b.booking_date BETWEEN w.week_start AND w.week_end
+                AND b.status = 'confirmed'
+            LEFT JOIN services s ON b.service_id = s.id
+            GROUP BY w.week_num, w.week_start, w.week_end
+            ORDER BY w.week_start
+        )
+        SELECT 
+            week_num,
+            week_start,
+            week_end,
+            booked_slots,
+            40 as max_slots,
+            revenue,
+            capacity_percentage,
+            CASE 
+                WHEN capacity_percentage >= 80 THEN 'high'
+                WHEN capacity_percentage >= 50 THEN 'medium'
+                ELSE 'low'
+            END as status
+        FROM weeks
+    ");
+    $stmt->execute([$first_day, $last_day]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Dynamische Monats-/Jahresliste generieren
+ */
+function getAvailableMonths($pdo) {
+    $stmt = $pdo->query("
+        SELECT DISTINCT 
+            YEAR(booking_date) as year,
+            MONTH(booking_date) as month,
+            DATE_FORMAT(booking_date, '%Y-%m') as year_month,
+            DATE_FORMAT(booking_date, '%M %Y') as display_name
+        FROM bookings 
+        WHERE status = 'confirmed'
+        ORDER BY year DESC, month DESC
+        LIMIT 12
+    ");
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Datums-Utility für Wochenbereiche
+ */
+function getWeekDateRange($year, $month, $week_number) {
+    $first_day = "{$year}-{$month}-01";
+    $start_of_month = new DateTime($first_day);
+
+    $start_of_week = clone $start_of_month;
+    $start_of_week->modify('monday this week');
+
+    $start_of_week->modify('+' . ($week_number - 1) . ' weeks');
+    $end_of_week = clone $start_of_week;
+    $end_of_week->modify('+6 days');
+
+    return [
+        'start' => $start_of_week->format('j. M'),
+        'end' => $end_of_week->format('j. M'),
+        'full' => $start_of_week->format('j.') . ' - ' . $end_of_week->format('j. M')
+    ];
+}
+
 $kpis = getKPIMetrics($pdo, $days);
 $trends = getActivityTrends($pdo, $days);
 $funnel = getConversionFunnel($pdo, $days);
 $services = getPopularServices($pdo, $days);
+
+// Neue Parameter für Monats-/Service-Filter
+$selected_month = $_GET['service_month'] ?? date('Y-m');
+$capacity_month = $_GET['capacity_month'] ?? date('Y-m');
+
+list($service_year, $service_month_num) = explode('-', $selected_month);
+list($capacity_year, $capacity_month_num) = explode('-', $capacity_month);
+
+$available_months = getAvailableMonths($pdo);
+$service_performance = getServicePerformance($pdo, $service_year, $service_month_num);
+$weekly_capacity = getWeeklyCapacity($pdo, $capacity_year, $capacity_month_num);
+
+// Service Performance Gesamtstatistiken
+$total_bookings = array_sum(array_column($service_performance, 'booking_count'));
+$total_revenue = array_sum(array_column($service_performance, 'revenue'));
+$avg_booking_value = $total_bookings > 0 ? round($total_revenue / $total_bookings, 2) : 0;
 
 // Calculate conversion rates
 $conversion_rates = [
@@ -949,9 +1098,154 @@ $conversion_rates = [
                 <?php endif; ?>
             </div>
         </div>
-        <div id="serviceAnalytics">Service Analytics werden geladen...</div>
 
-        <div id="weeklyCapacity">Kapazitätsplanung wird geladen...</div>
+        <!-- Service Performance Section -->
+        <div class="analytics-container" style="margin-top: 2rem;">
+            <div style="background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 1.5rem 0 1.5rem; border-bottom: 1px solid #e9ecef;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 1.5rem;">📊</span>
+                        <h3 style="margin: 0; font-size: 1.2rem; font-weight: 600; color: #495057;">Service Performance</h3>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="color: #6c757d; font-size: 0.9rem;">Monat:</span>
+                        <select name="service_month" onchange="window.location.href='?service_month=' + this.value + '&capacity_month=<?= urlencode($capacity_month) ?>';" style="padding: 0.5rem 1rem; border-radius: 8px; border: 2px solid #e9ecef; background: white; font-size: 0.9rem; font-weight: 500; color: #495057; cursor: pointer; min-width: 120px;">
+                            <?php foreach ($available_months as $month): ?>
+                                <option value="<?= $month['year_month'] ?>" <?= $month['year_month'] == $selected_month ? 'selected' : '' ?>>
+                                    <?= $month['display_name'] ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 2rem; padding: 1.5rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef;">
+                    <div style="text-align: center; flex: 1;">
+                        <h3 style="margin: 0 0 0.25rem 0; font-size: 2rem; font-weight: 700; color: #007bff;"><?= $total_bookings ?></h3>
+                        <small style="color: #6c757d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">Gesamtbuchungen</small>
+                    </div>
+                    <div style="text-align: center; flex: 1;">
+                        <h3 style="margin: 0 0 0.25rem 0; font-size: 2rem; font-weight: 700; color: #28a745;">€<?= number_format($total_revenue, 0, ',', '.') ?></h3>
+                        <small style="color: #6c757d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">Gesamtumsatz</small>
+                    </div>
+                    <div style="text-align: center; flex: 1;">
+                        <h3 style="margin: 0 0 0.25rem 0; font-size: 2rem; font-weight: 700; color: #ffc107;">€<?= $avg_booking_value ?></h3>
+                        <small style="color: #6c757d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">⌀ Buchungswert</small>
+                    </div>
+                </div>
+                <div style="padding: 1.5rem;">
+                    <div style="background: #f8f9fa; border-radius: 12px; overflow: hidden; border: 2px solid #e9ecef;">
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 2fr; gap: 1rem; padding: 1rem 1.5rem; background: #e9ecef; font-weight: 600; color: #495057; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <div>Service</div>
+                            <div style="text-align: center;">Buchungen</div>
+                            <div style="text-align: center;">Umsatz</div>
+                            <div style="text-align: center;">Anteil</div>
+                            <div style="text-align: center;">Performance</div>
+                        </div>
+                        <?php foreach ($service_performance as $index => $service): ?>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 2fr; gap: 1rem; padding: 1.5rem; <?= $index < count($service_performance) - 1 ? 'border-bottom: 1px solid #e9ecef;' : '' ?> align-items: center; transition: background 0.2s ease;" onmouseover="this.style.background='#ffffff'" onmouseout="this.style.background='transparent'">
+                            <div style="font-size: 1.1rem; font-weight: 600; color: #495057;">
+                                <?= htmlspecialchars($service['service_name']) ?>
+                            </div>
+                            <div style="text-align: center; font-size: 1.2rem; font-weight: 600; color: #007bff;">
+                                <?= $service['booking_count'] ?>
+                            </div>
+                            <div style="text-align: center; font-size: 1.2rem; font-weight: 600; color: #28a745;">
+                                €<?= number_format($service['revenue'], 0, ',', '.') ?>
+                            </div>
+                            <div style="text-align: center;">
+                                <span style="font-size: 0.9rem; font-weight: 700; color: #28a745; background: #d4edda; padding: 0.5rem 1rem; border-radius: 20px;">
+                                    <?= $service['percentage'] ?>%
+                                </span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="flex: 1; height: 12px; background: #e9ecef; border-radius: 6px; overflow: hidden;">
+                                    <div style="height: 100%; width: <?= $service['percentage'] ?>%; background: linear-gradient(90deg, #28a745, #20c997); border-radius: 6px; transition: width 0.8s ease-in-out;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kapazitätsplanung Section -->
+        <div class="analytics-container">
+            <div style="background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 1.5rem 0 1.5rem; border-bottom: 1px solid #e9ecef;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 1.5rem;">📈</span>
+                        <h3 style="margin: 0; font-size: 1.2rem; font-weight: 600; color: #495057;">Kapazitätsplanung</h3>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="color: #6c757d; font-size: 0.9rem;">Planungsmonat:</span>
+                        <select name="capacity_month" onchange="window.location.href='?capacity_month=' + this.value + '&service_month=<?= urlencode($selected_month) ?>';" style="padding: 0.5rem 1rem; border-radius: 8px; border: 2px solid #e9ecef; background: white; font-size: 0.9rem; font-weight: 500; color: #495057; cursor: pointer; min-width: 140px;">
+                            <?php for ($i = 0; $i < 4; $i++): $month = date('Y-m', strtotime("+$i months")); $display = date('F Y', strtotime("+$i months")); ?>
+                                <option value="<?= $month ?>" <?= $month == $capacity_month ? 'selected' : '' ?>>
+                                    <?= $display ?>
+                                </option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                </div>
+                <?php $total_capacity_revenue = array_sum(array_column($weekly_capacity, 'revenue')); $avg_capacity = count($weekly_capacity) > 0 ? round(array_sum(array_column($weekly_capacity, 'capacity_percentage')) / count($weekly_capacity)) : 0; $total_booked_slots = array_sum(array_column($weekly_capacity, 'booked_slots')); ?>
+                <div style="display: flex; gap: 2rem; padding: 1.5rem; background: #f8f9fa; border-bottom: 1px solid #e9ecef;">
+                    <div style="text-align: center; flex: 1;">
+                        <h3 style="margin: 0 0 0.25rem 0; font-size: 2rem; font-weight: 700; color: #28a745;">€<?= number_format($total_capacity_revenue, 0, ',', '.') ?></h3>
+                        <small style="color: #6c757d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">Geplanter Umsatz</small>
+                    </div>
+                    <div style="text-align: center; flex: 1;">
+                        <h3 style="margin: 0 0 0.25rem 0; font-size: 2rem; font-weight: 700; color: #17a2b8;"><?= $avg_capacity ?>%</h3>
+                        <small style="color: #6c757d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">⌀ Geplante Auslastung</small>
+                    </div>
+                    <div style="text-align: center; flex: 1;">
+                        <h3 style="margin: 0 0 0.25rem 0; font-size: 2rem; font-weight: 700; color: #6f42c1;"><?= $total_booked_slots ?></h3>
+                        <small style="color: #6c757d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">Gebuchte Termine</small>
+                    </div>
+                </div>
+                <div style="padding: 1.5rem;">
+                    <div style="background: #f8f9fa; border-radius: 12px; overflow: hidden; border: 2px solid #e9ecef;">
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 2fr; gap: 1rem; padding: 1rem 1.5rem; background: #e9ecef; font-weight: 600; color: #495057; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <div>Woche</div>
+                            <div style="text-align: center;">Status</div>
+                            <div style="text-align: center;">Gebucht</div>
+                            <div style="text-align: center;">Auslastung</div>
+                            <div style="text-align: center;">Umsatz</div>
+                            <div style="text-align: center;">Kapazität</div>
+                        </div>
+                        <?php foreach ($weekly_capacity as $index => $week): $week_range = getWeekDateRange($capacity_year, $capacity_month_num, $week['week_num']); ?>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 2fr; gap: 1rem; padding: 1.5rem; <?= $index < count($weekly_capacity) - 1 ? 'border-bottom: 1px solid #e9ecef;' : '' ?> align-items: center; transition: background 0.2s ease;" onmouseover="this.style.background='#ffffff'" onmouseout="this.style.background='transparent'">
+                            <div>
+                                <div style="font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 0.25rem;">Woche <?= $week['week_num'] ?></div>
+                                <div style="font-size: 0.85rem; color: #6c757d;">(<?= $week_range['full'] ?>)</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <?php $status_colors = ['high' => ['bg' => '#f8d7da', 'color' => '#721c24', 'text' => 'Voll'], 'medium' => ['bg' => '#fff3cd', 'color' => '#856404', 'text' => 'Mittel'], 'low' => ['bg' => '#d4edda', 'color' => '#155724', 'text' => 'Frei']]; $status_style = $status_colors[$week['status']]; ?>
+                                <span style="padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; background: <?= $status_style['bg'] ?>; color: <?= $status_style['color'] ?>;">
+                                    <?= $status_style['text'] ?>
+                                </span>
+                            </div>
+                            <div style="text-align: center; font-size: 1.2rem; font-weight: 600; color: #495057;">
+                                <?= $week['booked_slots'] ?>/<?= $week['max_slots'] ?>
+                            </div>
+                            <div style="text-align: center; font-size: 1.2rem; font-weight: 700; color: <?= $week['status'] == 'high' ? '#dc3545' : ($week['status'] == 'medium' ? '#ffc107' : '#28a745') ?>;">
+                                <?= $week['capacity_percentage'] ?>%
+                            </div>
+                            <div style="text-align: center; font-size: 1.2rem; font-weight: 600; color: #28a745;">
+                                €<?= number_format($week['revenue'], 0, ',', '.') ?>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="position: relative; flex: 1; height: 20px; background: #e9ecef; border-radius: 10px; overflow: hidden;">
+                                    <div style="height: 100%; width: <?= $week['capacity_percentage'] ?>%; background: linear-gradient(90deg, <?= $week['status'] == 'high' ? '#dc3545' : ($week['status'] == 'medium' ? '#ffc107' : '#28a745') ?>, <?= $week['status'] == 'high' ? '#dc3545aa' : ($week['status'] == 'medium' ? '#ffc107aa' : '#28a745aa') ?>); border-radius: 10px; transition: width 0.8s ease-in-out;"></div>
+                                    <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 0.75rem; font-weight: 600; color: #333;"><?= $week['capacity_percentage'] ?>%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1109,189 +1403,6 @@ $conversion_rates = [
                 }
             }, 500);
         });
-    </script>
-    <script>
-    // Calendly Analytics laden
-    document.addEventListener('DOMContentLoaded', function() {
-        loadServiceAnalytics(<?= $days ?>);
-        loadWeeklyCapacity();
-    });
-
-    async function loadServiceAnalytics(days) {
-        try {
-            const response = await fetch(`calendly_analytics.php?type=service_stats&days=` + days);
-            const data = await response.json();
-
-            if (data.success) {
-                displayServiceAnalytics(data);
-            } else {
-                document.getElementById('serviceAnalytics').innerHTML =
-                    '<p style="color:red;">❌ ' + data.error + '</p>';
-            }
-        } catch (error) {
-            document.getElementById('serviceAnalytics').innerHTML =
-                '<p style="color:red;">❌ Fehler beim Laden der Service Analytics</p>';
-        }
-    }
-
-    async function loadWeeklyCapacity() {
-        try {
-            const response = await fetch('calendly_analytics.php?type=weekly_capacity');
-            const data = await response.json();
-
-            if (data.success) {
-                displayWeeklyCapacity(data);
-            } else {
-                document.getElementById('weeklyCapacity').innerHTML =
-                    '<p style="color:red;">❌ ' + data.error + '</p>';
-            }
-        } catch (error) {
-            document.getElementById('weeklyCapacity').innerHTML =
-                '<p style="color:red;">❌ Fehler beim Laden der Kapazitätsplanung</p>';
-        }
-    }
-
-    function displayServiceAnalytics(data) {
-        let html = `
-            <div class="analytics-container">
-                <div class="analytics-header">
-                    <h2>📊 Service Performance</h2>
-                </div>
-
-                <!-- KPI Summary -->
-                <div class="analytics-summary">
-                    <div class="analytics-metric bookings">
-                        <h3>${data.total_bookings}</h3>
-                        <small>Gesamtbuchungen</small>
-                    </div>
-                    <div class="analytics-metric revenue">
-                        <h3>€${data.total_revenue}</h3>
-                        <small>Gesamtumsatz</small>
-                    </div>
-                    <div class="analytics-metric average">
-                        <h3>€${data.avg_booking_value}</h3>
-                        <small>⌀ Buchungswert</small>
-                    </div>
-                </div>
-
-                <!-- Service Cards Grid -->
-                <div class="services-grid">
-        `;
-
-        Object.entries(data.services).forEach(([service, stats]) => {
-            const percentage = Math.min(100, Math.max(0, stats.percentage));
-
-            html += `
-                <div class="service-card">
-                    <div class="service-card-header">
-                        <h4 class="service-name">${service}</h4>
-                        <span class="service-percentage">${percentage}%</span>
-                    </div>
-
-                    <div class="service-bar-container-new">
-                        <div class="service-bar-fill-new" style="width: ${percentage}%;"></div>
-                    </div>
-
-                    <div class="service-stats">
-                        <div class="service-stat">
-                            <span class="stat-label">Buchungen</span>
-                            <span class="stat-value">${stats.count}</span>
-                        </div>
-                        <div class="service-stat">
-                            <span class="stat-label">Umsatz</span>
-                            <span class="stat-value revenue-color">€${stats.revenue}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-
-        html += `
-                </div>
-            </div>
-        `;
-
-        document.getElementById('serviceAnalytics').innerHTML = html;
-    }
-
-    function displayWeeklyCapacity(data) {
-        let html = `
-            <div class="analytics-container">
-                <div class="analytics-header">
-                    <h2>📈 Kapazitätsplanung</h2>
-                </div>
-
-                <!-- Capacity Summary -->
-                <div class="analytics-summary">
-                    <div class="analytics-metric revenue">
-                        <h3>€${data.total_upcoming_revenue}</h3>
-                        <small>Kommender Umsatz</small>
-                    </div>
-                    <div class="analytics-metric capacity">
-                        <h3>${data.average_capacity}%</h3>
-                        <small>⌀ Auslastung</small>
-                    </div>
-                </div>
-
-                <!-- Weekly Cards Grid -->
-                <div class="weeks-grid">
-        `;
-
-        data.weeks.forEach(week => {
-            const capacityClass = week.capacity_percentage >= 70 ? 'high' :
-                                 week.capacity_percentage >= 40 ? 'medium' : 'low';
-            const statusText = week.status === 'full' ? 'Voll' :
-                              week.status === 'medium' ? 'Mittel' : 'Frei';
-
-            html += `
-                <div class="week-card">
-                    <div class="week-card-header">
-                        <h4 class="week-title">Woche ${week.week_number}</h4>
-                        <span class="week-status ${capacityClass}">${statusText}</span>
-                    </div>
-
-                    <div class="week-date-range">
-                        ${week.week_start} - ${week.week_end}
-                    </div>
-
-                    <div class="capacity-bar-container-new">
-                        <div class="capacity-bar-fill-new ${capacityClass}" style="width: ${week.capacity_percentage}%;"></div>
-                        <span class="capacity-text">${week.capacity_percentage}%</span>
-                    </div>
-
-                    <div class="week-stats">
-                        <div class="week-stat">
-                            <span class="stat-label">Gebucht</span>
-                            <span class="stat-value">${week.booked_slots}/${week.max_capacity}</span>
-                        </div>
-                        <div class="week-stat">
-                            <span class="stat-label">Umsatz</span>
-                            <span class="stat-value revenue-color">€${week.revenue}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-
-        html += `
-                </div>
-            </div>
-        `;
-
-        // Empfehlungen hinzufügen
-        const lowWeeks = data.weeks.filter(w => w.status === 'low');
-        if (lowWeeks.length > 0) {
-            html += `
-                <div class="analytics-recommendation">
-                    <strong>💡 Marketing-Empfehlung:</strong><br>
-                    Wochen mit niedriger Auslastung: ${lowWeeks.map(w => w.week_number).join(', ')}. 
-                    Erwägen Sie gezielte Marketing-Aktionen oder Sonderangebote.
-                </div>
-            `;
-        }
-
-        document.getElementById('weeklyCapacity').innerHTML = html;
-    }
     </script>
 </body>
 </html>

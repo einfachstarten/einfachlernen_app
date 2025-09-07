@@ -100,6 +100,45 @@ try {
     } catch (PDOException $e) {
         echo "<p style='color:red'>❌ customer_activities creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
     }
+
+    // Create analytics views
+    echo "<h3>Creating analytics views:</h3>";
+    try {
+        $pdo->exec("CREATE OR REPLACE VIEW service_performance_monthly AS
+            SELECT 
+                s.service_name,
+                YEAR(b.booking_date) as year,
+                MONTH(b.booking_date) as month,
+                COUNT(b.id) as booking_count,
+                SUM(s.price) as revenue,
+                ROUND((COUNT(b.id) * 100.0 / (SELECT COUNT(*) FROM bookings WHERE YEAR(booking_date) = YEAR(b.booking_date) AND MONTH(booking_date) = MONTH(b.booking_date))), 1) as percentage
+            FROM bookings b
+            JOIN services s ON b.service_id = s.id 
+            WHERE b.status = 'confirmed'
+            GROUP BY s.service_name, YEAR(b.booking_date), MONTH(b.booking_date)");
+        echo "<p style='color:green'>✅ service_performance_monthly view ready</p>";
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ service_performance_monthly failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
+
+    try {
+        $pdo->exec("CREATE OR REPLACE VIEW weekly_capacity AS
+            SELECT 
+                YEAR(booking_date) as year,
+                WEEK(booking_date, 1) as week_number,
+                DATE(DATE_SUB(booking_date, INTERVAL WEEKDAY(booking_date) DAY)) as week_start,
+                DATE(DATE_ADD(DATE_SUB(booking_date, INTERVAL WEEKDAY(booking_date) DAY), INTERVAL 6 DAY)) as week_end,
+                COUNT(*) as booked_slots,
+                SUM(s.price) as revenue,
+                ROUND((COUNT(*) * 100.0 / 40), 1) as capacity_percentage
+            FROM bookings b
+            JOIN services s ON b.service_id = s.id
+            WHERE b.status = 'confirmed'
+            GROUP BY YEAR(booking_date), WEEK(booking_date, 1)");
+        echo "<p style='color:green'>✅ weekly_capacity view ready</p>";
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ weekly_capacity view failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
     
     // Verify final schema
     echo "<h3>Final Schema Verification:</h3>";

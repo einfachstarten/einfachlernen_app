@@ -20,6 +20,47 @@ function getPDO()
     }
 }
 
+function getCalendlyConfig() {
+    return [
+        'token' => getenv('CALENDLY_TOKEN') ?: 'PASTE_YOUR_TOKEN_HERE',
+        'org_uri' => getenv('CALENDLY_ORG_URI') ?: 'https://api.calendly.com/organizations/PASTE_ORG_ID'
+    ];
+}
+
+function api_get($url, $token) {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer $token"],
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 25,
+    ]);
+    $res = curl_exec($ch);
+    if ($res === false) {
+        return [null, 'Network error: ' . curl_error($ch)];
+    }
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code < 200 || $code >= 300) {
+        return [null, "HTTP $code"];
+    }
+
+    $json = json_decode($res, true);
+    return [$json, null];
+}
+
+function getServicePriceMapping() {
+    return [
+        'Lerntraining' => 45.00,
+        'Neurofeedback 20' => 45.00,
+        'Neurofeedback 40' => 65.00,
+        'Neurofeedback + Lerntraining' => 85.00,
+        'Erstberatung' => 0.00,
+        'Lerntyp-Analyse' => 65.00
+    ];
+}
+
 require_once 'ActivityLogger.php';
 
 $pdo = getPDO();
@@ -99,112 +140,187 @@ function getPopularServices($pdo, $days) {
  * Service Performance Analytics
  */
 function getServicePerformance($pdo, $year, $month) {
-    $stmt = $pdo->prepare("
-        SELECT 
-            s.service_name,
-            COUNT(b.id) as booking_count,
-            SUM(s.price) as revenue,
-            ROUND((COUNT(b.id) * 100.0 / total.total_bookings), 1) as percentage
-        FROM services s
-        LEFT JOIN bookings b ON s.id = b.service_id 
-            AND YEAR(b.booking_date) = ? 
-            AND MONTH(b.booking_date) = ?
-            AND b.status = 'confirmed'
-        CROSS JOIN (
-            SELECT COUNT(*) as total_bookings 
-            FROM bookings 
-            WHERE YEAR(booking_date) = ? 
-            AND MONTH(booking_date) = ?
-            AND status = 'confirmed'
-        ) as total
-        GROUP BY s.id, s.service_name, total.total_bookings
-        ORDER BY revenue DESC
-    ");
-    $stmt->execute([$year, $month, $year, $month]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $config = getCalendlyConfig();
+    $service_prices = getServicePriceMapping();
+
+    try {
+        $month_start = new DateTime("{$year}-{$month}-01", new DateTimeZone('UTC'));
+        $month_end = (clone $month_start)->modify('last day of this month')->setTime(23, 59, 59);
+
+        $url = 'https://api.calendly.com/scheduled_events?' . http_build_query([
+            'organization' => $config['org_uri'],
+            'status' => 'active',
+            'min_start_time' => $month_start->format('Y-m-d\\TH:i:s\\Z'),
+            'max_start_time' => $month_end->format('Y-m-d\\TH:i:s\\Z'),
+            'count' => 100
+        ]);
+
+        list($data, $err) = api_get($url, $config['token']);
+        if ($err) {
+            throw new Exception("Calendly API Error: $err");
+        }
+
+        $events = $data['collection'] ?? [];
+        $service_stats = [];
+        $total_bookings = 0;
+
+        foreach ($service_prices as $service_name => $price) {
+            $service_stats[$service_name] = [
+                'service_name' => $service_name,
+                'booking_count' => 0,
+                'revenue' => 0,
+                'percentage' => 0
+            ];
+        }
+
+        foreach ($events as $event) {
+            $service_name = $event['name'] ?? 'Unknown Service';
+            $total_bookings++;
+
+            if (isset($service_stats[$service_name])) {
+                $service_stats[$service_name]['booking_count']++;
+                $service_stats[$service_name]['revenue'] += $service_prices[$service_name] ?? 0;
+            }
+        }
+
+        foreach ($service_stats as $service_name => $stats) {
+            $service_stats[$service_name]['percentage'] = $total_bookings > 0
+                ? round(($stats['booking_count'] / $total_bookings) * 100, 1)
+                : 0;
+        }
+
+        uasort($service_stats, fn($a, $b) => $b['revenue'] <=> $a['revenue']);
+
+        return array_values($service_stats);
+
+    } catch (Exception $e) {
+        error_log("Calendly Service Performance Error: " . $e->getMessage());
+        return [];
+    }
 }
 
 /**
  * Kapazitätsplanung für kommende Wochen
  */
 function getWeeklyCapacity($pdo, $year, $month) {
-    $first_day = "{$year}-{$month}-01";
-    $last_day = date("Y-m-t", strtotime($first_day));
+    $config = getCalendlyConfig();
+    $service_prices = getServicePriceMapping();
 
-    $stmt = $pdo->prepare("
-        WITH weeks AS (
-            SELECT 
-                w.week_num,
-                w.week_start,
-                w.week_end,
-                COALESCE(COUNT(b.id), 0) as booked_slots,
-                COALESCE(SUM(s.price), 0) as revenue,
-                ROUND((COALESCE(COUNT(b.id), 0) * 100.0 / 40), 1) as capacity_percentage
-            FROM (
-                SELECT 
-                    ROW_NUMBER() OVER (ORDER BY week_start) as week_num,
-                    week_start,
-                    DATE_ADD(week_start, INTERVAL 6 DAY) as week_end
-                FROM (
-                    SELECT DISTINCT 
-                        DATE(DATE_SUB(d.date, INTERVAL WEEKDAY(d.date) DAY)) as week_start
-                    FROM (
-                        SELECT DATE_ADD(?, INTERVAL seq.n DAY) as date
-                        FROM (
-                            SELECT 0 as n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION 
-                            SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION 
-                            SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION 
-                            SELECT 12 UNION SELECT 13 UNION SELECT 14 UNION SELECT 15 UNION 
-                            SELECT 16 UNION SELECT 17 UNION SELECT 18 UNION SELECT 19 UNION 
-                            SELECT 20 UNION SELECT 21 UNION SELECT 22 UNION SELECT 23 UNION 
-                            SELECT 24 UNION SELECT 25 UNION SELECT 26 UNION SELECT 27 UNION 
-                            SELECT 28 UNION SELECT 29 UNION SELECT 30
-                        ) seq
-                    ) d
-                    WHERE d.date <= ?
-                ) week_boundaries
-            ) w
-            LEFT JOIN bookings b ON b.booking_date BETWEEN w.week_start AND w.week_end
-                AND b.status = 'confirmed'
-            LEFT JOIN services s ON b.service_id = s.id
-            GROUP BY w.week_num, w.week_start, w.week_end
-            ORDER BY w.week_start
-        )
-        SELECT 
-            week_num,
-            week_start,
-            week_end,
-            booked_slots,
-            40 as max_slots,
-            revenue,
-            capacity_percentage,
-            CASE 
-                WHEN capacity_percentage >= 80 THEN 'high'
-                WHEN capacity_percentage >= 50 THEN 'medium'
-                ELSE 'low'
-            END as status
-        FROM weeks
-    ");
-    $stmt->execute([$first_day, $last_day]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $month_start = new DateTime("{$year}-{$month}-01", new DateTimeZone('UTC'));
+        $month_end = (clone $month_start)->modify('last day of this month')->setTime(23, 59, 59);
+
+        $url = 'https://api.calendly.com/scheduled_events?' . http_build_query([
+            'organization' => $config['org_uri'],
+            'status' => 'active',
+            'min_start_time' => $month_start->format('Y-m-d\\TH:i:s\\Z'),
+            'max_start_time' => $month_end->format('Y-m-d\\TH:i:s\\Z'),
+            'count' => 100
+        ]);
+
+        list($data, $err) = api_get($url, $config['token']);
+        if ($err) {
+            throw new Exception("Calendly API Error: $err");
+        }
+
+        $events = $data['collection'] ?? [];
+        $weeks_data = [];
+
+        foreach ($events as $event) {
+            $start_time = new DateTime($event['start_time'], new DateTimeZone('UTC'));
+            $start_time->setTimezone(new DateTimeZone('Europe/Vienna'));
+
+            $week_number = (int)$start_time->format('W');
+            $service_name = $event['name'] ?? 'Unknown Service';
+            $price = $service_prices[$service_name] ?? 0;
+
+            if (!isset($weeks_data[$week_number])) {
+                $weeks_data[$week_number] = [
+                    'week_number' => $week_number,
+                    'booked_slots' => 0,
+                    'max_slots' => 40,
+                    'revenue' => 0,
+                    'capacity_percentage' => 0,
+                    'status' => 'low'
+                ];
+            }
+
+            $weeks_data[$week_number]['booked_slots']++;
+            $weeks_data[$week_number]['revenue'] += $price;
+        }
+
+        foreach ($weeks_data as $week_number => $week_data) {
+            $capacity_percentage = round(($week_data['booked_slots'] / 40) * 100, 1);
+            $status = $capacity_percentage >= 20 ? 'high' : ($capacity_percentage >= 10 ? 'medium' : 'low');
+
+            $weeks_data[$week_number]['capacity_percentage'] = $capacity_percentage;
+            $weeks_data[$week_number]['status'] = $status;
+        }
+
+        ksort($weeks_data);
+
+        return array_values($weeks_data);
+
+    } catch (Exception $e) {
+        error_log("Calendly Weekly Capacity Error: " . $e->getMessage());
+        return [];
+    }
 }
 
 /**
  * Dynamische Monats-/Jahresliste generieren
  */
 function getAvailableMonths($pdo) {
-    $stmt = $pdo->query("
-        SELECT DISTINCT 
-            YEAR(booking_date) as year,
-            MONTH(booking_date) as month,
-            DATE_FORMAT(booking_date, '%Y-%m') as year_month,
-            DATE_FORMAT(booking_date, '%M %Y') as display_name
-        FROM bookings 
-        WHERE status = 'confirmed'
-        ORDER BY year DESC, month DESC
-        LIMIT 12
-    ");
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $config = getCalendlyConfig();
+
+    try {
+        $twelve_months_ago = (new DateTime('-12 months', new DateTimeZone('UTC')))->format('Y-m-d\\TH:i:s\\Z');
+        $today = (new DateTime('now', new DateTimeZone('UTC')))->format('Y-m-d\\TH:i:s\\Z');
+
+        $url = 'https://api.calendly.com/scheduled_events?' . http_build_query([
+            'organization' => $config['org_uri'],
+            'status' => 'active',
+            'min_start_time' => $twelve_months_ago,
+            'max_start_time' => $today,
+            'count' => 100
+        ]);
+
+        list($data, $err) = api_get($url, $config['token']);
+        if ($err) {
+            throw new Exception("Calendly API Error: $err");
+        }
+
+        $events = $data['collection'] ?? [];
+        $months = [];
+
+        foreach ($events as $event) {
+            $start_time = new DateTime($event['start_time'], new DateTimeZone('UTC'));
+            $year = (int)$start_time->format('Y');
+            $month = (int)$start_time->format('n');
+            $year_month_str = $start_time->format('Y-m');
+            $display_name = $start_time->format('F Y');
+
+            $key = $year_month_str;
+            if (!isset($months[$key])) {
+                $months[$key] = [
+                    'year' => $year,
+                    'month' => $month,
+                    'year_month_str' => $year_month_str,
+                    'display_name' => $display_name
+                ];
+            }
+        }
+
+        uasort($months, function($a, $b) {
+            return strcmp($b['year_month_str'], $a['year_month_str']);
+        });
+
+        return array_values($months);
+
+    } catch (Exception $e) {
+        error_log("Calendly Available Months Error: " . $e->getMessage());
+        return [];
+    }
 }
 
 /**

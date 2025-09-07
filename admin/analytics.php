@@ -369,33 +369,59 @@ $conversion_rates = [
             align-items: center;
             gap: 12px;
             margin-bottom: 12px;
+            padding: 0.5rem 0;
         }
-        
+
         .service-name {
-            min-width: 120px;
+            min-width: 140px;
             font-weight: 500;
-            color: #2d3748;
+            color: #495057;
+            font-size: 0.9rem;
         }
-        
+
         .service-bar-bg {
             flex: 1;
             height: 8px;
-            background: #e2e8f0;
+            background: #e9ecef;
             border-radius: 4px;
             overflow: hidden;
+            position: relative;
         }
-        
+
         .service-bar-fill {
             height: 100%;
             background: linear-gradient(90deg, #667eea, #764ba2);
             border-radius: 4px;
-            transition: width 0.8s ease;
+            transition: width 0.8s ease-in-out;
+            position: relative;
         }
-        
+
         .service-count {
             font-weight: 600;
             color: #667eea;
             min-width: 30px;
+            text-align: right;
+            font-size: 0.9rem;
+        }
+
+        .chart-card .service-bar-bg {
+            max-width: 200px;
+        }
+
+        .chart-card .service-bar-fill {
+            max-width: 100%;
+        }
+
+        .service-bar:hover {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 0.5rem;
+            margin: 0 -0.5rem 12px -0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .service-bar:hover .service-bar-fill {
+            background: linear-gradient(90deg, #5a67d8, #667eea);
         }
         
         @media (max-width: 1024px) {
@@ -733,7 +759,6 @@ $conversion_rates = [
 
         /* Hide obsolete table styles */
         .service-bar-container,
-        .service-bar,
         .analytics-table {
             display: none !important;
         }

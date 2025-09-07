@@ -207,14 +207,19 @@ function getWeeklyCapacity($pdo, $year, $month) {
     $service_prices = getServicePriceMapping();
 
     try {
+        // Calculate month range - ensure we get full weeks that overlap with selected month
         $month_start = new DateTime("{$year}-{$month}-01", new DateTimeZone('UTC'));
         $month_end = (clone $month_start)->modify('last day of this month')->setTime(23, 59, 59);
+
+        // Extend range to include partial weeks at month boundaries
+        $search_start = (clone $month_start)->modify('-7 days');
+        $search_end = (clone $month_end)->modify('+7 days');
 
         $url = 'https://api.calendly.com/scheduled_events?' . http_build_query([
             'organization' => $config['org_uri'],
             'status' => 'active',
-            'min_start_time' => $month_start->format('Y-m-d\\TH:i:s\\Z'),
-            'max_start_time' => $month_end->format('Y-m-d\\TH:i:s\\Z'),
+            'min_start_time' => $search_start->format('Y-m-d\TH:i:s\Z'),
+            'max_start_time' => $search_end->format('Y-m-d\TH:i:s\Z'),
             'count' => 100
         ]);
 
@@ -229,6 +234,14 @@ function getWeeklyCapacity($pdo, $year, $month) {
         foreach ($events as $event) {
             $start_time = new DateTime($event['start_time'], new DateTimeZone('UTC'));
             $start_time->setTimezone(new DateTimeZone('Europe/Vienna'));
+
+            // Check if event date falls within selected month
+            $event_year = (int)$start_time->format('Y');
+            $event_month = (int)$start_time->format('n');
+
+            if ($event_year != $year || $event_month != $month) {
+                continue; // Skip events outside selected month
+            }
 
             $week_number = (int)$start_time->format('W');
             $service_name = $event['name'] ?? 'Unknown Service';
@@ -249,6 +262,7 @@ function getWeeklyCapacity($pdo, $year, $month) {
             $weeks_data[$week_number]['revenue'] += $price;
         }
 
+        // Calculate capacity and status
         foreach ($weeks_data as $week_number => $week_data) {
             $capacity_percentage = round(($week_data['booked_slots'] / 40) * 100, 1);
             $status = $capacity_percentage >= 20 ? 'high' : ($capacity_percentage >= 10 ? 'medium' : 'low');
@@ -257,6 +271,7 @@ function getWeeklyCapacity($pdo, $year, $month) {
             $weeks_data[$week_number]['status'] = $status;
         }
 
+        // Sort by week number
         ksort($weeks_data);
 
         return array_values($weeks_data);
@@ -274,14 +289,15 @@ function getAvailableMonths($pdo) {
     $config = getCalendlyConfig();
 
     try {
-        $twelve_months_ago = (new DateTime('-12 months', new DateTimeZone('UTC')))->format('Y-m-d\\TH:i:s\\Z');
-        $today = (new DateTime('now', new DateTimeZone('UTC')))->format('Y-m-d\\TH:i:s\\Z');
+        // Get events from 2 months ago to 6 months ahead for current + future months
+        $two_months_ago = (new DateTime('-2 months', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
+        $six_months_ahead = (new DateTime('+6 months', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
 
         $url = 'https://api.calendly.com/scheduled_events?' . http_build_query([
             'organization' => $config['org_uri'],
             'status' => 'active',
-            'min_start_time' => $twelve_months_ago,
-            'max_start_time' => $today,
+            'min_start_time' => $two_months_ago,
+            'max_start_time' => $six_months_ahead,
             'count' => 100
         ]);
 
@@ -311,6 +327,19 @@ function getAvailableMonths($pdo) {
             }
         }
 
+        // Add current month even if no events yet
+        $current = new DateTime('now', new DateTimeZone('UTC'));
+        $current_key = $current->format('Y-m');
+        if (!isset($months[$current_key])) {
+            $months[$current_key] = [
+                'year' => (int)$current->format('Y'),
+                'month' => (int)$current->format('n'),
+                'year_month_str' => $current_key,
+                'display_name' => $current->format('F Y')
+            ];
+        }
+
+        // Sort by year and month (newest first)
         uasort($months, function($a, $b) {
             return strcmp($b['year_month_str'], $a['year_month_str']);
         });
@@ -319,7 +348,18 @@ function getAvailableMonths($pdo) {
 
     } catch (Exception $e) {
         error_log("Calendly Available Months Error: " . $e->getMessage());
-        return [];
+        // Fallback: provide current month + 2 previous months
+        $fallback_months = [];
+        for ($i = 0; $i >= -2; $i--) {
+            $date = new DateTime("{$i} months", new DateTimeZone('UTC'));
+            $fallback_months[] = [
+                'year' => (int)$date->format('Y'),
+                'month' => (int)$date->format('n'),
+                'year_month_str' => $date->format('Y-m'),
+                'display_name' => $date->format('F Y')
+            ];
+        }
+        return $fallback_months;
     }
 }
 

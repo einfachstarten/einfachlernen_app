@@ -430,15 +430,13 @@ $conversion_rates = [
         }
     </style>
     <style>
-        /* Analytics-specific Styles */
+        /* Analytics base styles */
         .analytics-container {
             background: #ffffff;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin: 1rem 0;
             overflow: hidden;
-            position: relative;
-            isolation: isolate;
         }
 
         .analytics-header {
@@ -480,159 +478,12 @@ $conversion_rates = [
             letter-spacing: 0.5px;
         }
 
-        .analytics-metric.revenue h3 {
-            color: #28a745;
-        }
+        .analytics-metric.revenue h3 { color: #28a745; }
+        .analytics-metric.bookings h3 { color: #007bff; }
+        .analytics-metric.average h3 { color: #ffc107; }
+        .analytics-metric.capacity h3 { color: #17a2b8; }
 
-        .analytics-metric.bookings h3 {
-            color: #007bff;
-        }
-
-        .analytics-metric.average h3 {
-            color: #ffc107;
-        }
-
-        .analytics-metric.capacity h3 {
-            color: #17a2b8;
-        }
-
-        .analytics-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            position: relative;
-            z-index: 10;
-            table-layout: fixed;
-        }
-
-        .analytics-table th {
-            background: #495057;
-            color: white;
-            padding: 1rem;
-            text-align: left;
-            font-weight: 600;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .analytics-table th:last-child {
-            text-align: right;
-        }
-
-        .analytics-table td {
-            padding: 1rem;
-            border-bottom: 1px solid #f8f9fa;
-            background: white;
-            position: relative;
-            z-index: 11;
-            vertical-align: top;
-        }
-
-        .analytics-table tr:hover td {
-            background: #f8f9fa;
-        }
-
-        .analytics-table td:last-child {
-            text-align: right;
-            font-weight: 600;
-        }
-
-        .analytics-table td:first-child {
-            width: 250px;
-            min-width: 250px;
-        }
-
-        .service-bar-container {
-            position: relative;
-            margin-top: 0.5rem;
-            background: #e9ecef;
-            height: 8px;
-            border-radius: 4px;
-            overflow: hidden;
-            width: 100%;
-            max-width: 200px;
-        }
-
-        .service-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            background: linear-gradient(90deg, #28a745, #20c997);
-            border-radius: 4px;
-            transition: width 0.3s ease;
-            z-index: 1;
-        }
-
-        .capacity-bar-container {
-            background: #e9ecef;
-            height: 24px;
-            border-radius: 12px;
-            position: relative;
-            overflow: hidden;
-            width: 100%;
-            max-width: 150px;
-        }
-
-        .capacity-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            border-radius: 12px;
-            transition: width 0.3s ease;
-            z-index: 1;
-        }
-
-        .capacity-bar.low {
-            background: linear-gradient(90deg, #28a745, #20c997);
-        }
-
-        .capacity-bar.medium {
-            background: linear-gradient(90deg, #ffc107, #ffca2c);
-        }
-
-        .capacity-bar.high {
-            background: linear-gradient(90deg, #dc3545, #e74c3c);
-        }
-
-        .capacity-percentage {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 11px;
-            font-weight: bold;
-            color: #333;
-            z-index: 2;
-            pointer-events: none;
-        }
-
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .status-badge.frei {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-badge.mittel {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .status-badge.voll {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
+        /* Recommendation box */
         .analytics-recommendation {
             background: #fff3cd;
             border-left: 4px solid #ffc107;
@@ -641,82 +492,250 @@ $conversion_rates = [
             border-radius: 0 4px 4px 0;
         }
 
-        .analytics-recommendation strong {
-            color: #856404;
+        .analytics-recommendation strong { color: #856404; }
+
+        /* Service Cards Grid */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+            background: #f8f9fa;
         }
 
-        /* Responsive Design */
+        .service-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid #e9ecef;
+        }
+
+        .service-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+
+        .service-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .service-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #495057;
+            margin: 0;
+        }
+
+        .service-percentage {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #28a745;
+            background: #d4edda;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+        }
+
+        .service-bar-container-new {
+            width: 100%;
+            height: 12px;
+            background: #e9ecef;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+
+        .service-bar-fill-new {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            border-radius: 6px;
+            transition: width 0.8s ease-in-out;
+            position: relative;
+        }
+
+        .service-stats {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .service-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .revenue-color { color: #28a745 !important; }
+
         @media (max-width: 768px) {
-            .analytics-summary {
-                flex-direction: column;
+            .services-grid {
+                grid-template-columns: 1fr;
                 gap: 1rem;
+                padding: 1rem;
             }
 
-            .analytics-table {
-                font-size: 0.9rem;
+            .service-card {
+                padding: 1rem;
             }
 
-            .analytics-table th,
-            .analytics-table td {
-                padding: 0.75rem 0.5rem;
+            .service-stats {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .service-stat {
+                flex-direction: row;
+                justify-content: space-between;
             }
         }
-    </style>
-    <style>
-        /* Override existing admin table styles for analytics */
-        .analytics-container * {
-            box-sizing: border-box !important;
+
+        /* Weekly Capacity Cards */
+        .weeks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+            background: #f8f9fa;
         }
 
-        .analytics-container table {
-            background: white !important;
-            position: relative !important;
-            z-index: 10 !important;
+        .week-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid #e9ecef;
         }
 
-        .analytics-container th {
-            background: #495057 !important;
-            color: white !important;
-            position: relative !important;
-            z-index: 11 !important;
+        .week-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
         }
 
-        .analytics-container td {
-            background: white !important;
-            border-bottom: 1px solid #f8f9fa !important;
-            position: relative !important;
-            z-index: 11 !important;
+        .week-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
         }
 
-        .analytics-container .service-bar,
-        .analytics-container .capacity-bar {
-            max-width: 100% !important;
-            contain: layout style !important;
+        .week-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #495057;
+            margin: 0;
         }
-    </style>
-    <style>
-        /* Fallback styles for broken layouts */
+
+        .week-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .week-status.low { background: #d4edda; color: #155724; }
+        .week-status.medium { background: #fff3cd; color: #856404; }
+        .week-status.high { background: #f8d7da; color: #721c24; }
+
+        .week-date-range {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 1rem;
+        }
+
+        .capacity-bar-container-new {
+            position: relative;
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .capacity-bar-fill-new {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.8s ease-in-out;
+            position: relative;
+        }
+
+        .capacity-bar-fill-new.low { background: linear-gradient(90deg, #28a745, #20c997); }
+        .capacity-bar-fill-new.medium { background: linear-gradient(90deg, #ffc107, #ffca2c); }
+        .capacity-bar-fill-new.high { background: linear-gradient(90deg, #dc3545, #e74c3c); }
+
+        .capacity-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #333;
+            z-index: 2;
+        }
+
+        .week-stats {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .week-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .weeks-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                padding: 1rem;
+            }
+
+            .week-card {
+                padding: 1rem;
+            }
+
+            .week-stats {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .week-stat {
+                flex-direction: row;
+                justify-content: space-between;
+            }
+        }
+
+        /* Hide obsolete table styles */
         .service-bar-container,
-        .capacity-bar-container {
-            display: inline-block !important;
-            vertical-align: top !important;
-            position: relative !important;
-            overflow: hidden !important;
-        }
-
         .service-bar,
-        .capacity-bar {
-            position: relative !important;
-            display: block !important;
-            float: none !important;
-            clear: none !important;
-        }
-
-        @media screen and (max-width: 768px) {
-            .service-bar-container,
-            .capacity-bar-container {
-                display: none;
-            }
+        .analytics-table {
+            display: none !important;
         }
     </style>
 </head>
@@ -1113,7 +1132,8 @@ $conversion_rates = [
                 <div class="analytics-header">
                     <h2>📊 Service Performance</h2>
                 </div>
-                
+
+                <!-- KPI Summary -->
                 <div class="analytics-summary">
                     <div class="analytics-metric bookings">
                         <h3>${data.total_bookings}</h3>
@@ -1128,44 +1148,44 @@ $conversion_rates = [
                         <small>⌀ Buchungswert</small>
                     </div>
                 </div>
-                
-                <table class="analytics-table">
-                    <thead>
-                        <tr>
-                            <th>Service</th>
-                            <th style="text-align:center;">Buchungen</th>
-                            <th style="text-align:center;">Anteil</th>
-                            <th style="text-align:right;">Umsatz</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+
+                <!-- Service Cards Grid -->
+                <div class="services-grid">
         `;
-        
+
         Object.entries(data.services).forEach(([service, stats]) => {
             const percentage = Math.min(100, Math.max(0, stats.percentage));
-            console.log(`Service: ${service}, Percentage: ${percentage}%`);
 
             html += `
-                <tr>
-                    <td style="width:250px;">
-                        <strong style="color:#495057;">${service}</strong>
-                        <div class="service-bar-container" style="max-width:200px;">
-                            <div class="service-bar" style="width:${percentage}%;"></div>
+                <div class="service-card">
+                    <div class="service-card-header">
+                        <h4 class="service-name">${service}</h4>
+                        <span class="service-percentage">${percentage}%</span>
+                    </div>
+
+                    <div class="service-bar-container-new">
+                        <div class="service-bar-fill-new" style="width: ${percentage}%;"></div>
+                    </div>
+
+                    <div class="service-stats">
+                        <div class="service-stat">
+                            <span class="stat-label">Buchungen</span>
+                            <span class="stat-value">${stats.count}</span>
                         </div>
-                    </td>
-                    <td style="text-align:center;">${stats.count}</td>
-                    <td style="text-align:center;font-weight:600;">${percentage}%</td>
-                    <td style="text-align:right;color:#28a745;font-weight:bold;">€${stats.revenue}</td>
-                </tr>
+                        <div class="service-stat">
+                            <span class="stat-label">Umsatz</span>
+                            <span class="stat-value revenue-color">€${stats.revenue}</span>
+                        </div>
+                    </div>
+                </div>
             `;
         });
-        
+
         html += `
-                    </tbody>
-                </table>
+                </div>
             </div>
         `;
-        
+
         document.getElementById('serviceAnalytics').innerHTML = html;
     }
 
@@ -1175,7 +1195,8 @@ $conversion_rates = [
                 <div class="analytics-header">
                     <h2>📈 Kapazitätsplanung</h2>
                 </div>
-                
+
+                <!-- Capacity Summary -->
                 <div class="analytics-summary">
                     <div class="analytics-metric revenue">
                         <h3>€${data.total_upcoming_revenue}</h3>
@@ -1186,53 +1207,52 @@ $conversion_rates = [
                         <small>⌀ Auslastung</small>
                     </div>
                 </div>
-                
-                <table class="analytics-table">
-                    <thead>
-                        <tr>
-                            <th>Woche</th>
-                            <th style="text-align:center;">Auslastung</th>
-                            <th style="text-align:center;">Gebucht/Max</th>
-                            <th style="text-align:right;">Umsatz</th>
-                            <th style="text-align:center;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+
+                <!-- Weekly Cards Grid -->
+                <div class="weeks-grid">
         `;
-        
+
         data.weeks.forEach(week => {
             const capacityClass = week.capacity_percentage >= 70 ? 'high' :
                                  week.capacity_percentage >= 40 ? 'medium' : 'low';
             const statusText = week.status === 'full' ? 'Voll' :
                               week.status === 'medium' ? 'Mittel' : 'Frei';
-            
+
             html += `
-                <tr>
-                    <td>
-                        <strong style="color:#495057;">Woche ${week.week_number}</strong><br>
-                        <small style="color:#6c757d;">${week.week_start} - ${week.week_end}</small>
-                    </td>
-                    <td style="text-align:center;">
-                        <div class="capacity-bar-container">
-                            <div class="capacity-bar ${capacityClass}" style="width:${week.capacity_percentage}%;"></div>
-                            <span class="capacity-percentage">${week.capacity_percentage}%</span>
+                <div class="week-card">
+                    <div class="week-card-header">
+                        <h4 class="week-title">Woche ${week.week_number}</h4>
+                        <span class="week-status ${capacityClass}">${statusText}</span>
+                    </div>
+
+                    <div class="week-date-range">
+                        ${week.week_start} - ${week.week_end}
+                    </div>
+
+                    <div class="capacity-bar-container-new">
+                        <div class="capacity-bar-fill-new ${capacityClass}" style="width: ${week.capacity_percentage}%;"></div>
+                        <span class="capacity-text">${week.capacity_percentage}%</span>
+                    </div>
+
+                    <div class="week-stats">
+                        <div class="week-stat">
+                            <span class="stat-label">Gebucht</span>
+                            <span class="stat-value">${week.booked_slots}/${week.max_capacity}</span>
                         </div>
-                    </td>
-                    <td style="text-align:center;font-weight:600;">${week.booked_slots}/${week.max_capacity}</td>
-                    <td style="text-align:right;color:#28a745;font-weight:bold;">€${week.revenue}</td>
-                    <td style="text-align:center;">
-                        <span class="status-badge ${statusText.toLowerCase()}">${statusText}</span>
-                    </td>
-                </tr>
+                        <div class="week-stat">
+                            <span class="stat-label">Umsatz</span>
+                            <span class="stat-value revenue-color">€${week.revenue}</span>
+                        </div>
+                    </div>
+                </div>
             `;
         });
-        
+
         html += `
-                    </tbody>
-                </table>
+                </div>
             </div>
         `;
-        
+
         // Empfehlungen hinzufügen
         const lowWeeks = data.weeks.filter(w => w.status === 'low');
         if (lowWeeks.length > 0) {
@@ -1244,7 +1264,7 @@ $conversion_rates = [
                 </div>
             `;
         }
-        
+
         document.getElementById('weeklyCapacity').innerHTML = html;
     }
     </script>

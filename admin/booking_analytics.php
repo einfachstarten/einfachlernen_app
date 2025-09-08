@@ -613,6 +613,22 @@ $month_options = getMonthOptions();
             .kpi-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
+            
+            .customer-main {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+            
+            .customer-stats {
+                align-self: stretch;
+                justify-content: space-between;
+            }
+            
+            .customer-email {
+                word-break: break-all;
+                font-size: 12px;
+            }
         }
     </style>
 </head>

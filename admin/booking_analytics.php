@@ -862,7 +862,12 @@ $month_options = getMonthOptions();
         async function loadAnalyticsData() {
             if (isLoading) return;
             
-            showLoading();
+            isLoading = true;
+            document.getElementById('refreshBtn').disabled = true;
+            document.getElementById('errorState').style.display = 'none';
+            
+            // Reset all areas to loading state
+            resetToLoadingState();
             
             const selectedMonth = document.getElementById('monthSelector').value;
             
@@ -882,11 +887,12 @@ $month_options = getMonthOptions();
                 updateTopCustomers(currentData.top_customers, currentData.display_month);
                 updateStatusBreakdown(currentData.status_breakdown, currentData.total_bookings);
                 
-                hideLoading();
-                
             } catch (error) {
                 console.error('Error loading analytics:', error);
                 showError(error.message);
+            } finally {
+                isLoading = false;
+                document.getElementById('refreshBtn').disabled = false;
             }
         }
 

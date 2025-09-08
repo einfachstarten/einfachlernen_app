@@ -21,14 +21,14 @@ function getPDO()
 }
 
 // Handle API requests
-if (isset($_GET['api']) && $_GET['api'] === 'data') {
+if (isset($_GET['api'])) {
     header('Content-Type: application/json; charset=utf-8');
     
     $CALENDLY_TOKEN = getenv('CALENDLY_TOKEN') ?: 'PASTE_YOUR_TOKEN_HERE';
     $ORG_URI = getenv('CALENDLY_ORG_URI') ?: 'https://api.calendly.com/organizations/PASTE_ORG_ID';
     
-    if (!$CALENDLY_TOKEN || !$ORG_URI) {
-        echo json_encode(['error' => 'Calendly configuration missing']);
+    if (!$CALENDLY_TOKEN || $CALENDLY_TOKEN === 'PASTE_YOUR_TOKEN_HERE' || !$ORG_URI || $ORG_URI === 'https://api.calendly.com/organizations/PASTE_ORG_ID') {
+        echo json_encode(['success' => false, 'error' => 'Calendly API configuration missing']);
         exit;
     }
     
@@ -37,28 +37,36 @@ if (isset($_GET['api']) && $_GET['api'] === 'data') {
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ["Authorization: Bearer $token"],
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_SSL_VERIFYPEER => true
         ]);
         $res = curl_exec($ch);
-        if ($res === false) {
-            return [null, 'Network error: '.curl_error($ch)];
-        }
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
         curl_close($ch);
         
-        if ($code < 200 || $code >= 300) {
+        if ($res === false) {
+            return [null, 'Network error: ' . $error];
+        }
+        
+        if ($http_code < 200 || $http_code >= 300) {
             $error_data = json_decode($res, true);
-            $error_msg = $error_data['message'] ?? "HTTP $code";
+            $error_msg = $error_data['message'] ?? "HTTP $http_code";
             return [null, $error_msg];
         }
         
         $json = json_decode($res, true);
+        if ($json === null) {
+            return [null, 'Invalid JSON response'];
+        }
+        
         return [$json, null];
     }
     
-    function getBookingAnalytics($token, $org_uri, $month_year) {
-        // Parse month_year (format: "2025-01" or "current")
+    function getEventsForMonth($token, $org_uri, $month_year) {
+        // Parse month_year 
         if ($month_year === 'current') {
             $target_date = new DateTimeImmutable('now', new DateTimeZone('Europe/Vienna'));
         } else {
@@ -80,7 +88,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'data') {
         $start_utc = $month_start->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
         $end_utc = $month_end->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
         
-        // Fetch all events for specified month
+        // Fetch all events (WITHOUT invitee details first!)
         $all_events = [];
         $page_token = null;
         $max_pages = 10;
@@ -107,150 +115,146 @@ if (isset($_GET['api']) && $_GET['api'] === 'data') {
             
         } while ($page_token && $page_count < $max_pages);
         
-        // Enrich events with invitee data (limit concurrent requests)
-        $enriched_events = [];
-        $batch_size = 5;
-        $processed = 0;
-        
-        foreach (array_chunk($all_events, $batch_size) as $batch) {
-            foreach ($batch as $event) {
-                $event_uuid = basename($event['uri']);
+        return $all_events;
+    }
+    
+    // STAGE 1: Basic Analytics (from events only, no invitee calls)
+    if ($_GET['api'] === 'basic') {
+        try {
+            $month_year = $_GET['month'] ?? 'current';
+            $events = getEventsForMonth($CALENDLY_TOKEN, $ORG_URI, $month_year);
+            
+            $analytics = [
+                'total_bookings' => count($events),
+                'services' => [],
+                'status_breakdown' => [],
+                'avg_duration' => 0
+            ];
+            
+            $service_prices = [
+                'lerntraining' => 80,
+                'neurofeedback-20' => 45,
+                'neurofeedback-40' => 70,
+                'neurofeedback training 20 min' => 45,
+                'neurofeedback training 40 minuten' => 70
+            ];
+            
+            $total_duration = 0;
+            
+            foreach ($events as $event) {
+                $start_time = new DateTimeImmutable($event['start_time'], new DateTimeZone('UTC'));
+                $end_time = new DateTimeImmutable($event['end_time'], new DateTimeZone('UTC'));
+                $duration = ($end_time->getTimestamp() - $start_time->getTimestamp()) / 60;
+                $total_duration += $duration;
                 
-                // Get invitees
-                $invitee_url = "https://api.calendly.com/scheduled_events/{$event_uuid}/invitees";
-                list($invitee_data, $invitee_err) = api_get($invitee_url, $token);
+                // Service analysis
+                $service_name = $event['event_type']['name'] ?? 'Unknown';
+                if (!isset($analytics['services'][$service_name])) {
+                    $analytics['services'][$service_name] = [
+                        'count' => 0,
+                        'duration_total' => 0,
+                        'revenue' => 0
+                    ];
+                }
+                $analytics['services'][$service_name]['count']++;
+                $analytics['services'][$service_name]['duration_total'] += $duration;
                 
-                $event['invitees'] = [];
-                if (!$invitee_err && isset($invitee_data['collection'])) {
-                    $event['invitees'] = $invitee_data['collection'];
+                // Revenue estimation
+                $service_key = strtolower($service_name);
+                foreach ($service_prices as $key => $price) {
+                    if (strpos($service_key, $key) !== false || strpos($key, $service_key) !== false) {
+                        $analytics['services'][$service_name]['revenue'] += $price;
+                        break;
+                    }
                 }
                 
-                $enriched_events[] = $event;
-                $processed++;
+                // Status breakdown
+                $status = $event['status'] ?? 'unknown';
+                $analytics['status_breakdown'][$status] = ($analytics['status_breakdown'][$status] ?? 0) + 1;
+            }
+            
+            $analytics['avg_duration'] = count($events) > 0 ? round($total_duration / count($events)) : 0;
+            $analytics['revenue_estimate'] = array_sum(array_column($analytics['services'], 'revenue'));
+            
+            // Add month info
+            if ($month_year === 'current') {
+                $display_month = (new DateTimeImmutable('now', new DateTimeZone('Europe/Vienna')))->format('F Y');
+            } else {
+                $display_month = DateTimeImmutable::createFromFormat('Y-m', $month_year, new DateTimeZone('Europe/Vienna'))->format('F Y');
+            }
+            $analytics['display_month'] = $display_month;
+            
+            echo json_encode(['success' => true, 'data' => $analytics]);
+            
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+    
+    // STAGE 2: Customer Analytics (requires invitee details, but only for unique events)
+    if ($_GET['api'] === 'customers') {
+        try {
+            $month_year = $_GET['month'] ?? 'current';
+            $events = getEventsForMonth($CALENDLY_TOKEN, $ORG_URI, $month_year);
+            
+            // Get unique event UUIDs (avoid duplicate invitee calls)
+            $unique_events = [];
+            foreach ($events as $event) {
+                $uuid = basename($event['uri']);
+                $unique_events[$uuid] = $event;
+            }
+            
+            $customer_emails = [];
+            $customer_booking_count = [];
+            $processed = 0;
+            
+            // Only fetch invitee details for unique events
+            foreach ($unique_events as $uuid => $event) {
+                $invitee_url = "https://api.calendly.com/scheduled_events/{$uuid}/invitees";
+                list($invitee_data, $invitee_err) = api_get($invitee_url, $CALENDLY_TOKEN);
                 
-                // Add small delay to prevent rate limiting
-                if ($processed % $batch_size === 0) {
+                if (!$invitee_err && isset($invitee_data['collection'])) {
+                    foreach ($invitee_data['collection'] as $invitee) {
+                        $email = strtolower($invitee['email'] ?? '');
+                        if ($email) {
+                            $customer_emails[$email] = $invitee['name'] ?? 'Unknown';
+                            $customer_booking_count[$email] = ($customer_booking_count[$email] ?? 0) + 1;
+                        }
+                    }
+                }
+                
+                $processed++;
+                // Rate limiting: delay after every 5 requests
+                if ($processed % 5 === 0) {
                     usleep(200000); // 200ms delay
                 }
+                
+                // Safety limit: max 50 invitee calls
+                if ($processed >= 50) break;
             }
+            
+            // Top customers
+            arsort($customer_booking_count);
+            $top_customers = array_slice($customer_booking_count, 0, 10, true);
+            
+            $analytics = [
+                'unique_customers' => count($customer_emails),
+                'top_customers' => $top_customers,
+                'processed_events' => $processed,
+                'total_events' => count($events)
+            ];
+            
+            echo json_encode(['success' => true, 'data' => $analytics]);
+            
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
-        
-        return $enriched_events;
+        exit;
     }
     
-    function analyzeBookingData($events) {
-        $analytics = [
-            'total_bookings' => count($events),
-            'unique_customers' => 0,
-            'services' => [],
-            'daily_distribution' => [],
-            'hourly_distribution' => [],
-            'status_breakdown' => [],
-            'top_customers' => [],
-            'revenue_estimate' => 0,
-            'avg_duration' => 0
-        ];
-        
-        $customer_emails = [];
-        $customer_booking_count = [];
-        $service_prices = [
-            'lerntraining' => 80,
-            'neurofeedback-20' => 45,
-            'neurofeedback-40' => 70,
-            'neurofeedback training 20 min' => 45,
-            'neurofeedback training 40 minuten' => 70
-        ];
-        
-        foreach ($events as $event) {
-            $vienna_tz = new DateTimeZone('Europe/Vienna');
-            $start_time = new DateTimeImmutable($event['start_time'], new DateTimeZone('UTC'));
-            $end_time = new DateTimeImmutable($event['end_time'], new DateTimeZone('UTC'));
-            $start_vienna = $start_time->setTimezone($vienna_tz);
-            
-            // Service analysis
-            $service_name = $event['event_type']['name'] ?? 'Unknown';
-            if (!isset($analytics['services'][$service_name])) {
-                $analytics['services'][$service_name] = [
-                    'count' => 0,
-                    'duration_total' => 0,
-                    'revenue' => 0
-                ];
-            }
-            $analytics['services'][$service_name]['count']++;
-            
-            // Duration calculation
-            $duration = ($end_time->getTimestamp() - $start_time->getTimestamp()) / 60; // minutes
-            $analytics['services'][$service_name]['duration_total'] += $duration;
-            
-            // Revenue estimation
-            $service_key = strtolower($service_name);
-            $found_price = false;
-            foreach ($service_prices as $key => $price) {
-                if (strpos($service_key, $key) !== false || strpos($key, $service_key) !== false) {
-                    $analytics['services'][$service_name]['revenue'] += $price;
-                    $analytics['revenue_estimate'] += $price;
-                    $found_price = true;
-                    break;
-                }
-            }
-            
-            // Daily distribution
-            $day_key = $start_vienna->format('Y-m-d');
-            $analytics['daily_distribution'][$day_key] = ($analytics['daily_distribution'][$day_key] ?? 0) + 1;
-            
-            // Hourly distribution
-            $hour_key = $start_vienna->format('H');
-            $analytics['hourly_distribution'][$hour_key] = ($analytics['hourly_distribution'][$hour_key] ?? 0) + 1;
-            
-            // Status breakdown
-            $status = $event['status'] ?? 'unknown';
-            $analytics['status_breakdown'][$status] = ($analytics['status_breakdown'][$status] ?? 0) + 1;
-            
-            // Customer analysis
-            foreach ($event['invitees'] as $invitee) {
-                $email = strtolower($invitee['email'] ?? '');
-                if ($email) {
-                    $customer_emails[$email] = $invitee['name'] ?? 'Unknown';
-                    $customer_booking_count[$email] = ($customer_booking_count[$email] ?? 0) + 1;
-                }
-            }
-        }
-        
-        $analytics['unique_customers'] = count($customer_emails);
-        
-        // Top customers
-        arsort($customer_booking_count);
-        $analytics['top_customers'] = array_slice($customer_booking_count, 0, 10, true);
-        
-        // Average duration
-        $total_duration = array_sum(array_column($analytics['services'], 'duration_total'));
-        $analytics['avg_duration'] = $analytics['total_bookings'] > 0 ? 
-            round($total_duration / $analytics['total_bookings']) : 0;
-        
-        return $analytics;
-    }
-    
-    try {
-        $month_year = $_GET['month'] ?? 'current';
-        $events = getBookingAnalytics($CALENDLY_TOKEN, $ORG_URI, $month_year);
-        $analytics = analyzeBookingData($events);
-        
-        // Add month info
-        if ($month_year === 'current') {
-            $display_month = (new DateTimeImmutable('now', new DateTimeZone('Europe/Vienna')))->format('F Y');
-        } else {
-            $display_month = DateTimeImmutable::createFromFormat('Y-m', $month_year, new DateTimeZone('Europe/Vienna'))->format('F Y');
-        }
-        
-        $analytics['display_month'] = $display_month;
-        $analytics['month_key'] = $month_year;
-        
-        echo json_encode(['success' => true, 'data' => $analytics]);
-        
-    } catch (Exception $e) {
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-    }
-    
+    // Invalid API endpoint
+    echo json_encode(['success' => false, 'error' => 'Invalid API endpoint']);
     exit;
 }
 
@@ -384,36 +388,14 @@ $month_options = getMonthOptions();
             transform: translateY(-2px);
         }
         
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(4px);
-        }
-        
-        .loading-spinner {
-            background: white;
-            padding: 32px;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-        }
-        
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e2e8f0;
-            border-top: 4px solid #667eea;
+            width: 32px;
+            height: 32px;
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #667eea;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 16px auto;
+            margin: 0 auto;
         }
         
         @keyframes spin {
@@ -518,7 +500,12 @@ $month_options = getMonthOptions();
             height: 200px;
             color: #a0aec0;
             flex-direction: column;
-            gap: 16px;
+            gap: 12px;
+            font-size: 14px;
+        }
+        
+        .chart-loading .spinner {
+            margin-bottom: 8px;
         }
         
         .charts-grid {
@@ -645,15 +632,6 @@ $month_options = getMonthOptions();
             </div>
         </div>
 
-        <!-- Loading Overlay -->
-        <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-            <div class="loading-spinner">
-                <div class="spinner"></div>
-                <div>Loading booking data...</div>
-                <div style="font-size: 12px; color: #718096; margin-top: 8px;">This may take a moment</div>
-            </div>
-        </div>
-
         <!-- Error State -->
         <div id="errorState" class="error-state" style="display: none;">
             <div class="error-icon">⚠️</div>
@@ -733,49 +711,89 @@ $month_options = getMonthOptions();
     </div>
 
     <script>
-        let currentData = null;
+        let currentBasicData = null;
+        let currentCustomerData = null;
         let isLoading = false;
 
-        function showLoading() {
-            if (isLoading) return;
-            isLoading = true;
-            document.getElementById('loadingOverlay').style.display = 'flex';
-            document.getElementById('errorState').style.display = 'none';
-            document.getElementById('refreshBtn').disabled = true;
-        }
+        function resetToLoadingState() {
+            // Reset KPI cards to loading state
+            document.querySelectorAll('.kpi-card').forEach(card => {
+                card.classList.add('loading');
+            });
+            
+            document.getElementById('totalBookings').textContent = '--';
+            document.getElementById('uniqueCustomers').textContent = '--';
+            document.getElementById('revenueEstimate').textContent = '€--';
+            document.getElementById('avgDuration').textContent = '--';
+            
+            document.querySelectorAll('.kpi-change').forEach(change => {
+                change.classList.remove('loaded');
+                change.textContent = 'Loading...';
+            });
 
-        function hideLoading() {
-            isLoading = false;
-            document.getElementById('loadingOverlay').style.display = 'none';
-            document.getElementById('refreshBtn').disabled = false;
+            // Reset chart areas to loading state
+            document.getElementById('servicePerformance').innerHTML = `
+                <div class="chart-loading">
+                    <div class="spinner"></div>
+                    <div>Loading service data...</div>
+                </div>
+            `;
+            
+            document.getElementById('topCustomers').innerHTML = `
+                <div class="chart-loading">
+                    <div class="spinner"></div>
+                    <div>Loading customer data...</div>
+                </div>
+            `;
+            
+            document.getElementById('statusBreakdown').innerHTML = `
+                <div class="chart-loading">
+                    <div class="spinner"></div>
+                    <div>Loading status data...</div>
+                </div>
+            `;
         }
 
         function showError(message) {
-            hideLoading();
+            isLoading = false;
             document.getElementById('errorState').style.display = 'block';
             document.getElementById('errorMessage').textContent = message;
+            document.getElementById('refreshBtn').disabled = false;
         }
 
-        function updateKPIs(data) {
-            // Update KPI values
+        function updateBasicKPIs(data) {
+            // Update KPI values that don't require customer data
             document.getElementById('totalBookings').textContent = data.total_bookings;
-            document.getElementById('uniqueCustomers').textContent = data.unique_customers;
             document.getElementById('revenueEstimate').textContent = '€' + data.revenue_estimate.toLocaleString();
             document.getElementById('avgDuration').textContent = data.avg_duration;
 
             // Update change indicators
             document.getElementById('bookingsChange').textContent = data.display_month;
-            document.getElementById('customersChange').textContent = Object.keys(data.services).length + ' Services';
             document.getElementById('revenueChange').textContent = 'Estimated';
             document.getElementById('durationChange').textContent = 'Per Session';
 
-            // Remove loading state
-            document.querySelectorAll('.kpi-card').forEach(card => {
-                card.classList.remove('loading');
+            // Update KPI cards (except customers)
+            document.querySelectorAll('.kpi-card').forEach((card, index) => {
+                if (index !== 1) { // Skip unique customers card
+                    card.classList.remove('loading');
+                }
             });
-            document.querySelectorAll('.kpi-change').forEach(change => {
-                change.classList.add('loaded');
+            
+            // Update change classes (except customers)
+            document.querySelectorAll('.kpi-change').forEach((change, index) => {
+                if (index !== 1) { // Skip unique customers change
+                    change.classList.add('loaded');
+                }
             });
+        }
+
+        function updateCustomerKPIs(data) {
+            document.getElementById('uniqueCustomers').textContent = data.unique_customers;
+            document.getElementById('customersChange').textContent = Object.keys(currentBasicData.services).length + ' Services';
+            
+            // Remove loading state from customer card
+            document.querySelectorAll('.kpi-card')[1].classList.remove('loading');
+            document.querySelectorAll('.kpi-change')[1].classList.add('loaded');
         }
 
         function updateServicePerformance(services) {
@@ -859,6 +877,75 @@ $month_options = getMonthOptions();
             container.appendChild(statusGrid);
         }
 
+        async function loadBasicData() {
+            const selectedMonth = document.getElementById('monthSelector').value;
+            
+            try {
+                console.log('Loading basic data for month:', selectedMonth);
+                
+                const response = await fetch(`?api=basic&month=${encodeURIComponent(selectedMonth)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Basic data result:', result);
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to load basic data');
+                }
+
+                currentBasicData = result.data;
+                
+                // Update UI elements that don't need customer data
+                updateBasicKPIs(currentBasicData);
+                updateServicePerformance(currentBasicData.services);
+                updateStatusBreakdown(currentBasicData.status_breakdown, currentBasicData.total_bookings);
+                
+                return true;
+                
+            } catch (error) {
+                console.error('Error loading basic data:', error);
+                throw error;
+            }
+        }
+
+        async function loadCustomerData() {
+            const selectedMonth = document.getElementById('monthSelector').value;
+            
+            try {
+                console.log('Loading customer data for month:', selectedMonth);
+                
+                const response = await fetch(`?api=customers&month=${encodeURIComponent(selectedMonth)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Customer data result:', result);
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to load customer data');
+                }
+
+                currentCustomerData = result.data;
+                
+                // Update customer-related UI
+                updateCustomerKPIs(currentCustomerData);
+                updateTopCustomers(currentCustomerData.top_customers, currentBasicData.display_month);
+                
+                return true;
+                
+            } catch (error) {
+                console.error('Error loading customer data:', error);
+                // Don't fail the whole thing for customer data
+                document.getElementById('uniqueCustomers').textContent = '?';
+                document.getElementById('customersChange').textContent = 'Error loading';
+                document.getElementById('topCustomers').innerHTML = '<div class="no-data">Customer data unavailable</div>';
+                return false;
+            }
+        }
+
         async function loadAnalyticsData() {
             if (isLoading) return;
             
@@ -869,27 +956,16 @@ $month_options = getMonthOptions();
             // Reset all areas to loading state
             resetToLoadingState();
             
-            const selectedMonth = document.getElementById('monthSelector').value;
-            
             try {
-                const response = await fetch(`?api=data&month=${encodeURIComponent(selectedMonth)}`);
-                const result = await response.json();
-
-                if (!result.success) {
-                    throw new Error(result.error || 'Failed to load data');
-                }
-
-                currentData = result.data;
+                // STAGE 1: Load basic data (fast, no invitee calls)
+                await loadBasicData();
                 
-                // Update all UI elements
-                updateKPIs(currentData);
-                updateServicePerformance(currentData.services);
-                updateTopCustomers(currentData.top_customers, currentData.display_month);
-                updateStatusBreakdown(currentData.status_breakdown, currentData.total_bookings);
+                // STAGE 2: Load customer data (slower, needs invitee calls)
+                await loadCustomerData();
                 
             } catch (error) {
                 console.error('Error loading analytics:', error);
-                showError(error.message);
+                showError(`${error.message} - Check console for details`);
             } finally {
                 isLoading = false;
                 document.getElementById('refreshBtn').disabled = false;

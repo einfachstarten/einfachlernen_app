@@ -1199,7 +1199,7 @@ $conversion_rates = [
             <div class="chart-card">
                 <h3 class="chart-title">
                     <div class="chart-icon">⭐</div>
-                    Popular Services
+                    Beliebte Services
                 </h3>
                 <?php if (empty($services)): ?>
                     <p style="color: #718096; text-align: center; padding: 40px;">No service data available</p>

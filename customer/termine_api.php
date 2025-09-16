@@ -129,34 +129,54 @@ try {
 
     // Fetch events from Calendly
     $base = 'https://api.calendly.com';
-    $count = 50;
-    $page_token = '';
     $events = [];
-    
+    $page_token = '';
+    $max_pages = 10; // Safety limit: max 500 events (50 * 10)
+    $page_count = 0;
+
     do {
-        $url = $base.'/scheduled_events?' . http_build_query([
+        $page_count++;
+
+        $params = [
             'organization' => $ORG_URI,
             'status' => 'active',
             'invitee_email' => $email, // SECURE: Email from session
             'min_start_time' => $min_start,
             'max_start_time' => $max_start,
-            'count' => $count,
-            'page_token' => $page_token ?: null
-        ]);
-        $url = preg_replace('/(&page_token=)$/','',$url);
-        
+            'count' => 50
+        ];
+
+        if ($page_token) {
+            $params['page_token'] = $page_token;
+        }
+
+        $url = $base.'/scheduled_events?' . http_build_query($params);
+
+        // Debug log for problematic pagination
+        if ($page_count > 3) {
+            error_log("Calendly Pagination Warning - Customer: $email, Page: $page_count, Token: " . substr($page_token, 0, 20) . "...");
+        }
+
         list($data, $err) = api_get($url, $CALENDLY_TOKEN);
         if ($err) {
-            json_error($err, 502);
+            error_log("Calendly Pagination Error - Customer: $email, Page: $page_count, Error: $err");
+            break; // Stop pagination on error, return what we have
         }
-        
+
         $collection = $data['collection'] ?? [];
         foreach ($collection as $ev) {
             $events[] = $ev;
         }
+
         $page_token = $data['pagination']['next_page_token'] ?? '';
-        
-    } while ($page_token);
+
+        // Safety check
+        if ($page_count >= $max_pages) {
+            error_log("Calendly Pagination Limit Reached - Customer: $email, Events: " . count($events));
+            break;
+        }
+
+    } while ($page_token && $page_count < $max_pages);
     
     // Sort events by start time
     usort($events, fn($a,$b)=>strcmp($a['start_time']??'', $b['start_time']??''));

@@ -39,40 +39,89 @@ $ORG_URI = getenv('CALENDLY_ORG_URI') ?: 'https://api.calendly.com/organizations
 
 header('Content-Type: application/json; charset=utf-8');
 
-function api_get($url, $token) {
+function api_get($url, $token, array $context = []) {
+    $request_debug = array_merge([
+        'url' => $url,
+        'token_prefix' => substr((string) $token, 0, 8) . '...',
+        'timestamp' => date('Y-m-d H:i:s'),
+        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+        'admin_user' => $_SESSION['admin'] ?? 'unknown'
+    ], $context);
+    error_log("CALENDLY REQUEST: " . json_encode($request_debug));
+
     $ch = curl_init($url);
+    $curl_verbose = fopen('php://temp', 'w+');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => ["Authorization: Bearer $token"],
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT => 25,
+        CURLOPT_VERBOSE => true,
+        CURLOPT_STDERR => $curl_verbose
     ]);
+
+    $start_time = microtime(true);
     $res = curl_exec($ch);
-    if ($res === false) {
-        $curl_error = curl_error($ch);
-        curl_close($ch);
-        return [null, 'Network error: ' . $curl_error];
-    }
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $end_time = microtime(true);
+    $duration = round(($end_time - $start_time) * 1000, 2);
+
+    $curl_info = curl_getinfo($ch);
+    $code = $curl_info['http_code'] ?? 0;
+    $curl_error = $res === false ? curl_error($ch) : null;
     curl_close($ch);
 
+    $verbose_output = '';
+    if (is_resource($curl_verbose)) {
+        rewind($curl_verbose);
+        $verbose_output = stream_get_contents($curl_verbose) ?: '';
+        fclose($curl_verbose);
+    }
+
+    if ($res === false) {
+        if ($verbose_output) {
+            $sanitized_verbose = preg_replace('/(Authorization: Bearer )([A-Za-z0-9._-]+)/i', '$1***redacted***', $verbose_output);
+            error_log("CALENDLY CURL VERBOSE ERROR: " . $sanitized_verbose);
+        }
+        error_log("CALENDLY CURL ERROR: $curl_error");
+        return [null, 'Network error: ' . $curl_error];
+    }
+
+    $response_debug = array_merge([
+        'http_code' => $code,
+        'duration_ms' => $duration,
+        'response_size' => strlen($res),
+        'content_type' => $curl_info['content_type'] ?? 'unknown'
+    ], $context);
+
     if ($code < 200 || $code >= 300) {
+        if ($verbose_output) {
+            $sanitized_verbose = preg_replace('/(Authorization: Bearer )([A-Za-z0-9._-]+)/i', '$1***redacted***', $verbose_output);
+            error_log("CALENDLY CURL VERBOSE RESPONSE: " . $sanitized_verbose);
+        }
+
         $error_data = json_decode($res, true);
 
-        // Enhanced error logging for admin
-        $detailed_error = [
+        $full_error_details = array_merge([
+            'request_url' => $url,
             'http_code' => $code,
+            'duration_ms' => $duration,
             'response_body' => $res,
+            'parsed_error' => $error_data,
             'calendly_message' => $error_data['message'] ?? null,
             'calendly_details' => $error_data['details'] ?? null,
-            'request_url' => $url,
+            'calendly_errors' => $error_data['errors'] ?? null,
+            'curl_info' => $curl_info,
+            'timestamp' => date('Y-m-d H:i:s'),
             'admin_user' => $_SESSION['admin'] ?? 'unknown'
-        ];
-        error_log("Admin Calendly API Error: " . json_encode($detailed_error));
+        ], $context);
+
+        error_log("CALENDLY ERROR FULL DETAILS: " . json_encode($full_error_details, JSON_PRETTY_PRINT));
 
         $user_error = $error_data['message'] ?? "HTTP $code";
         return [null, "Calendly API Error: $user_error"];
     }
+
+    error_log("CALENDLY SUCCESS: " . json_encode($response_debug));
 
     $json = json_decode($res, true);
     return [$json, null];
@@ -89,22 +138,44 @@ try {
     $max_pages = 10; // Safety limit: max 1000 events
     $page_count = 0;
 
+    $request_params = [
+        'organization' => $ORG_URI,
+        'status' => 'active',
+        'invitee_email' => $customer['email'],
+        'min_start_time' => $twelveMonthsAgo,
+        'max_start_time' => $sixMonthsAhead,
+        'count' => 100
+    ];
+
+    $start_date = new DateTimeImmutable($request_params['min_start_time']);
+    $end_date = new DateTimeImmutable($request_params['max_start_time']);
+    $days_span = $start_date->diff($end_date)->days;
+
+    if ($days_span > 400) {
+        error_log("CALENDLY WARNING: Large date span requested - Customer: {$customer['email']}, Days: $days_span");
+    }
+
+    error_log("CALENDLY PARAMS: " . json_encode($request_params));
+
     do {
-        $params = [
-            'organization' => $ORG_URI,
-            'invitee_email' => $customer['email'],
-            'min_start_time' => $twelveMonthsAgo,
-            'max_start_time' => $sixMonthsAhead,
-            'count' => 100
-        ];
+        $params = $request_params;
 
         if ($page_token) {
             $params['page_token'] = $page_token;
         }
 
+        $log_params = $params;
+        $log_params['page'] = $page_count + 1;
+        error_log("CALENDLY PARAMS: " . json_encode($log_params));
+
         $url = 'https://api.calendly.com/scheduled_events?' . http_build_query($params);
 
-        list($data, $err) = api_get($url, $CALENDLY_TOKEN);
+        list($data, $err) = api_get($url, $CALENDLY_TOKEN, [
+            'endpoint' => 'scheduled_events',
+            'page_token' => $page_token,
+            'customer_email' => $customer['email'],
+            'admin_session_id' => session_id()
+        ]);
         if ($err) {
             throw new Exception($err);
         }
@@ -126,7 +197,12 @@ try {
 
         // Get invitee details for actions
         $invitee_url = "https://api.calendly.com/scheduled_events/{$event_uuid}/invitees";
-        list($invitee_data, $invitee_err) = api_get($invitee_url, $CALENDLY_TOKEN);
+        list($invitee_data, $invitee_err) = api_get($invitee_url, $CALENDLY_TOKEN, [
+            'endpoint' => 'scheduled_event_invitees',
+            'event_uuid' => $event_uuid,
+            'customer_email' => $customer['email'],
+            'admin_session_id' => session_id()
+        ]);
 
         $invitee_uuid = null;
         $can_cancel = false;

@@ -59,40 +59,87 @@ function json_error($msg, $code = 400) {
     exit;
 }
 
-function api_get($url, $token) {
+function api_get($url, $token, array $context = []) {
+    $request_debug = array_merge([
+        'url' => $url,
+        'token_prefix' => substr((string) $token, 0, 8) . '...',
+        'timestamp' => date('Y-m-d H:i:s'),
+        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
+    ], $context);
+    error_log("CALENDLY REQUEST: " . json_encode($request_debug));
+
     $ch = curl_init($url);
+    $curl_verbose = fopen('php://temp', 'w+');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => ["Authorization: Bearer $token"],
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT => 25,
+        CURLOPT_VERBOSE => true,
+        CURLOPT_STDERR => $curl_verbose
     ]);
+
+    $start_time = microtime(true);
     $res = curl_exec($ch);
-    if ($res === false) {
-        $curl_error = curl_error($ch);
-        curl_close($ch);
-        return [null, 'Netzwerk-Fehler: ' . $curl_error];
-    }
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $end_time = microtime(true);
+    $duration = round(($end_time - $start_time) * 1000, 2);
+
+    $curl_info = curl_getinfo($ch);
+    $code = $curl_info['http_code'] ?? 0;
+    $curl_error = $res === false ? curl_error($ch) : null;
     curl_close($ch);
 
+    $verbose_output = '';
+    if (is_resource($curl_verbose)) {
+        rewind($curl_verbose);
+        $verbose_output = stream_get_contents($curl_verbose) ?: '';
+        fclose($curl_verbose);
+    }
+
+    if ($res === false) {
+        if ($verbose_output) {
+            $sanitized_verbose = preg_replace('/(Authorization: Bearer )([A-Za-z0-9._-]+)/i', '$1***redacted***', $verbose_output);
+            error_log("CALENDLY CURL VERBOSE ERROR: " . $sanitized_verbose);
+        }
+        error_log("CALENDLY CURL ERROR: $curl_error");
+        return [null, 'Netzwerk-Fehler: ' . $curl_error];
+    }
+
+    $response_debug = array_merge([
+        'http_code' => $code,
+        'duration_ms' => $duration,
+        'response_size' => strlen($res),
+        'content_type' => $curl_info['content_type'] ?? 'unknown'
+    ], $context);
+
     if ($code < 200 || $code >= 300) {
+        if ($verbose_output) {
+            $sanitized_verbose = preg_replace('/(Authorization: Bearer )([A-Za-z0-9._-]+)/i', '$1***redacted***', $verbose_output);
+            error_log("CALENDLY CURL VERBOSE RESPONSE: " . $sanitized_verbose);
+        }
+
         $error_data = json_decode($res, true);
 
-        // Enhanced error logging
-        $detailed_error = [
+        $full_error_details = array_merge([
+            'request_url' => $url,
             'http_code' => $code,
+            'duration_ms' => $duration,
             'response_body' => $res,
+            'parsed_error' => $error_data,
             'calendly_message' => $error_data['message'] ?? null,
             'calendly_details' => $error_data['details'] ?? null,
-            'request_url' => $url
-        ];
-        error_log("Calendly API Error Details: " . json_encode($detailed_error));
+            'calendly_errors' => $error_data['errors'] ?? null,
+            'curl_info' => $curl_info,
+            'timestamp' => date('Y-m-d H:i:s')
+        ], $context);
 
-        // Return user-friendly error with Calendly's specific message
+        error_log("CALENDLY ERROR FULL DETAILS: " . json_encode($full_error_details, JSON_PRETTY_PRINT));
+
         $user_error = $error_data['message'] ?? "HTTP $code";
         return [null, "Calendly API-Fehler: $user_error"];
     }
+
+    error_log("CALENDLY SUCCESS: " . json_encode($response_debug));
 
     $json = json_decode($res, true);
     if ($json === null) {
@@ -134,30 +181,51 @@ try {
     $max_pages = 10; // Safety limit: max 500 events (50 * 10)
     $page_count = 0;
 
+    $request_params = [
+        'organization' => $ORG_URI,
+        'status' => 'active',
+        'invitee_email' => $email,
+        'min_start_time' => $min_start,
+        'max_start_time' => $max_start,
+        'count' => 50
+    ];
+
+    $start_date = new DateTimeImmutable($request_params['min_start_time']);
+    $end_date = new DateTimeImmutable($request_params['max_start_time']);
+    $days_span = $start_date->diff($end_date)->days;
+
+    if ($days_span > 400) {
+        error_log("CALENDLY WARNING: Large date span requested - Customer: $email, Days: $days_span");
+    }
+
+    error_log("CALENDLY PARAMS: " . json_encode($request_params));
+
     do {
         $page_count++;
 
-        $params = [
-            'organization' => $ORG_URI,
-            'status' => 'active',
-            'invitee_email' => $email, // SECURE: Email from session
-            'min_start_time' => $min_start,
-            'max_start_time' => $max_start,
-            'count' => 50
-        ];
+        $params = $request_params;
 
         if ($page_token) {
             $params['page_token'] = $page_token;
         }
 
-        $url = $base.'/scheduled_events?' . http_build_query($params);
+        $log_params = $params;
+        $log_params['page'] = $page_count;
+        error_log("CALENDLY PARAMS: " . json_encode($log_params));
+
+        $url = $base . '/scheduled_events?' . http_build_query($params);
 
         // Debug log for problematic pagination
         if ($page_count > 3) {
             error_log("Calendly Pagination Warning - Customer: $email, Page: $page_count, Token: " . substr($page_token, 0, 20) . "...");
         }
 
-        list($data, $err) = api_get($url, $CALENDLY_TOKEN);
+        list($data, $err) = api_get($url, $CALENDLY_TOKEN, [
+            'endpoint' => 'scheduled_events',
+            'page_token' => $page_token,
+            'customer_email' => $email,
+            'customer_session_id' => session_id()
+        ]);
         if ($err) {
             error_log("Calendly Pagination Error - Customer: $email, Page: $page_count, Error: $err");
             break; // Stop pagination on error, return what we have
@@ -187,7 +255,12 @@ try {
         foreach ($events as $ev) {
             $uuid = basename($ev['uri']);
             $u = "$base/scheduled_events/$uuid/invitees";
-            list($inv, $err2) = api_get($u, $CALENDLY_TOKEN);
+            list($inv, $err2) = api_get($u, $CALENDLY_TOKEN, [
+                'endpoint' => 'scheduled_event_invitees',
+                'event_uuid' => $uuid,
+                'customer_email' => $email,
+                'customer_session_id' => session_id()
+            ]);
             if ($err2 || !isset($inv['collection'])) { 
                 continue; 
             }

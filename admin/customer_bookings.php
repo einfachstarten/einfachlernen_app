@@ -49,13 +49,29 @@ function api_get($url, $token) {
     ]);
     $res = curl_exec($ch);
     if ($res === false) {
-        return [null, 'Network error: ' . curl_error($ch)];
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+        return [null, 'Network error: ' . $curl_error];
     }
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
     if ($code < 200 || $code >= 300) {
-        return [null, "HTTP $code"];
+        $error_data = json_decode($res, true);
+
+        // Enhanced error logging for admin
+        $detailed_error = [
+            'http_code' => $code,
+            'response_body' => $res,
+            'calendly_message' => $error_data['message'] ?? null,
+            'calendly_details' => $error_data['details'] ?? null,
+            'request_url' => $url,
+            'admin_user' => $_SESSION['admin'] ?? 'unknown'
+        ];
+        error_log("Admin Calendly API Error: " . json_encode($detailed_error));
+
+        $user_error = $error_data['message'] ?? "HTTP $code";
+        return [null, "Calendly API Error: $user_error"];
     }
 
     $json = json_decode($res, true);
@@ -90,7 +106,7 @@ try {
 
         list($data, $err) = api_get($url, $CALENDLY_TOKEN);
         if ($err) {
-            throw new Exception("Calendly API Error: $err");
+            throw new Exception($err);
         }
 
         $events = $data['collection'] ?? [];

@@ -65,28 +65,6 @@ if (isset($_GET['api'])) {
         return [$json, null];
     }
     
-    function mapServiceName($calendly_name) {
-        $mapping = [
-            'lerntraining' => 'Lerntraining',
-            'neurofeedback-training-20-min' => 'Neurofeedback 20 Min',
-            'neurofeedback-training-40-minuten' => 'Neurofeedback 40 Min',
-            'neurofeedback training 20 min' => 'Neurofeedback 20 Min', 
-            'neurofeedback training 40 minuten' => 'Neurofeedback 40 Min',
-            'neurofeedback-20' => 'Neurofeedback 20 Min',
-            'neurofeedback-40' => 'Neurofeedback 40 Min'
-        ];
-        
-        $lower = strtolower($calendly_name);
-        
-        foreach ($mapping as $key => $display_name) {
-            if (strpos($lower, $key) !== false) {
-                return $display_name;
-            }
-        }
-        
-        return $calendly_name; // Return original if no mapping found
-    }
-    
     function getEventsForMonth($token, $org_uri, $month_year) {
         // Parse month_year 
         if ($month_year === 'current') {
@@ -158,9 +136,7 @@ if (isset($_GET['api'])) {
                 'neurofeedback-20' => 45,
                 'neurofeedback-40' => 70,
                 'neurofeedback training 20 min' => 45,
-                'neurofeedback training 40 minuten' => 70,
-                'neurofeedback 20 min' => 45,
-                'neurofeedback 40 min' => 70
+                'neurofeedback training 40 minuten' => 70
             ];
             
             $total_duration = 0;
@@ -171,35 +147,8 @@ if (isset($_GET['api'])) {
                 $duration = ($end_time->getTimestamp() - $start_time->getTimestamp()) / 60;
                 $total_duration += $duration;
                 
-                // Service analysis - VERBESSERTE SERVICE-NAME-EXTRAKTION
-                $service_name = 'Unknown';
-                
-                // Versuch 1: event_type.name
-                if (isset($event['event_type']['name']) && !empty($event['event_type']['name'])) {
-                    $service_name = $event['event_type']['name'];
-                }
-                // Versuch 2: name direkt
-                elseif (isset($event['name']) && !empty($event['name'])) {
-                    $service_name = $event['name'];
-                }
-                // Versuch 3: event_type.slug oder andere Felder
-                elseif (isset($event['event_type']['slug'])) {
-                    $service_name = ucfirst(str_replace(['-', '_'], ' ', $event['event_type']['slug']));
-                }
-                // Versuch 4: URI-basiert (letzte Option)
-                elseif (isset($event['event_type']['uri'])) {
-                    $uri_parts = explode('/', $event['event_type']['uri']);
-                    $service_name = 'Service ' . end($uri_parts);
-                }
-                
-                // Debug-Ausgabe aktivieren (nur für Test)
-                if ($service_name === 'Unknown') {
-                    error_log("DEBUG Event Structure: " . json_encode($event));
-                }
-                
-                // Clean up und mapping anwenden
-                $service_name = mapServiceName($service_name);
-                
+                // Service analysis
+                $service_name = $event['event_type']['name'] ?? 'Unknown';
                 if (!isset($analytics['services'][$service_name])) {
                     $analytics['services'][$service_name] = [
                         'count' => 0,
@@ -210,7 +159,7 @@ if (isset($_GET['api'])) {
                 $analytics['services'][$service_name]['count']++;
                 $analytics['services'][$service_name]['duration_total'] += $duration;
                 
-                // Revenue estimation - VERBESSERTE ZUORDNUNG
+                // Revenue estimation
                 $service_key = strtolower($service_name);
                 foreach ($service_prices as $key => $price) {
                     if (strpos($service_key, $key) !== false || strpos($key, $service_key) !== false) {
@@ -246,9 +195,6 @@ if (isset($_GET['api'])) {
     // STAGE 2: Customer Analytics (requires invitee details, but only for unique events)
     if ($_GET['api'] === 'customers') {
         try {
-            // Start output buffering to catch any PHP errors
-            ob_start();
-            
             $month_year = $_GET['month'] ?? 'current';
             $events = getEventsForMonth($CALENDLY_TOKEN, $ORG_URI, $month_year);
             
@@ -261,8 +207,6 @@ if (isset($_GET['api'])) {
             
             $customer_emails = [];
             $customer_booking_count = [];
-            $customer_services = []; // Track services per customer
-            $customer_details = []; // Full booking details per customer
             $processed = 0;
             
             // Only fetch invitee details for unique events
@@ -271,48 +215,11 @@ if (isset($_GET['api'])) {
                 list($invitee_data, $invitee_err) = api_get($invitee_url, $CALENDLY_TOKEN);
                 
                 if (!$invitee_err && isset($invitee_data['collection'])) {
-                    // VERBESSERTE Service-Name-Extraktion (same logic as basic)
-                    $service_name = 'Unknown';
-                    
-                    if (isset($event['event_type']['name']) && !empty($event['event_type']['name'])) {
-                        $service_name = $event['event_type']['name'];
-                    } elseif (isset($event['name']) && !empty($event['name'])) {
-                        $service_name = $event['name'];
-                    } elseif (isset($event['event_type']['slug'])) {
-                        $service_name = ucfirst(str_replace(['-', '_'], ' ', $event['event_type']['slug']));
-                    } elseif (isset($event['event_type']['uri'])) {
-                        $uri_parts = explode('/', $event['event_type']['uri']);
-                        $service_name = 'Service ' . end($uri_parts);
-                    }
-                    
-                    $service_name = mapServiceName($service_name);
-                    
-                    $event_date = $event['start_time'] ?? '';
-                    $event_status = $event['status'] ?? 'unknown';
-                    
                     foreach ($invitee_data['collection'] as $invitee) {
                         $email = strtolower($invitee['email'] ?? '');
                         if ($email) {
                             $customer_emails[$email] = $invitee['name'] ?? 'Unknown';
                             $customer_booking_count[$email] = ($customer_booking_count[$email] ?? 0) + 1;
-                            
-                            // Track services per customer
-                            if (!isset($customer_services[$email])) {
-                                $customer_services[$email] = [];
-                            }
-                            if (!in_array($service_name, $customer_services[$email])) {
-                                $customer_services[$email][] = $service_name;
-                            }
-                            
-                            // Track detailed bookings
-                            if (!isset($customer_details[$email])) {
-                                $customer_details[$email] = [];
-                            }
-                            $customer_details[$email][] = [
-                                'service' => $service_name,
-                                'date' => $event_date,
-                                'status' => $event_status
-                            ];
                         }
                     }
                 }
@@ -327,38 +234,20 @@ if (isset($_GET['api'])) {
                 if ($processed >= 50) break;
             }
             
-            // ALL customers - keine Limitierung mehr
+            // Top customers
             arsort($customer_booking_count);
-            $all_customers = $customer_booking_count; // Alle Kunden ohne Limit
+            $top_customers = array_slice($customer_booking_count, 0, 10, true);
             
-            // Calculate unique services used by customers
-            $unique_services_by_customers = [];
-            foreach ($customer_services as $services) {
-                foreach ($services as $service) {
-                    $unique_services_by_customers[$service] = true;
-                }
-            }
-            
-            $result_data = [
+            $analytics = [
                 'unique_customers' => count($customer_emails),
-                'top_customers' => $all_customers, // Geändert: Alle statt nur Top 10
-                'customer_services' => $customer_services,
-                'customer_details' => $customer_details,
-                'customer_names' => $customer_emails,
-                'unique_services_by_customers' => count($unique_services_by_customers),
+                'top_customers' => $top_customers,
                 'processed_events' => $processed,
                 'total_events' => count($events)
             ];
             
-            // Clean any output that might have been generated
-            ob_clean();
-            
-            echo json_encode(['success' => true, 'data' => $result_data]);
+            echo json_encode(['success' => true, 'data' => $analytics]);
             
         } catch (Exception $e) {
-            // Clean any output that might have been generated
-            if (ob_get_length()) ob_clean();
-            
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         exit;
@@ -402,7 +291,6 @@ $month_options = getMonthOptions();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Booking Analytics Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -411,7 +299,6 @@ $month_options = getMonthOptions();
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
-            color: #2d3748;
         }
         
         .dashboard-container {
@@ -604,10 +491,6 @@ $month_options = getMonthOptions();
         
         .chart-content {
             padding: 24px;
-            min-height: 350px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         
         .chart-loading {
@@ -675,214 +558,30 @@ $month_options = getMonthOptions();
             opacity: 0.7;
         }
         
-        /* Chart Specific Styles */
-        #statusChart {
-            max-height: 280px;
-            margin: 0 auto;
-        }
-        
-        /* PROFESSIONAL CUSTOMER TABLE DESIGN */
-        .customers-section {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            overflow: hidden;
-            margin-bottom: 24px;
-        }
-        
-        .customers-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 24px;
-            color: white;
-        }
-        
-        .customers-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin: 0;
+        .customer-item {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 12px;
-        }
-        
-        .customers-count {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        .customers-table-wrapper {
-            max-height: 700px;
-            overflow-y: auto;
-            overflow-x: auto;
-        }
-        
-        .customers-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            font-size: 14px;
-        }
-        
-        .customers-table thead th {
-            background: #f8fafc;
-            padding: 16px 20px;
-            text-align: left;
-            font-weight: 600;
-            color: #4a5568;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-size: 12px;
-            border-bottom: 2px solid #e2e8f0;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        
-        .customers-table tbody td {
-            padding: 16px 20px;
+            padding: 12px 0;
             border-bottom: 1px solid #e2e8f0;
-            vertical-align: top;
         }
         
-        .customers-table tbody tr {
-            transition: background-color 0.2s ease;
-        }
-        
-        .customers-table tbody tr:hover {
-            background-color: #f8fafc;
-        }
-        
-        .customers-table tbody tr:nth-child(even) {
-            background-color: #fafbfc;
-        }
-        
-        .customers-table tbody tr:nth-child(even):hover {
-            background-color: #f1f5f9;
-        }
-        
-        .customer-info {
-            min-width: 220px;
-        }
-        
-        .customer-name {
-            font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 4px;
-            font-size: 15px;
+        .customer-item:last-child {
+            border-bottom: none;
         }
         
         .customer-email {
-            color: #718096;
-            font-size: 13px;
-            word-break: break-word;
-        }
-        
-        .booking-stats-cell {
-            text-align: center;
-            min-width: 80px;
-        }
-        
-        .booking-number {
-            font-size: 18px;
-            font-weight: 700;
-            color: #667eea;
-            display: block;
-            margin-bottom: 2px;
-        }
-        
-        .booking-subtitle {
-            font-size: 11px;
-            color: #a0aec0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .services-cell {
-            min-width: 300px;
-        }
-        
-        .service-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-        
-        .service-tag {
-            background: #edf2f7;
-            color: #4a5568;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 11px;
             font-weight: 500;
-            white-space: nowrap;
-        }
-        
-        .service-tag.primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .last-booking-cell {
-            min-width: 140px;
-            text-align: center;
-        }
-        
-        .booking-date {
-            font-weight: 600;
             color: #2d3748;
-            font-size: 13px;
-            margin-bottom: 2px;
         }
         
-        .booking-time {
-            color: #718096;
-            font-size: 11px;
-            margin-bottom: 4px;
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 2px 8px;
+        .customer-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
             border-radius: 12px;
-            font-size: 10px;
+            font-size: 12px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .status-active {
-            background: #c6f6d5;
-            color: #22543d;
-        }
-        
-        .status-cancelled {
-            background: #fed7d7;
-            color: #c53030;
-        }
-        
-        .no-customers {
-            text-align: center;
-            padding: 80px 40px;
-            color: #a0aec0;
-        }
-        
-        .no-customers-icon {
-            font-size: 64px;
-            margin-bottom: 16px;
-            opacity: 0.4;
-        }
-        
-        .no-customers h3 {
-            font-size: 18px;
-            margin-bottom: 8px;
-            color: #718096;
-        }
-        
-        .no-customers p {
-            font-size: 14px;
         }
         
         .no-data {
@@ -892,7 +591,6 @@ $month_options = getMonthOptions();
             font-style: italic;
         }
         
-        /* Mobile Responsive */
         @media (max-width: 768px) {
             .dashboard-header {
                 flex-direction: column;
@@ -916,59 +614,21 @@ $month_options = getMonthOptions();
                 grid-template-columns: repeat(2, 1fr);
             }
             
-            .customers-table {
-                font-size: 12px;
+            .customer-main {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
             }
             
-            .customers-table thead th,
-            .customers-table tbody td {
-                padding: 12px 8px;
-            }
-            
-            .customer-info {
-                min-width: 180px;
-            }
-            
-            .customer-name {
-                font-size: 14px;
+            .customer-stats {
+                align-self: stretch;
+                justify-content: space-between;
             }
             
             .customer-email {
+                word-break: break-all;
                 font-size: 12px;
             }
-            
-            .services-cell {
-                min-width: 200px;
-            }
-            
-            .service-tags {
-                flex-direction: column;
-                gap: 4px;
-            }
-            
-            .last-booking-cell {
-                min-width: 100px;
-            }
-        }
-        
-        /* Scrollbar Styling */
-        .customers-table-wrapper::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        
-        .customers-table-wrapper::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 4px;
-        }
-        
-        .customers-table-wrapper::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 4px;
-        }
-        
-        .customers-table-wrapper::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
         }
     </style>
 </head>
@@ -1036,33 +696,31 @@ $month_options = getMonthOptions();
                 </div>
             </div>
 
-            <!-- Status Breakdown -->
+            <!-- Top Customers -->
             <div class="chart-card">
                 <h3 class="chart-title">
-                    <div class="chart-icon">📈</div>
-                    Booking Status Overview
+                    <div class="chart-icon">👥</div>
+                    <span id="topCustomersTitle">Top Customers</span>
                 </h3>
                 <div class="chart-content">
-                    <div id="statusBreakdown" class="chart-loading">
+                    <div id="topCustomers" class="chart-loading">
                         <div class="spinner"></div>
-                        <div>Loading status data...</div>
+                        <div>Loading customer data...</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Professional Customers Section -->
-        <div class="customers-section">
-            <div class="customers-header">
-                <h3 class="customers-title">
-                    👥 All Customers
-                    <span id="customersCount" class="customers-count">Loading...</span>
-                </h3>
-            </div>
-            <div id="customersTableContainer" class="customers-table-wrapper">
-                <div class="chart-loading">
+        <!-- Status Breakdown -->
+        <div class="chart-card">
+            <h3 class="chart-title">
+                <div class="chart-icon">📈</div>
+                Booking Status Overview
+            </h3>
+            <div class="chart-content">
+                <div id="statusBreakdown" class="chart-loading">
                     <div class="spinner"></div>
-                    <div>Loading customer data...</div>
+                    <div>Loading status data...</div>
                 </div>
             </div>
         </div>
@@ -1097,7 +755,7 @@ $month_options = getMonthOptions();
                 </div>
             `;
             
-            document.getElementById('customersTableContainer').innerHTML = `
+            document.getElementById('topCustomers').innerHTML = `
                 <div class="chart-loading">
                     <div class="spinner"></div>
                     <div>Loading customer data...</div>
@@ -1110,8 +768,6 @@ $month_options = getMonthOptions();
                     <div>Loading status data...</div>
                 </div>
             `;
-            
-            document.getElementById('customersCount').textContent = 'Loading...';
         }
 
         function showError(message) {
@@ -1149,7 +805,7 @@ $month_options = getMonthOptions();
 
         function updateCustomerKPIs(data) {
             document.getElementById('uniqueCustomers').textContent = data.unique_customers;
-            document.getElementById('customersChange').textContent = data.unique_services_by_customers + ' Different Services';
+            document.getElementById('customersChange').textContent = Object.keys(currentBasicData.services).length + ' Services';
             
             // Remove loading state from customer card
             document.querySelectorAll('.kpi-card')[1].classList.remove('loading');
@@ -1187,6 +843,26 @@ $month_options = getMonthOptions();
             container.appendChild(serviceGrid);
         }
 
+        function updateTopCustomers(topCustomers, displayMonth) {
+            const container = document.getElementById('topCustomers');
+            const title = document.getElementById('topCustomersTitle');
+            title.textContent = `Top Customers - ${displayMonth}`;
+            
+            if (Object.keys(topCustomers).length === 0) {
+                container.innerHTML = '<div class="no-data">No customer data available</div>';
+                return;
+            }
+
+            const customersHtml = Object.entries(topCustomers).map(([email, count]) => `
+                <div class="customer-item">
+                    <div class="customer-email">${email}</div>
+                    <div class="customer-count">${count} booking${count > 1 ? 's' : ''}</div>
+                </div>
+            `).join('');
+
+            container.innerHTML = customersHtml;
+        }
+
         function updateStatusBreakdown(statusBreakdown, totalBookings) {
             const container = document.getElementById('statusBreakdown');
             
@@ -1195,218 +871,26 @@ $month_options = getMonthOptions();
                 return;
             }
 
-            // Create canvas for chart
-            container.innerHTML = '<canvas id="statusChart" width="400" height="200"></canvas>';
-            
-            const ctx = document.getElementById('statusChart').getContext('2d');
-            
-            // Prepare data
-            const labels = Object.keys(statusBreakdown).map(status => 
-                status.charAt(0).toUpperCase() + status.slice(1)
-            );
-            const data = Object.values(statusBreakdown);
-            const percentages = data.map(count => 
-                totalBookings > 0 ? Math.round((count / totalBookings) * 100) : 0
-            );
-            
-            // Corporate color scheme
-            const colors = [
-                'rgba(102, 126, 234, 0.8)',  // Primary blue
-                'rgba(118, 75, 162, 0.8)',   // Purple
-                'rgba(34, 197, 94, 0.8)',    // Green
-                'rgba(239, 68, 68, 0.8)',    // Red
-                'rgba(245, 158, 11, 0.8)',   // Orange
-                'rgba(107, 114, 128, 0.8)'   // Gray
-            ];
-            
-            const borderColors = [
-                'rgba(102, 126, 234, 1)',
-                'rgba(118, 75, 162, 1)', 
-                'rgba(34, 197, 94, 1)',
-                'rgba(239, 68, 68, 1)',
-                'rgba(245, 158, 11, 1)',
-                'rgba(107, 114, 128, 1)'
-            ];
+            const statusGrid = document.createElement('div');
+            statusGrid.className = 'service-grid';
 
-            new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: colors.slice(0, labels.length),
-                        borderColor: borderColors.slice(0, labels.length),
-                        borderWidth: 2,
-                        hoverOffset: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true,
-                                font: {
-                                    size: 13,
-                                    family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
-                                },
-                                generateLabels: function(chart) {
-                                    const data = chart.data;
-                                    return data.labels.map((label, i) => ({
-                                        text: `${label}: ${data.datasets[0].data[i]} (${percentages[i]}%)`,
-                                        fillStyle: data.datasets[0].backgroundColor[i],
-                                        strokeStyle: data.datasets[0].borderColor[i],
-                                        lineWidth: 2,
-                                        hidden: false,
-                                        index: i
-                                    }));
-                                }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const label = context.label || '';
-                                    const value = context.parsed;
-                                    const percentage = percentages[context.dataIndex];
-                                    return `${label}: ${value} bookings (${percentage}%)`;
-                                }
-                            },
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: 'white',
-                            bodyColor: 'white',
-                            borderColor: 'rgba(102, 126, 234, 1)',
-                            borderWidth: 1
-                        }
-                    },
-                    animation: {
-                        animateRotate: true,
-                        duration: 1000
-                    }
-                }
-            });
-        }
-
-        function updateCustomersTable(customerData, displayMonth) {
-            const container = document.getElementById('customersTableContainer');
-            const countBadge = document.getElementById('customersCount');
-            
-            if (!customerData || !customerData.top_customers || Object.keys(customerData.top_customers).length === 0) {
-                container.innerHTML = `
-                    <div class="no-customers">
-                        <div class="no-customers-icon">👥</div>
-                        <h3>No customer data available</h3>
-                        <p>Customer details are still loading or unavailable for this period.</p>
+            Object.entries(statusBreakdown).forEach(([status, count]) => {
+                const percentage = totalBookings > 0 ? Math.round((count / totalBookings) * 100) : 0;
+                
+                const statusItem = document.createElement('div');
+                statusItem.className = 'service-item';
+                statusItem.innerHTML = `
+                    <div class="service-name">${status.charAt(0).toUpperCase() + status.slice(1)}</div>
+                    <div class="service-stats">
+                        <span>${count} bookings</span>
+                        <span>${percentage}%</span>
                     </div>
                 `;
-                countBadge.textContent = '0 customers';
-                return;
-            }
-
-            const customerCount = Object.keys(customerData.top_customers).length;
-            countBadge.textContent = `${customerCount} customer${customerCount !== 1 ? 's' : ''} - ${displayMonth}`;
-
-            // Create professional table
-            let tableHtml = `
-                <table class="customers-table">
-                    <thead>
-                        <tr>
-                            <th>Customer</th>
-                            <th>Bookings</th>
-                            <th>Services</th>
-                            <th>Service Breakdown</th>
-                            <th>Last Booking</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            Object.entries(customerData.top_customers).forEach(([email, count]) => {
-                const customerName = (customerData.customer_names && customerData.customer_names[email]) || 'Unknown';
-                const services = (customerData.customer_services && customerData.customer_services[email]) || [];
-                const details = (customerData.customer_details && customerData.customer_details[email]) || [];
-                
-                // Get service breakdown
-                const serviceBreakdown = {};
-                details.forEach(booking => {
-                    serviceBreakdown[booking.service] = (serviceBreakdown[booking.service] || 0) + 1;
-                });
-                
-                // Find last booking
-                let lastBooking = null;
-                if (details.length > 0) {
-                    lastBooking = details.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-                }
-                
-                // Format last booking date
-                let lastBookingHtml = '<span style="color: #a0aec0;">No bookings</span>';
-                if (lastBooking && lastBooking.date) {
-                    try {
-                        const date = new Date(lastBooking.date);
-                        const dateStr = date.toLocaleDateString('de-DE', { 
-                            day: '2-digit', 
-                            month: '2-digit', 
-                            year: 'numeric'
-                        });
-                        const timeStr = date.toLocaleTimeString('de-DE', { 
-                            hour: '2-digit', 
-                            minute: '2-digit'
-                        });
-                        const statusClass = lastBooking.status === 'active' ? 'status-active' : 'status-cancelled';
-                        
-                        lastBookingHtml = `
-                            <div class="booking-date">${dateStr}</div>
-                            <div class="booking-time">${timeStr}</div>
-                            <div style="margin-top: 6px;">
-                                <span class="status-badge ${statusClass}">${lastBooking.status}</span>
-                            </div>
-                        `;
-                    } catch (e) {
-                        lastBookingHtml = '<span style="color: #e53e3e;">Invalid date</span>';
-                    }
-                }
-                
-                // Create service tags
-                const serviceTags = Object.entries(serviceBreakdown)
-                    .map(([service, sCount], index) => {
-                        const tagClass = index === 0 ? 'service-tag primary' : 'service-tag';
-                        return `<span class="${tagClass}">${service} (${sCount})</span>`;
-                    })
-                    .join('') || '<span class="service-tag">No services</span>';
-                
-                tableHtml += `
-                    <tr>
-                        <td class="customer-info">
-                            <div class="customer-name">${customerName}</div>
-                            <div class="customer-email">${email}</div>
-                        </td>
-                        <td class="booking-stats-cell">
-                            <span class="booking-number">${count}</span>
-                            <span class="booking-subtitle">booking${count > 1 ? 's' : ''}</span>
-                        </td>
-                        <td class="booking-stats-cell">
-                            <span class="booking-number">${services.length}</span>
-                            <span class="booking-subtitle">service${services.length > 1 ? 's' : ''}</span>
-                        </td>
-                        <td class="services-cell">
-                            <div class="service-tags">${serviceTags}</div>
-                        </td>
-                        <td class="last-booking-cell">
-                            ${lastBookingHtml}
-                        </td>
-                    </tr>
-                `;
+                statusGrid.appendChild(statusItem);
             });
 
-            tableHtml += `
-                    </tbody>
-                </table>
-            `;
-
-            container.innerHTML = tableHtml;
+            container.innerHTML = '';
+            container.appendChild(statusGrid);
         }
 
         async function loadBasicData() {
@@ -1449,8 +933,6 @@ $month_options = getMonthOptions();
                 console.log('Loading customer data for month:', selectedMonth);
                 
                 const response = await fetch(`?api=customers&month=${encodeURIComponent(selectedMonth)}`);
-                console.log('Customer API response status:', response.status);
-                
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -1463,11 +945,10 @@ $month_options = getMonthOptions();
                 }
 
                 currentCustomerData = result.data;
-                console.log('Setting currentCustomerData to:', currentCustomerData);
                 
                 // Update customer-related UI
                 updateCustomerKPIs(currentCustomerData);
-                updateCustomersTable(currentCustomerData, currentBasicData.display_month);
+                updateTopCustomers(currentCustomerData.top_customers, currentBasicData.display_month);
                 
                 return true;
                 
@@ -1476,8 +957,7 @@ $month_options = getMonthOptions();
                 // Don't fail the whole thing for customer data
                 document.getElementById('uniqueCustomers').textContent = '?';
                 document.getElementById('customersChange').textContent = 'Error loading';
-                document.getElementById('customersTableContainer').innerHTML = '<div class="no-data">Customer data unavailable - ' + error.message + '</div>';
-                document.getElementById('customersCount').textContent = 'Error loading';
+                document.getElementById('topCustomers').innerHTML = '<div class="no-data">Customer data unavailable</div>';
                 return false;
             }
         }

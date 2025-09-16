@@ -101,8 +101,10 @@ function logSlotSearchError($customer_id, $service_slug, $error_type, $error_det
 
 // Validate input
 $service_slug = $_GET['service'] ?? '';
-$target_count = min(10, max(1, intval($_GET['count'] ?? 3)));
+$target_count = min(15, max(1, intval($_GET['count'] ?? 3)));
 $current_week = intval($_GET['week'] ?? 0);
+$start_from_date = isset($_GET['start_from']) ? trim($_GET['start_from']) : null;
+$original_target_count = min(15, max(1, intval($_GET['original_count'] ?? $target_count)));
 
 // Log API call
 $logger->logActivity($customer['id'], 'slots_api_called', [
@@ -151,80 +153,144 @@ try {
     $service = $services[$service_slug];
     $slots_by_date = [];
     $found_dates = [];
+    $viennaTz = new DateTimeZone("Europe/Vienna");
+    $utcTz = new DateTimeZone("UTC");
 
-    // Calculate time range for current week
-    $base = new DateTimeImmutable("tomorrow midnight", new DateTimeZone("UTC"));
-    $start = $base->modify("+$current_week week");
-    $end = $start->modify("+6 days 23 hours 59 minutes 59 seconds");
+    $search_type = 'initial';
+    $search_base = (new DateTimeImmutable("tomorrow midnight", $utcTz))->modify("+$current_week week");
 
-    $url = "https://api.calendly.com/event_type_available_times"
-         . "?event_type=" . urlencode($service["uri"])
-         . "&start_time=" . $start->format("Y-m-d\TH:i:s\Z")
-         . "&end_time=" . $end->format("Y-m-d\TH:i:s\Z")
-         . "&timezone=Europe/Vienna";
+    if (!empty($start_from_date)) {
+        $startDateVienna = DateTimeImmutable::createFromFormat('Y-m-d', $start_from_date, $viennaTz);
+        $parseErrors = DateTimeImmutable::getLastErrors();
+        $hasParseErrors = !$startDateVienna;
 
-    $api_start = microtime(true);
-    $api_response = call_api($url, $CALENDLY_TOKEN);
-    $api_response_time = microtime(true) - $api_start;
+        if (is_array($parseErrors)) {
+            $hasParseErrors = $hasParseErrors || !empty($parseErrors['warning_count']) || !empty($parseErrors['error_count']);
+        }
 
-    if (empty($api_response)) {
-        logSlotSearchError($customer['id'], $service_slug, 'api_timeout', 'Calendly API timeout or connection error');
-        json_error('Booking service temporarily unavailable');
+        if ($hasParseErrors) {
+            json_error('Ungültiges Startdatum');
+        }
+
+        $startDateVienna = $startDateVienna->setTime(0, 0, 0);
+        $todayVienna = (new DateTimeImmutable('today', $viennaTz))->setTime(0, 0, 0);
+
+        if ($startDateVienna < $todayVienna) {
+            json_error('Ungültiges Startdatum');
+        }
+
+        $search_base = $startDateVienna->setTimezone($utcTz)->modify('+1 day');
+        $search_type = 'continuation';
     }
 
-    if ($api_response && !empty($api_response['collection'])) {
+    $max_weeks = $search_type === 'continuation' ? 16 : 8;
+    $api_calls = 0;
+    $api_durations = [];
+    $total_slots_returned = 0;
+    $referenceMidnightUtc = new DateTimeImmutable("tomorrow midnight", $utcTz);
+
+    for ($week_offset = 0; $week_offset < $max_weeks && count($found_dates) < $target_count; $week_offset++) {
+        $week_start = $search_base->modify("+$week_offset week");
+        $week_end = $week_start->modify("+6 days 23 hours 59 minutes 59 seconds");
+
+        $url = "https://api.calendly.com/event_type_available_times"
+             . "?event_type=" . urlencode($service["uri"])
+             . "&start_time=" . $week_start->format("Y-m-d\TH:i:s\Z")
+             . "&end_time=" . $week_end->format("Y-m-d\TH:i:s\Z")
+             . "&timezone=Europe/Vienna";
+
+        $api_start = microtime(true);
+        $api_response = call_api($url, $CALENDLY_TOKEN);
+        $api_response_time = microtime(true) - $api_start;
+
+        $api_calls++;
+        $api_durations[] = $api_response_time;
+
+        if (empty($api_response)) {
+            logSlotSearchError($customer['id'], $service_slug, 'api_timeout', 'Calendly API timeout or connection error');
+            json_error('Booking service temporarily unavailable');
+        }
+
+        $total_slots_returned += count($api_response['collection'] ?? []);
+
+        foreach ($api_response["collection"] ?? [] as $slot) {
+            if (!isset($slot["start_time"])) {
+                continue;
+            }
+
+            $startIso = $slot["start_time"];
+            $startDt = new DateTimeImmutable($startIso);
+            $endDt = $startDt->modify("+{$service['dur']} minutes");
+
+            $slotDateVienna = $startDt->setTimezone($viennaTz);
+            $slotDate = $slotDateVienna->format("Y-m-d");
+
+            $isExistingDate = isset($slots_by_date[$slotDate]);
+            if (!$isExistingDate && count($found_dates) >= $target_count) {
+                continue;
+            }
+
+            if (!$isExistingDate) {
+                $slots_by_date[$slotDate] = [];
+                $found_dates[] = $slotDate;
+            }
+
+            $booking_link = build_calendly_link($service["url"], $startIso, $customer_email);
+
+            $weeks_from_now = intdiv(max(0, $startDt->getTimestamp() - $referenceMidnightUtc->getTimestamp()), 604800) + 1;
+
+            $slots_by_date[$slotDate][] = [
+                "start" => $slotDateVienna->format("D, d.m.Y H:i"),
+                "end" => $endDt->setTimezone($viennaTz)->format("H:i"),
+                "time_only" => $slotDateVienna->format("H:i"),
+                "start_iso" => $startIso,
+                "end_iso" => $endDt->format("Y-m-d\TH:i:s\Z"),
+                "booking_url" => $booking_link,
+                "weeks_from_now" => $weeks_from_now,
+                "slot_date" => $slotDate
+            ];
+        }
+    }
+
+    if (!empty($slots_by_date)) {
+        $total_day_slots = array_map('count', $slots_by_date);
         $logger->logActivity($customer['id'], 'slots_found', [
             'service_slug' => $service_slug,
-            'slots_count' => count($api_response['collection']),
+            'days_found' => count($slots_by_date),
+            'slots_count' => array_sum($total_day_slots),
             'week_offset' => $current_week,
-            'api_success' => true,
-            'calendly_response_time' => $api_response_time,
-            'search_successful' => true
+            'api_calls' => $api_calls,
+            'search_type' => $search_type,
+            'calendly_response_time_total' => array_sum($api_durations),
+            'search_successful' => true,
+            'start_from' => $start_from_date,
+            'target_count' => $target_count,
+            'original_target_count' => $original_target_count,
+            'total_slots_returned' => $total_slots_returned
         ]);
     } else {
         $logger->logActivity($customer['id'], 'slots_not_found', [
             'service_slug' => $service_slug,
             'week_offset' => $current_week,
             'reason' => 'no_slots_available',
-            'api_response_empty' => empty($api_response),
-            'search_unsuccessful' => true
+            'api_response_empty' => $total_slots_returned === 0,
+            'api_calls' => $api_calls,
+            'search_type' => $search_type,
+            'search_unsuccessful' => true,
+            'start_from' => $start_from_date,
+            'target_count' => $target_count,
+            'original_target_count' => $original_target_count
         ]);
     }
 
-    foreach ($api_response["collection"] ?? [] as $slot) {
-        if (!isset($slot["start_time"])) continue;
-        
-        $startIso = $slot["start_time"];
-        $startDt = new DateTimeImmutable($startIso);
-        $endDt = $startDt->modify("+{$service['dur']} minutes");
-        
-        // Get date in Vienna timezone for grouping
-        $slotDate = $startDt->setTimezone(new DateTimeZone("Europe/Vienna"))->format("Y-m-d");
-        
-        // Initialize date group if not exists
-        if (!isset($slots_by_date[$slotDate])) {
-            $slots_by_date[$slotDate] = [];
-            $found_dates[] = $slotDate;
-        }
-        
-        // Build booking link with customer email from session
-        $booking_link = build_calendly_link($service["url"], $startIso, $customer_email);
+    ksort($slots_by_date);
 
-        $slots_by_date[$slotDate][] = [
-            "start" => $startDt->setTimezone(new DateTimeZone("Europe/Vienna"))->format("D, d.m.Y H:i"),
-            "end" => $endDt->setTimezone(new DateTimeZone("Europe/Vienna"))->format("H:i"),
-            "time_only" => $startDt->setTimezone(new DateTimeZone("Europe/Vienna"))->format("H:i"),
-            "start_iso" => $startIso,
-            "end_iso" => $endDt->format("Y-m-d\TH:i:s\Z"),
-            "booking_url" => $booking_link,
-            "weeks_from_now" => $current_week + 1,
-            "slot_date" => $slotDate
-        ];
-    }
-    
-    // Convert grouped data to frontend format
     $slots = [];
     foreach ($slots_by_date as $date => $daySlots) {
+        usort($daySlots, function ($a, $b) {
+            return strcmp($a['time_only'], $b['time_only']);
+        });
+
         $slots[] = [
             "date" => $date,
             "date_formatted" => (new DateTime($date))->format("D, d.m.Y"),
@@ -233,20 +299,25 @@ try {
         ];
     }
 
-    // Return response
+    $last_found_date = !empty($found_dates) ? max($found_dates) : null;
+    $can_search_more = !empty($slots) && $last_found_date !== null;
+
     echo json_encode([
         "success" => true,
         "current_week" => $current_week + 1,
-        "week_range" => $start->setTimezone(new DateTimeZone("Europe/Vienna"))->format("d.m") . " - " . 
-                       $end->setTimezone(new DateTimeZone("Europe/Vienna"))->format("d.m.Y"),
         "slots" => $slots,
         "found_count" => count($slots),
         "target_count" => $target_count,
+        "original_target_count" => $original_target_count,
         "service" => $service["name"],
-        "customer_email" => $customer_email, // For debugging
-        "authenticated" => true
+        "customer_email" => $customer_email,
+        "authenticated" => true,
+        "last_found_date" => $last_found_date,
+        "can_search_more" => $can_search_more,
+        "search_type" => $search_type,
+        "total_slots_returned" => $total_slots_returned
     ]);
-    
+
 } catch (Throwable $e) {
     logSlotSearchError($customer['id'], $service_slug, 'exception', $e->getMessage());
     error_log("Secure Slots API Error: " . $e->getMessage());

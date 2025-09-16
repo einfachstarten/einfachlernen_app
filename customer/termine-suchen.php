@@ -301,6 +301,55 @@ logPageView($customer['id'], 'termine_suchen', [
             text-decoration: none;
         }
 
+        .continue-search-section {
+            text-align: center;
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, var(--light-blue) 0%, rgba(74, 144, 184, 0.1) 100%);
+            border-radius: 12px;
+            border: 2px dashed var(--primary);
+        }
+
+        .continue-search-btn {
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--accent-teal) 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(82, 179, 164, 0.3);
+        }
+
+        .continue-search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(82, 179, 164, 0.4);
+        }
+
+        .continue-search-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+            background: var(--gray-medium);
+        }
+
+        .continue-hint {
+            margin-top: 0.8rem;
+            color: var(--gray-medium);
+            font-size: 0.9rem;
+        }
+
+        .search-continuation-separator {
+            text-align: center;
+            margin: 2rem 0 1rem 0;
+            padding: 1rem;
+            background: var(--gray-light);
+            border-radius: 8px;
+            border-left: 4px solid var(--secondary);
+        }
+
         .loading-spinner {
             width: 40px;
             height: 40px;
@@ -332,6 +381,14 @@ logPageView($customer['id'], 'termine_suchen', [
             margin: 1rem 0;
         }
 
+        .no-slots-message {
+            background: #fff3cd;
+            color: #856404;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
         @media (max-width: 768px) {
             .control-group {
                 flex-direction: column;
@@ -344,6 +401,16 @@ logPageView($customer['id'], 'termine_suchen', [
             
             .service-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .continue-search-section {
+                margin: 1.5rem 0;
+                padding: 1rem;
+            }
+
+            .continue-search-btn {
+                padding: 0.8rem 1.5rem;
+                font-size: 0.9rem;
             }
         }
     </style>
@@ -415,132 +482,140 @@ logPageView($customer['id'], 'termine_suchen', [
     <script>
         let selectedService = null;
         let searchActive = false;
+        let continuationData = null;
+        let originalTargetCount = null;
 
         // Service selection
         document.querySelectorAll('.service-card').forEach(card => {
             card.addEventListener('click', () => {
-                // Remove active from all cards
                 document.querySelectorAll('.service-card').forEach(c => c.classList.remove('active'));
-                
-                // Add active to clicked card
+
                 card.classList.add('active');
                 selectedService = card.dataset.service;
-                
-                // Enable search button
+
                 document.getElementById('searchBtn').disabled = false;
             });
         });
 
-        // Search function
-        document.getElementById('searchBtn').addEventListener('click', async () => {
-            if (!selectedService || searchActive) return;
-            
-            searchActive = true;
-            const count = parseInt(document.getElementById('termineAnzahl').value);
-            
-            // Show progress
-            document.getElementById('progressSection').style.display = 'block';
-            document.getElementById('resultsSection').style.display = 'none';
-            document.getElementById('searchBtn').disabled = true;
-            
-            try {
-                await searchSlots(selectedService, count);
-            } catch (error) {
-                showError('Fehler beim Laden der Termine: ' + error.message);
-            } finally {
-                searchActive = false;
-                document.getElementById('progressSection').style.display = 'none';
-                document.getElementById('searchBtn').disabled = false;
+        document.getElementById('searchBtn').addEventListener('click', searchAppointments);
+
+        async function searchAppointments() {
+            if (!selectedService || searchActive) {
+                return;
             }
-        });
 
-        async function searchSlots(service, count) {
-            let allSlots = [];
-            let foundDates = new Set();
-            let week = 0;
-            const maxWeeks = 26;
+            const searchBtn = document.getElementById('searchBtn');
+            const targetCount = parseInt(document.getElementById('termineAnzahl').value, 10);
 
-            while (foundDates.size < count && week < maxWeeks) {
-                updateProgress(week, maxWeeks, `Durchsuche Woche ${week + 1}...`);
+            continuationData = null;
+            originalTargetCount = targetCount;
+            searchActive = true;
 
-                try {
-                    const response = await fetch(`slots_api.php?service=${service}&count=${count}&week=${week}`);
+            const container = document.getElementById('slotsContainer');
+            if (container) {
+                container.innerHTML = '';
+            }
+            document.querySelector('.continue-search-section')?.remove();
 
-                    if (!response.ok) {
-                        console.error(`HTTP ${response.status}: ${response.statusText}`);
-                        week++;
-                        continue;
-                    }
+            showProgress('Termine werden gesucht...');
+            searchBtn.disabled = true;
 
-                    const data = await response.json();
+            try {
+                const response = await fetch(`slots_api.php?service=${encodeURIComponent(selectedService)}&count=${targetCount}&week=0`);
 
-                    if (data.error) {
-                        console.error('API Error:', data.error);
-                        week++;
-                        continue;
-                    }
-
-                    if (data.slots && data.slots.length > 0) {
-                        // Add new unique dates (bis count erreicht)
-                        data.slots.forEach(slot => {
-                            if (!foundDates.has(slot.date) && foundDates.size < count) {
-                                foundDates.add(slot.date);
-                                allSlots.push(slot);
-                            }
-                        });
-                    }
-
-                    if (foundDates.size >= count) {
-                        break;
-                    }
-                } catch (error) {
-                    console.error('Week fetch error:', error);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
                 }
 
-                week++;
+                const data = await response.json();
 
-                // Small delay for better UX
-                await new Promise(resolve => setTimeout(resolve, 300));
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                displaySlots(data, true, selectedService);
+            } catch (error) {
+                console.error('Initial search error:', error);
+                showError('Fehler beim Laden der Termine');
+            } finally {
+                hideProgress();
+                searchActive = false;
+                searchBtn.disabled = false;
+            }
+        }
+
+        function showProgress(message = 'Termine werden gesucht...') {
+            const progressSection = document.getElementById('progressSection');
+            const progressText = document.getElementById('progressText');
+            const progressFill = document.getElementById('progressFill');
+            const resultsSection = document.getElementById('resultsSection');
+
+            if (progressText) {
+                progressText.textContent = message;
             }
 
-            updateProgress(100, 100, `${foundDates.size} Termine gefunden!`);
-            setTimeout(() => showResults(allSlots, count, service), 500);
+            if (progressFill) {
+                progressFill.style.width = '10%';
+            }
+
+            if (progressSection) {
+                progressSection.style.display = 'block';
+            }
+
+            if (resultsSection) {
+                resultsSection.style.display = 'none';
+            }
         }
 
-        function updateProgress(current, max, text) {
-            const percentage = Math.round((current / max) * 100);
-            document.getElementById('progressFill').style.width = percentage + '%';
-            document.getElementById('progressText').textContent = text;
+        function hideProgress() {
+            const progressSection = document.getElementById('progressSection');
+            const progressFill = document.getElementById('progressFill');
+
+            if (progressFill) {
+                progressFill.style.width = '100%';
+            }
+
+            if (progressSection) {
+                setTimeout(() => {
+                    progressSection.style.display = 'none';
+                    if (progressFill) {
+                        progressFill.style.width = '0%';
+                    }
+                }, 200);
+            }
         }
 
-        function showResults(slots, targetCount, serviceSlug) {
+        function displaySlots(data, isInitialSearch = true, serviceSlug = selectedService) {
             const container = document.getElementById('slotsContainer');
             const resultsSection = document.getElementById('resultsSection');
-            
-            if (slots.length === 0) {
-                container.innerHTML = `
-                    <div class="error-message">
-                        <h3>Keine Termine gefunden</h3>
-                        <p>Leider konnten keine verfügbaren Termine gefunden werden. Bitte versuche es später erneut oder wähle einen anderen Service.</p>
-                    </div>
-                `;
-            } else {
-                const statusText = slots.length >= targetCount ? 
-                    `✅ Alle ${targetCount} gewünschten Termine gefunden!` : 
-                    `⚠️ ${slots.length} von ${targetCount} Terminen gefunden`;
-                
-                container.innerHTML = `
-                    <div class="success-message">
-                        <h3>${statusText}</h3>
-                        <p>Klicke auf eine Uhrzeit, um den Termin zu buchen.</p>
-                    </div>
-                ` + slots.map(daySlot => {
+            const progressText = document.getElementById('progressText');
+            const progressFill = document.getElementById('progressFill');
+
+            if (!container || !resultsSection) {
+                return;
+            }
+
+            const foundCount = Number(data.found_count) || 0;
+            const targetCount = Number(data.target_count) || 0;
+            const serviceSlugToUse = serviceSlug || selectedService;
+
+            if (progressText) {
+                progressText.textContent = foundCount > 0 ? `${foundCount} Tage gefunden` : 'Keine Termine gefunden';
+            }
+
+            if (progressFill) {
+                progressFill.style.width = '100%';
+            }
+
+            if (data.slots && data.slots.length > 0) {
+                const slotsHTML = data.slots.map(daySlot => {
                     const timeButtons = daySlot.slots.map(slot => {
-                        return `<a href="#" onclick="trackBookingClick('${serviceSlug}', '${slot.booking_url}')" class="time-button">
+                        return `<a href="#" onclick="trackBookingClick('${serviceSlugToUse}', '${slot.booking_url}')" class="time-button">
                             ${slot.time_only} Uhr
                         </a>`;
                     }).join('');
-                    
+
                     return `
                         <div class="slot-card">
                             <div class="slot-date">${daySlot.date_formatted}</div>
@@ -551,9 +626,124 @@ logPageView($customer['id'], 'termine_suchen', [
                         </div>
                     `;
                 }).join('');
+
+                if (isInitialSearch) {
+                    const statusText = foundCount >= targetCount ?
+                        `✅ ${foundCount} Tage mit Terminen gefunden!` :
+                        `⚠️ ${foundCount} von ${targetCount} Tagen gefunden`;
+
+                    container.innerHTML = `
+                        <div class="success-message">
+                            <h3>${statusText}</h3>
+                            <p>Klicke auf eine Uhrzeit, um den Termin zu buchen.</p>
+                        </div>
+                        ${slotsHTML}
+                    `;
+
+                    continuationData = (foundCount > 0 && data.last_found_date) ? {
+                        service: serviceSlugToUse,
+                        lastDate: data.last_found_date,
+                        originalCount: originalTargetCount,
+                        currentTotal: foundCount
+                    } : null;
+                } else {
+                    document.querySelector('.continue-search-section')?.remove();
+                    container.insertAdjacentHTML('beforeend', `
+                        <div class="search-continuation-separator">
+                            <span>Weitere ${foundCount} Tage gefunden:</span>
+                        </div>
+                        ${slotsHTML}
+                    `);
+
+                    if (continuationData) {
+                        if (foundCount > 0 && data.last_found_date) {
+                            continuationData.lastDate = data.last_found_date;
+                            continuationData.currentTotal += foundCount;
+                        }
+                    }
+                }
+
+                if (data.can_search_more && continuationData && continuationData.lastDate) {
+                    document.querySelector('.continue-search-section')?.remove();
+
+                    container.insertAdjacentHTML('beforeend', `
+                        <div class="continue-search-section">
+                            <button id="continueSearchBtn" class="continue-search-btn">
+                                🔍 Weitere ${continuationData.originalCount} Tage suchen
+                            </button>
+                            <p class="continue-hint">
+                                Bisher ${continuationData.currentTotal} Tage mit freien Terminen gefunden
+                            </p>
+                        </div>
+                    `);
+
+                    const continueBtn = document.getElementById('continueSearchBtn');
+                    if (continueBtn) {
+                        continueBtn.addEventListener('click', continueSearch);
+                    }
+                } else {
+                    document.querySelector('.continue-search-section')?.remove();
+                }
+            } else if (isInitialSearch) {
+                container.innerHTML = `
+                    <div class="no-slots-message">
+                        <h3>Keine freien Termine gefunden</h3>
+                        <p>Bitte versuche es später erneut oder wähle einen anderen Service.</p>
+                    </div>
+                `;
+                continuationData = null;
+                document.querySelector('.continue-search-section')?.remove();
             }
-            
+
             resultsSection.style.display = 'block';
+        }
+
+        async function continueSearch() {
+            if (!continuationData || searchActive || !continuationData.lastDate) {
+                return;
+            }
+
+            const btn = document.getElementById('continueSearchBtn');
+            if (!btn) {
+                return;
+            }
+
+            btn.innerHTML = '⏳ Suche läuft...';
+            btn.disabled = true;
+            searchActive = true;
+
+            try {
+                const params = new URLSearchParams({
+                    service: continuationData.service,
+                    count: continuationData.originalCount,
+                    start_from: continuationData.lastDate,
+                    original_count: continuationData.originalCount
+                });
+
+                const response = await fetch(`slots_api.php?${params.toString()}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error, { preserveExisting: true });
+                    btn.innerHTML = `🔍 Weitere ${continuationData.originalCount} Tage suchen`;
+                    btn.disabled = false;
+                    return;
+                }
+
+                displaySlots(data, false, continuationData.service);
+            } catch (error) {
+                console.error('Continuation search error:', error);
+                showError('Fehler beim Laden weiterer Termine', { preserveExisting: true });
+                btn.innerHTML = `🔍 Weitere ${continuationData.originalCount} Tage suchen`;
+                btn.disabled = false;
+            } finally {
+                searchActive = false;
+            }
         }
 
         function trackBookingClick(serviceSlug, calendlyUrl) {
@@ -572,15 +762,34 @@ logPageView($customer['id'], 'termine_suchen', [
             window.open(calendlyUrl, '_blank');
         }
 
-        function showError(message) {
+        function showError(message, options = {}) {
+            const { preserveExisting = false } = options;
             const container = document.getElementById('slotsContainer');
-            container.innerHTML = `
+            const resultsSection = document.getElementById('resultsSection');
+
+            if (!container || !resultsSection) {
+                return;
+            }
+
+            const errorHtml = `
                 <div class="error-message">
                     <h3>Fehler</h3>
                     <p>${message}</p>
                 </div>
             `;
-            document.getElementById('resultsSection').style.display = 'block';
+
+            if (preserveExisting && container.innerHTML.trim() !== '') {
+                const existingError = container.querySelector('.error-message');
+                if (existingError) {
+                    existingError.remove();
+                }
+                container.insertAdjacentHTML('afterbegin', errorHtml);
+            } else {
+                container.innerHTML = errorHtml;
+                continuationData = null;
+            }
+
+            resultsSection.style.display = 'block';
         }
     </script>
 </body>

@@ -6,6 +6,13 @@ if (empty($_SESSION['admin'])) {
     exit;
 }
 
+$rate_limit_safe = isset($_GET['rate_limit_safe']);
+
+if ($rate_limit_safe) {
+    // Kurze Pause, damit sequenzielle Abrufe das Calendly-Limit nicht auslösen
+    usleep(300000); // 300ms Delay
+}
+
 function getPDO() {
     $config = require __DIR__ . '/config.php';
     return new PDO(
@@ -135,7 +142,7 @@ try {
     // Pagination through all events
     $all_events = [];
     $page_token = null;
-    $max_pages = 10; // Safety limit: max 1000 events
+    $max_pages = $rate_limit_safe ? 3 : 10; // Begrenzen bei sicherem Abruf, um API-Limits zu schützen
     $page_count = 0;
 
     $request_params = [
@@ -158,6 +165,10 @@ try {
     error_log("CALENDLY PARAMS: " . json_encode($request_params));
 
     do {
+        if ($rate_limit_safe && $page_count > 0) {
+            usleep(500000); // 500ms Pause zwischen den Seitenaufrufen
+        }
+
         $params = $request_params;
 
         if ($page_token) {

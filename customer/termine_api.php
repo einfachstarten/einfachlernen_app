@@ -25,6 +25,32 @@ $DAYS_AHEAD = 365;
 $TIMEZONE_OUT = 'Europe/Vienna';
 $INCLUDE_INVITEE_STATUS = true;
 
+// Enhanced configuration validation
+function validate_calendly_config($token, $org_uri, $email) {
+    $errors = [];
+
+    // Token validation
+    if (!$token || $token === 'PASTE_YOUR_TOKEN_HERE') {
+        $errors[] = 'Calendly Token nicht konfiguriert';
+    }
+
+    // Organization URI validation
+    if (!$org_uri || $org_uri === 'https://api.calendly.com/organizations/PASTE_ORG_ID') {
+        $errors[] = 'Calendly Organization URI nicht konfiguriert';
+    } elseif (!filter_var($org_uri, FILTER_VALIDATE_URL)) {
+        $errors[] = 'Calendly Organization URI ist keine gültige URL';
+    } elseif (!preg_match('/^https:\/\/api\.calendly\.com\/organizations\/[a-zA-Z0-9_-]+$/', $org_uri)) {
+        $errors[] = 'Calendly Organization URI hat falsches Format';
+    }
+
+    // Email validation
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Ungültige E-Mail-Adresse: ' . $email;
+    }
+
+    return $errors;
+}
+
 header('Content-Type: application/json; charset=utf-8');
 
 function json_error($msg, $code = 400) {
@@ -42,28 +68,44 @@ function api_get($url, $token) {
         CURLOPT_TIMEOUT => 25,
     ]);
     $res = curl_exec($ch);
-    if ($res === false) { 
-        return [null, 'Netzwerk-Fehler: '.curl_error($ch)]; 
+    if ($res === false) {
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+        return [null, 'Netzwerk-Fehler: ' . $curl_error];
     }
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    
-    if ($code < 200 || $code >= 300) { 
+
+    if ($code < 200 || $code >= 300) {
         $error_data = json_decode($res, true);
-        $error_msg = $error_data['message'] ?? "HTTP $code";
-        return [null, $error_msg]; 
+
+        // Enhanced error logging
+        $detailed_error = [
+            'http_code' => $code,
+            'response_body' => $res,
+            'calendly_message' => $error_data['message'] ?? null,
+            'calendly_details' => $error_data['details'] ?? null,
+            'request_url' => $url
+        ];
+        error_log("Calendly API Error Details: " . json_encode($detailed_error));
+
+        // Return user-friendly error with Calendly's specific message
+        $user_error = $error_data['message'] ?? "HTTP $code";
+        return [null, "Calendly API-Fehler: $user_error"];
     }
-    
+
     $json = json_decode($res, true);
-    if ($json === null) { 
-        return [null, 'Ungültige API-Antwort']; 
+    if ($json === null) {
+        return [null, 'Ungültige API-Antwort'];
     }
     return [$json, null];
 }
 
-// Validate configuration
-if (!$CALENDLY_TOKEN || !$ORG_URI) {
-    json_error('Server-Konfigurationsfehler', 500);
+// Validate configuration before API calls
+$config_errors = validate_calendly_config($CALENDLY_TOKEN, $ORG_URI, $email);
+if (!empty($config_errors)) {
+    error_log("Calendly Config Errors for user $email: " . implode(', ', $config_errors));
+    json_error('Server-Konfigurationsfehler: ' . implode(', ', $config_errors), 500);
 }
 
 try {
@@ -74,6 +116,17 @@ try {
     $min_start = $todayUtc->format('Y-m-d\TH:i:s\Z');
     $max_start = $toUtc->format('Y-m-d\TH:i:s\Z');
     
+    // Debug logging for problematic requests
+    $debug_info = [
+        'customer_email' => $email,
+        'org_uri' => $ORG_URI,
+        'min_start_time' => $min_start,
+        'max_start_time' => $max_start,
+        'token_prefix' => substr((string) $CALENDLY_TOKEN, 0, 8) . '...',
+        'timezone' => $TIMEZONE_OUT
+    ];
+    error_log("Calendly API Request Debug Info: " . json_encode($debug_info));
+
     // Fetch events from Calendly
     $base = 'https://api.calendly.com';
     $count = 50;
@@ -94,7 +147,7 @@ try {
         
         list($data, $err) = api_get($url, $CALENDLY_TOKEN);
         if ($err) {
-            json_error("Calendly API-Fehler: $err", 502);
+            json_error($err, 502);
         }
         
         $collection = $data['collection'] ?? [];

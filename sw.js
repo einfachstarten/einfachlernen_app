@@ -1,4 +1,4 @@
-const VERSION = 'v2.1.1'; // INCREMENT THIS FOR EACH UPDATE
+const VERSION = 'v2.4.0'; // INCREMENT THIS FOR EACH UPDATE
 const CACHE_NAME = `dashboard-${VERSION}`;
 const CRITICAL_CACHE = `critical-${VERSION}`;
 

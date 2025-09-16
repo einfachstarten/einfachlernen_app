@@ -1,149 +1,158 @@
 {
-  "name": "Anna Braun Lerncoaching",
-  "short_name": "Anna Braun",
-  "description": "Termine buchen und verwalten für ganzheitliches Lerncoaching",
-  "version": "2.1.0",
-  "start_url": "/einfachlernen/?pwa=true&v=2.1.0",
-  "id": "/einfachlernen/",
-  "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
-  "orientation": "portrait-primary",
-  "theme_color": "#4a90b8",
-  "background_color": "#e3f2fd",
-  "scope": "/einfachlernen/",
-  "lang": "de",
-  "dir": "ltr",
-  "categories": ["education", "productivity", "health"],
-  "iarc_rating_id": "e84b072d-71de-3dae-8f0c-662861a0e5b3",
-  "prefer_related_applications": false,
-  "scope_extensions": [
-    {
-      "origin": "https://www.einfachstarten.jetzt"
-    }
-  ],
-  "launch_handler": {
-    "client_mode": "navigate-existing"
-  },
-  "handle_links": "preferred",
-  "protocol_handlers": [
-    {
-      "protocol": "web+annabraun",
-      "url": "/einfachlernen/?action=%s"
-    }
-  ],
-  "file_handlers": [
-    {
-      "action": "/einfachlernen/",
-      "accept": {
-        "text/calendar": [".ics"]
-      },
-      "launch_type": "single-client"
-    }
-  ],
-  "edge_side_panel": {
-    "preferred_width": 400
-  },
-  "share_target": {
-    "action": "/einfachlernen/",
-    "method": "GET",
-    "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url"
-    }
-  },
-  "icons": [
-    {
-      "src": "android/android-launchericon-48-48.png",
-      "sizes": "48x48",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "android/android-launchericon-72-72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "android/android-launchericon-96-96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "android/android-launchericon-144-144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "android/android-launchericon-192-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "android/android-launchericon-192-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "android/android-launchericon-512-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "android/android-launchericon-512-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "screenshots/mobile-1.png",
-      "sizes": "640x1280",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Terminsuche in der App"
-    },
-    {
-      "src": "screenshots/mobile-2.png", 
-      "sizes": "640x1280",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Meine gebuchten Termine"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Termine suchen",
-      "short_name": "Suchen",
-      "description": "Freie Termine finden und buchen",
-      "url": "/einfachlernen/?tab=search",
-      "icons": [
+    "name": "Anna Braun Lerncoaching",
+    "short_name": "Anna Braun",
+    "description": "Termine buchen und verwalten f\u00fcr ganzheitliches Lerncoaching",
+    "version": "2.4.0",
+    "start_url": "\/einfachlernen\/?pwa=true&v=2.1.0",
+    "id": "\/einfachlernen\/",
+    "display": "standalone",
+    "display_override": [
+        "window-controls-overlay",
+        "standalone"
+    ],
+    "orientation": "portrait-primary",
+    "theme_color": "#4a90b8",
+    "background_color": "#e3f2fd",
+    "scope": "\/einfachlernen\/",
+    "lang": "de",
+    "dir": "ltr",
+    "categories": [
+        "education",
+        "productivity",
+        "health"
+    ],
+    "iarc_rating_id": "e84b072d-71de-3dae-8f0c-662861a0e5b3",
+    "prefer_related_applications": false,
+    "scope_extensions": [
         {
-          "src": "android/android-launchericon-96-96.png",
-          "sizes": "96x96",
-          "type": "image/png"
+            "origin": "https:\/\/www.einfachstarten.jetzt"
         }
-      ]
+    ],
+    "launch_handler": {
+        "client_mode": "navigate-existing"
     },
-    {
-      "name": "Meine Termine",
-      "short_name": "Termine",
-      "description": "Gebuchte Termine anzeigen",
-      "url": "/einfachlernen/?tab=appointments",
-      "icons": [
+    "handle_links": "preferred",
+    "protocol_handlers": [
         {
-          "src": "android/android-launchericon-96-96.png",
-          "sizes": "96x96",
-          "type": "image/png"
+            "protocol": "web+annabraun",
+            "url": "\/einfachlernen\/?action=%s"
         }
-      ]
-    }
-  ]
+    ],
+    "file_handlers": [
+        {
+            "action": "\/einfachlernen\/",
+            "accept": {
+                "text\/calendar": [
+                    ".ics"
+                ]
+            },
+            "launch_type": "single-client"
+        }
+    ],
+    "edge_side_panel": {
+        "preferred_width": 400
+    },
+    "share_target": {
+        "action": "\/einfachlernen\/",
+        "method": "GET",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url"
+        }
+    },
+    "icons": [
+        {
+            "src": "android\/android-launchericon-48-48.png",
+            "sizes": "48x48",
+            "type": "image\/png",
+            "purpose": "any"
+        },
+        {
+            "src": "android\/android-launchericon-72-72.png",
+            "sizes": "72x72",
+            "type": "image\/png",
+            "purpose": "any"
+        },
+        {
+            "src": "android\/android-launchericon-96-96.png",
+            "sizes": "96x96",
+            "type": "image\/png",
+            "purpose": "any"
+        },
+        {
+            "src": "android\/android-launchericon-144-144.png",
+            "sizes": "144x144",
+            "type": "image\/png",
+            "purpose": "any"
+        },
+        {
+            "src": "android\/android-launchericon-192-192.png",
+            "sizes": "192x192",
+            "type": "image\/png",
+            "purpose": "any"
+        },
+        {
+            "src": "android\/android-launchericon-192-192.png",
+            "sizes": "192x192",
+            "type": "image\/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "android\/android-launchericon-512-512.png",
+            "sizes": "512x512",
+            "type": "image\/png",
+            "purpose": "any"
+        },
+        {
+            "src": "android\/android-launchericon-512-512.png",
+            "sizes": "512x512",
+            "type": "image\/png",
+            "purpose": "maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "screenshots\/mobile-1.png",
+            "sizes": "640x1280",
+            "type": "image\/png",
+            "form_factor": "narrow",
+            "label": "Terminsuche in der App"
+        },
+        {
+            "src": "screenshots\/mobile-2.png",
+            "sizes": "640x1280",
+            "type": "image\/png",
+            "form_factor": "narrow",
+            "label": "Meine gebuchten Termine"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Termine suchen",
+            "short_name": "Suchen",
+            "description": "Freie Termine finden und buchen",
+            "url": "\/einfachlernen\/?tab=search",
+            "icons": [
+                {
+                    "src": "android\/android-launchericon-96-96.png",
+                    "sizes": "96x96",
+                    "type": "image\/png"
+                }
+            ]
+        },
+        {
+            "name": "Meine Termine",
+            "short_name": "Termine",
+            "description": "Gebuchte Termine anzeigen",
+            "url": "\/einfachlernen\/?tab=appointments",
+            "icons": [
+                {
+                    "src": "android\/android-launchericon-96-96.png",
+                    "sizes": "96x96",
+                    "type": "image\/png"
+                }
+            ]
+        }
+    ]
 }

@@ -883,8 +883,136 @@ setInterval(() => {
 </style>
 
 <script>
+const BOOKINGS_CACHE_TTL = 2 * 60 * 1000; // 2 Minuten Cache, um API-Last zu reduzieren
+const bookingsCache = new Map();
+const bookingRequestQueue = [];
+let bookingQueueProcessing = false;
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getCachedBookings(customerId) {
+    const entry = bookingsCache.get(customerId);
+    if (!entry) {
+        return null;
+    }
+
+    if (Date.now() - entry.timestamp > BOOKINGS_CACHE_TTL) {
+        bookingsCache.delete(customerId);
+        return null;
+    }
+
+    return entry;
+}
+
+function storeBookingsInCache(customerId, data) {
+    bookingsCache.set(customerId, {
+        data,
+        timestamp: Date.now()
+    });
+}
+
+function enqueueBookingRequest(task) {
+    return new Promise((resolve, reject) => {
+        bookingRequestQueue.push({ task, resolve, reject });
+        processBookingQueue();
+    });
+}
+
+async function processBookingQueue() {
+    if (bookingQueueProcessing) {
+        return;
+    }
+
+    bookingQueueProcessing = true;
+    while (bookingRequestQueue.length > 0) {
+        const { task, resolve, reject } = bookingRequestQueue.shift();
+        try {
+            const result = await task();
+            resolve(result);
+        } catch (error) {
+            reject(error);
+        }
+
+        if (bookingRequestQueue.length > 0) {
+            await wait(300); // kleine Pause zwischen Anfragen
+        }
+    }
+
+    bookingQueueProcessing = false;
+}
+
+function showCacheNotice(timestamp) {
+    const content = document.getElementById('bookingsContent');
+    if (!content) {
+        return;
+    }
+
+    const existingNotice = content.querySelector('[data-cache-notice="1"]');
+    if (existingNotice) {
+        existingNotice.remove();
+    }
+
+    const notice = document.createElement('div');
+    notice.setAttribute('data-cache-notice', '1');
+    notice.style.cssText = `
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:1rem;
+        background:#fff8e1;
+        border:1px solid #ffe0a3;
+        color:#8a6d3b;
+        padding:0.75rem 1rem;
+        border-radius:6px;
+        font-size:0.85rem;
+        margin-bottom:0.75rem;
+    `;
+
+    const minutesAgo = Math.floor((Date.now() - timestamp) / 60000);
+    const freshness = minutesAgo <= 0
+        ? 'vor weniger als einer Minute'
+        : `vor ${minutesAgo} Minute${minutesAgo === 1 ? '' : 'n'}`;
+
+    const textWrapper = document.createElement('div');
+    textWrapper.innerHTML = `
+        <strong>⚡ Zwischengespeicherte Termine</strong><br>
+        <small>Letzte Aktualisierung ${freshness}</small>
+    `;
+
+    const refreshBtn = document.createElement('button');
+    refreshBtn.textContent = 'Neu laden';
+    refreshBtn.style.cssText = `
+        background:#4a90b8;
+        color:white;
+        border:none;
+        padding:0.35rem 0.75rem;
+        border-radius:4px;
+        cursor:pointer;
+        font-size:0.8rem;
+    `;
+    refreshBtn.addEventListener('click', () => {
+        if (typeof window.currentBookingCustomerId !== 'undefined') {
+            bookingsCache.delete(window.currentBookingCustomerId);
+            showCustomerBookings(
+                window.currentBookingCustomerId,
+                window.currentBookingCustomerEmail || '',
+                window.currentBookingCustomerName || ''
+            );
+        }
+    });
+
+    notice.appendChild(textWrapper);
+    notice.appendChild(refreshBtn);
+    content.prepend(notice);
+}
+
 async function showCustomerBookings(customerId, email, name) {
     window.currentBookingCustomerId = customerId; // Store for quick actions
+    window.currentBookingCustomerEmail = email || '';
+    window.currentBookingCustomerName = name || '';
+
     const modal = document.getElementById('bookingsModal');
     const title = document.getElementById('bookingsTitle');
     const content = document.getElementById('bookingsContent');
@@ -892,25 +1020,63 @@ async function showCustomerBookings(customerId, email, name) {
     modal.style.display = 'block';
     title.textContent = `Termine von ${name}`;
 
+    const cachedEntry = getCachedBookings(customerId);
+    if (cachedEntry) {
+        displayBookings(cachedEntry.data);
+        showCacheNotice(cachedEntry.timestamp);
+        return;
+    }
+
+    const requestsAhead = bookingRequestQueue.length + (bookingQueueProcessing ? 1 : 0);
+    const queueNotice = requestsAhead > 0
+        ? `<div style="margin-top:0.35rem;color:#6c757d;font-size:0.8em;">⏳ Wartet auf ${requestsAhead} weitere Anfrage${requestsAhead === 1 ? '' : 'n'}</div>`
+        : '';
+
     content.innerHTML = `
         <div style="text-align:center;padding:2rem;">
             <div style="width:30px;height:30px;border:3px solid #f3f3f3;border-top:3px solid #4a90b8;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>
             <p style="margin-top:1rem;">Termine werden geladen...</p>
-            <small style="color:#6c757d;">Alle verfügbaren Termine der letzten 12 Monate</small>
+            <small style="color:#6c757d;">Einzelabruf zur Rate-Limit-Vermeidung</small>
+            ${queueNotice}
         </div>
     `;
 
     try {
-        const response = await fetch(`customer_bookings.php?customer_id=${customerId}`);
-        const data = await response.json();
+        await enqueueBookingRequest(async () => {
+            await wait(500); // kurze Pause vor dem API-Aufruf
 
-        if (data.success) {
+            const response = await fetch(`customer_bookings.php?customer_id=${customerId}&rate_limit_safe=1`, {
+                credentials: 'same-origin',
+                cache: 'no-store'
+            });
+
+            const responseText = await response.text();
+            let data;
+
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                throw new Error('Ungültige Antwort vom Server');
+            }
+
+            if (!response.ok) {
+                throw new Error(data && data.error ? data.error : `HTTP ${response.status}`);
+            }
+
+            if (!data.success) {
+                throw new Error(data.error || 'Unbekannter Fehler');
+            }
+
+            storeBookingsInCache(customerId, data);
             displayBookings(data);
-        } else {
-            content.innerHTML = `<div style="color:red;padding:1rem;">❌ ${data.error}</div>`;
-        }
+            return data;
+        });
     } catch (error) {
-        content.innerHTML = `<div style="color:red;padding:1rem;">❌ Fehler beim Laden der Termine: ${error.message}</div>`;
+        content.innerHTML = `<div style="color:red;padding:1rem;">❌ Rate Limit oder Timeout: ${error.message}</div>`;
     }
 }
 
@@ -1074,6 +1240,9 @@ async function doQuickAction(action, eventId, inviteeUuid = null) {
         const data = await response.json();
 
         if (data.success) {
+            if (currentCustomerId) {
+                bookingsCache.delete(currentCustomerId);
+            }
             if (data.action === 'redirect') {
                 window.open(data.url, '_blank');
                 showQuickActionResult(data.message, 'success');

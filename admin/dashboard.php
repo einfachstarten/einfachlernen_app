@@ -388,6 +388,7 @@ $email_stats = getEmailDeliveryStats(7);
     <a href="test_mail.php">E-Mail testen</a>
     <a href="analytics.php">Kunden-Analytics</a>
     <a href="migrate.php">Datenbank-Migration</a>
+    <a href="beta_messaging.php">🧪 Beta Messaging</a>
     <a href="?logout=1">Abmelden</a>
 </nav>
 <?php if(!empty($_GET['success'])): ?>

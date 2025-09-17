@@ -101,6 +101,26 @@ try {
         echo "<p style='color:red'>❌ customer_activities creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
     }
 
+    // Create beta messaging table (beta features)
+    echo "<h3>Creating beta_messages table (beta features):</h3>";
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS beta_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            from_admin BOOLEAN DEFAULT TRUE,
+            to_customer_email VARCHAR(100) NOT NULL,
+            message_text TEXT NOT NULL,
+            message_type ENUM('info', 'success', 'warning', 'question') DEFAULT 'info',
+            is_read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_customer_email (to_customer_email),
+            INDEX idx_unread (is_read, to_customer_email),
+            INDEX idx_created (created_at)
+        )");
+        echo "<p style='color:green'>✅ beta_messages table ready</p>";
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ beta_messages creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
+
     // Create analytics views
     echo "<h3>Creating analytics views:</h3>";
     try {

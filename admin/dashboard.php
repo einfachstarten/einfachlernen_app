@@ -148,19 +148,19 @@ foreach($customers as &$c) {
         $expires_timestamp = strtotime($c['pin_expires']);
         $now = time();
         if($expires_timestamp < $now){
-            $c['pin_status'] = '<span style="color:#dc3545">🔴 PIN Expired (' . date('H:i', $expires_timestamp) . ')</span>';
+            $c['pin_status'] = '<span class="pin-status-expired">🔴 PIN abgelaufen (' . date('H:i', $expires_timestamp) . ')</span>';
             $c['pin_status_raw'] = 'expired';
         } else {
             $remaining_minutes = round(($expires_timestamp - $now) / 60);
             if($remaining_minutes > 0) {
-                $c['pin_status'] = '<span style="color:#28a745">🟢 PIN Active (' . $remaining_minutes . ' min left)</span>';
+                $c['pin_status'] = '<span class="pin-status-active">🟢 PIN aktiv (' . $remaining_minutes . ' Min.)</span>';
             } else {
-                $c['pin_status'] = '<span style="color:#ffc107">🟡 PIN Expiring (&lt;1 min)</span>';
+                $c['pin_status'] = '<span class="pin-status-active">🟡 PIN läuft gleich ab (&lt;1 Min.)</span>';
             }
             $c['pin_status_raw'] = 'active';
         }
     } else {
-        $c['pin_status'] = '<span style="color:#6c757d">⚪ No PIN sent</span>';
+        $c['pin_status'] = '<span class="pin-status-none">⚪ Noch kein PIN versendet</span>';
         $c['pin_status_raw'] = 'none';
     }
 }
@@ -174,11 +174,162 @@ $email_stats = getEmailDeliveryStats(7);
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dashboard</title>
     <style>
-        body{font-family:Arial;margin:2em}
-        nav a{margin-right:1em;color:#52b3a4}
-        table{width:100%;border-collapse:collapse}
-        th,td{border:1px solid #ccc;padding:.4em;text-align:left}
-        th{background:#4a90b8;color:#fff}
+        /* Modern Dashboard Styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        header {
+            margin-bottom: 2rem;
+        }
+
+        header h2 {
+            color: #1e293b;
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Navigation */
+        nav {
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        nav a {
+            color: #4a90b8;
+            text-decoration: none;
+            margin-right: 2rem;
+            font-weight: 500;
+            padding: 0.5rem 0;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        nav a:hover {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+
+        /* Stats Section */
+        .stats-overview {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        .stats-overview p {
+            margin: 0;
+            font-size: 1.1rem;
+            color: #4a5568;
+        }
+
+        /* Table Container */
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Modern Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+        }
+
+        th {
+            background: #f7fafc;
+            color: #374151;
+            font-weight: 600;
+            padding: 1rem 0.75rem;
+            text-align: left;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 0.875rem 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Button Styles */
+        button {
+            background: #4a90b8;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Status Indicators */
+        .pin-status-active { color: #059669; font-weight: 600; }
+        .pin-status-expired { color: #dc2626; font-weight: 600; }
+        .pin-status-none { color: #6b7280; }
+
+        /* Alert Styles */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert-success {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
 
         /* Today's Schedule Styles */
         .schedule-item-now {
@@ -206,63 +357,91 @@ $email_stats = getEmailDeliveryStats(7);
             font-size: 11px;
             margin-left: 0.5rem;
         }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+
+            nav {
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            nav a {
+                margin-right: 0;
+                padding: 0.75rem;
+                background: #f8fafc;
+                border-radius: 6px;
+                text-align: center;
+            }
+
+            table { font-size: 0.8rem; }
+            th, td { padding: 0.5rem 0.25rem; }
+        }
     </style>
 </head>
 <body>
-<header><h2 style="color:#4a90b8">Dashboard</h2></header>
+<header><h2>🛠️ Admin-Dashboard</h2></header>
 <nav>
-    <a href="add_customer.php">Add Customer</a>
-    <a href="test_mail.php">Test Email</a>
-    <a href="analytics.php">Customer Analytics</a>
-    <a href="migrate.php">Database Migration</a>
-    <a href="?logout=1">Logout</a>
+    <a href="add_customer.php">Kunde hinzufügen</a>
+    <a href="test_mail.php">E-Mail testen</a>
+    <a href="analytics.php">Kunden-Analytics</a>
+    <a href="migrate.php">Datenbank-Migration</a>
+    <a href="?logout=1">Abmelden</a>
 </nav>
 <?php if(!empty($_GET['success'])): ?>
-    <div style="background:#d4edda;color:#155724;padding:1rem;border-radius:5px;margin-bottom:1rem;">
+    <div class="alert alert-success">
         ✅ <?=htmlspecialchars($_GET['success'])?>
     </div>
 <?php elseif(!empty($_GET['error'])): ?>
-    <div style="background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;margin-bottom:1rem;">
+    <div class="alert alert-error">
         ❌ <?=htmlspecialchars($_GET['error'])?>
     </div>
 <?php endif; ?>
-<p>Total customers: <?=$total?></p>
-<table>
-    <tr><th>Email</th><th>Name</th><th>Phone</th><th>Status</th><th>Created</th><th>PIN Status</th><th>Action</th><th>Activity</th><th>Bookings</th><th>Delete</th></tr>
-    <?php foreach($customers as $c): ?>
-    <tr>
-        <td><?=htmlspecialchars($c['email'])?></td>
-        <td><?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']))?></td>
-        <td><?=htmlspecialchars($c['phone'])?></td>
-        <td><?=htmlspecialchars($c['status'])?></td>
-        <td><?=htmlspecialchars($c['created_at'])?></td>
-        <td><?=$c['pin_status']?></td>
-        <td>
-            <form method="post" action="send_pin.php" style="margin:0;">
-                <input type="hidden" name="customer_id" value="<?=$c['id']?>">
-                <button type="submit">Send PIN</button>
-            </form>
-        </td>
-        <td><a href='?view_activity=<?=$c['id']?>'>View Activity</a></td>
-        <td>
-            <button onclick="showCustomerBookings(<?=$c['id']?>, '<?=htmlspecialchars($c['email'], ENT_QUOTES)?>', '<?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']), ENT_QUOTES)?>')"
-                    style="background:#4a90b8;color:white;border:none;padding:0.3em 0.6em;font-size:0.8em;border-radius:3px;cursor:pointer;">
-                📅 Termine
-            </button>
-        </td>
-        <td>
-            <form method="post" action="delete_customer.php" style="margin:0;display:inline;">
-                <input type="hidden" name="customer_id" value="<?=$c['id']?>">
-                <button type="submit"
-                        style="background:#dc3545;color:white;border:none;padding:0.3em 0.6em;font-size:0.8em;border-radius:3px;cursor:pointer;"
-                        onclick="return confirmDelete('<?=htmlspecialchars($c['email'])?>')">
-                    🗑️ Delete
+
+<div class="stats-overview">
+    <p>📊 Gesamt Kunden: <strong><?=$total?></strong></p>
+</div>
+
+<div class="table-container">
+    <table>
+        <tr><th>E-Mail</th><th>Name</th><th>Telefon</th><th>Status</th><th>Erstellt</th><th>PIN-Status</th><th>Aktion</th><th>Aktivität</th><th>Termine</th><th>Löschen</th></tr>
+        <?php foreach($customers as $c): ?>
+        <tr>
+            <td><?=htmlspecialchars($c['email'])?></td>
+            <td><?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']))?></td>
+            <td><?=htmlspecialchars($c['phone'])?></td>
+            <td><?=htmlspecialchars($c['status'])?></td>
+            <td><?=htmlspecialchars($c['created_at'])?></td>
+            <td><?=$c['pin_status']?></td>
+            <td>
+                <form method="post" action="send_pin.php" style="margin:0;" onsubmit="return confirmSendPin('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>')">
+                    <input type="hidden" name="customer_id" value="<?=$c['id']?>">
+                    <button type="submit">📧 PIN senden</button>
+                </form>
+            </td>
+            <td><a href='?view_activity=<?=$c['id']?>' style="color:#2563eb;font-weight:500;">Aktivitäten ansehen</a></td>
+            <td>
+                <button onclick="showCustomerBookings(<?=$c['id']?>, '<?=htmlspecialchars($c['email'], ENT_QUOTES)?>', '<?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']), ENT_QUOTES)?>')"
+                        style="background:#4a90b8;color:white;border:none;padding:0.3em 0.75em;font-size:0.85em;border-radius:6px;cursor:pointer;">
+                    📅 Termine
                 </button>
-            </form>
-        </td>
-    </tr>
-    <?php endforeach; ?>
-</table>
+            </td>
+            <td>
+                <form method="post" action="delete_customer.php" style="margin:0;display:inline;">
+                    <input type="hidden" name="customer_id" value="<?=$c['id']?>">
+                    <button type="submit"
+                            style="background:#dc3545;color:white;border:none;padding:0.3em 0.75em;font-size:0.85em;border-radius:6px;cursor:pointer;"
+                            onclick="return confirmDelete('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>')">
+                        🗑️ Löschen
+                    </button>
+                </form>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+    </table>
+</div>
 
 <?php
 $current_version = getCurrentVersionFromSW();
@@ -272,71 +451,71 @@ $sw_path = __DIR__ . '/../sw.js';
 ?>
 
 <div style='background:#f8f9fa;padding:1.5rem;margin:2rem 0;border:1px solid #dee2e6;border-radius:8px;'>
-    <h3 style='color:#4a90b8;margin-top:0;'>🚀 PWA Version Management</h3>
-    
+    <h3 style='color:#4a90b8;margin-top:0;'>🚀 PWA-Versionen verwalten</h3>
+
     <div style='display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0;'>
         <div style='background:white;padding:1rem;border-radius:6px;border:1px solid #e9ecef;'>
-            <h4 style='margin:0 0 0.5rem 0;color:#495057;'>Current Version</h4>
+            <h4 style='margin:0 0 0.5rem 0;color:#495057;'>Aktuelle Version</h4>
             <div style='font-size:1.5rem;font-weight:bold;color:#28a745;'>v<?= htmlspecialchars($current_version) ?></div>
             <div style='font-size:0.9rem;color:#6c757d;margin-top:0.5rem;'>
-                Major: <?= $version_parts['major'] ?> • 
-                Minor: <?= $version_parts['minor'] ?> • 
+                Major: <?= $version_parts['major'] ?> •
+                Minor: <?= $version_parts['minor'] ?> •
                 Patch: <?= $version_parts['patch'] ?>
             </div>
         </div>
-        
+
         <div style='background:white;padding:1rem;border-radius:6px;border:1px solid #e9ecef;'>
-            <h4 style='margin:0 0 0.5rem 0;color:#495057;'>File Status</h4>
+            <h4 style='margin:0 0 0.5rem 0;color:#495057;'>Dateistatus</h4>
             <div style='font-size:0.85rem;'>
-                <div><?= file_exists($sw_path) ? '✅' : '❌' ?> Service Worker: <?= file_exists($sw_path) ? date('Y-m-d H:i', filemtime($sw_path)) : 'Missing' ?></div>
-                <div><?= file_exists($manifest_path) ? '✅' : '❌' ?> Manifest: <?= file_exists($manifest_path) ? date('Y-m-d H:i', filemtime($manifest_path)) : 'Missing' ?></div>
+                <div><?= file_exists($sw_path) ? '✅' : '❌' ?> Service Worker: <?= file_exists($sw_path) ? date('Y-m-d H:i', filemtime($sw_path)) : 'Fehlt' ?></div>
+                <div><?= file_exists($manifest_path) ? '✅' : '❌' ?> Manifest: <?= file_exists($manifest_path) ? date('Y-m-d H:i', filemtime($manifest_path)) : 'Fehlt' ?></div>
             </div>
         </div>
     </div>
-    
+
     <!-- Version Update Controls -->
     <form method="POST" style='margin:1rem 0;'>
         <input type="hidden" name="action" value="update_version">
-        <h4 style='margin:0 0 1rem 0;color:#495057;'>Update Version:</h4>
-        
+        <h4 style='margin:0 0 1rem 0;color:#495057;'>Version aktualisieren:</h4>
+
         <div style='display:flex;gap:1rem;align-items:center;'>
-            <button type="submit" name="version_type" value="major" 
+            <button type="submit" name="version_type" value="major"
                     style='background:#dc3545;color:white;border:none;padding:0.75rem 1rem;border-radius:6px;cursor:pointer;font-weight:bold;'
-                    onclick='return confirm("Major Update (breaking changes)? Current: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'major') ?>")'>
-                🔴 Major Update<br>
+                    onclick='return confirm("Major-Update (Breaking Changes)? Aktuell: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'major') ?>")'>
+                🔴 Major-Update<br>
                 <small style='font-weight:normal;opacity:0.9;'>v<?= incrementVersion($current_version, 'major') ?></small>
             </button>
-            
-            <button type="submit" name="version_type" value="minor" 
+
+            <button type="submit" name="version_type" value="minor"
                     style='background:#ffc107;color:#212529;border:none;padding:0.75rem 1rem;border-radius:6px;cursor:pointer;font-weight:bold;'
-                    onclick='return confirm("Minor Update (new features)? Current: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'minor') ?>")'>
-                🟡 Minor Update<br>
+                    onclick='return confirm("Minor-Update (Neue Features)? Aktuell: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'minor') ?>")'>
+                🟡 Minor-Update<br>
                 <small style='font-weight:normal;opacity:0.8;'>v<?= incrementVersion($current_version, 'minor') ?></small>
             </button>
-            
-            <button type="submit" name="version_type" value="patch" 
+
+            <button type="submit" name="version_type" value="patch"
                     style='background:#28a745;color:white;border:none;padding:0.75rem 1rem;border-radius:6px;cursor:pointer;font-weight:bold;'
-                    onclick='return confirm("Patch Update (bugfixes)? Current: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'patch') ?>")'>
-                🟢 Patch Update<br>
+                    onclick='return confirm("Patch-Update (Bugfixes)? Aktuell: v<?= $current_version ?> → v<?= incrementVersion($current_version, 'patch') ?>")'>
+                🟢 Patch-Update<br>
                 <small style='font-weight:normal;opacity:0.9;'>v<?= incrementVersion($current_version, 'patch') ?></small>
             </button>
         </div>
     </form>
-    
+
     <!-- Emergency Controls -->
     <div style='border-top:1px solid #dee2e6;padding-top:1rem;margin-top:1rem;'>
-        <h5 style='margin:0 0 0.5rem 0;color:#495057;'>Emergency Controls:</h5>
+        <h5 style='margin:0 0 0.5rem 0;color:#495057;'>Notfall-Aktionen:</h5>
         <button onclick='forceClientUpdates()' style='background:#e74c3c;color:white;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;margin-right:0.5rem;'>
-            🚨 Force Client Update
+            🚨 Clients zum Update zwingen
         </button>
         <button onclick='clearAllCaches()' style='background:#95a5a6;color:white;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;'>
-            🗑️ Clear All Caches
+            🗑️ Alle Caches leeren
         </button>
     </div>
 
     <div style='margin-top:1rem;'>
         <button onclick='testManualUpdate()' style='background:#52b3a4;color:white;padding:0.5rem 1rem;text-decoration:none;border:none;border-radius:4px;cursor:pointer;'>
-            🔧 Test Manual Update
+            🔧 Manuelles Update testen
         </button>
     </div>
 </div>
@@ -401,7 +580,7 @@ if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
     $customer_info = $customer_stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$customer_info) {
-        echo "<div class='error'>Customer not found</div>";
+        echo "<div class='error'>Kunde nicht gefunden</div>";
     } else {
         require_once 'ActivityLogger.php';
         $logger = new ActivityLogger($pdo);
@@ -686,11 +865,11 @@ if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
     <div class="activity-stats">
         <div class="stat-card total">
             <div class="stat-number"><?= $stats['total'] ?></div>
-            <div class="stat-label">Total Activities</div>
+            <div class="stat-label">Aktivitäten gesamt</div>
         </div>
         <div class="stat-card auth">
             <div class="stat-number"><?= $stats['auth'] ?></div>
-            <div class="stat-label">Authentication</div>
+            <div class="stat-label">Authentifizierung</div>
         </div>
         <div class="stat-card navigation">
             <div class="stat-number"><?= $stats['navigation'] ?></div>
@@ -698,7 +877,7 @@ if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
         </div>
         <div class="stat-card booking">
             <div class="stat-number"><?= $stats['booking'] ?></div>
-            <div class="stat-label">Booking</div>
+            <div class="stat-label">Buchungen</div>
         </div>
         <div class="stat-card system">
             <div class="stat-number"><?= $stats['system'] ?></div>
@@ -706,27 +885,27 @@ if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
         </div>
         <div class="stat-card today">
             <div class="stat-number"><?= $stats['today'] ?></div>
-            <div class="stat-label">Today</div>
+            <div class="stat-label">Heute</div>
         </div>
         <div class="stat-card week">
             <div class="stat-number"><?= $stats['week'] ?></div>
-            <div class="stat-label">This Week</div>
+            <div class="stat-label">Diese Woche</div>
         </div>
     </div>
 
     <!-- Activity Filters -->
     <div class="activity-filters">
-        <button class="filter-btn active" data-filter="all">All Activities</button>
-        <button class="filter-btn" data-filter="auth">🔐 Authentication</button>
+        <button class="filter-btn active" data-filter="all">Alle Aktivitäten</button>
+        <button class="filter-btn" data-filter="auth">🔐 Authentifizierung</button>
         <button class="filter-btn" data-filter="navigation">🧭 Navigation</button>
-        <button class="filter-btn" data-filter="booking">📅 Booking</button>
+        <button class="filter-btn" data-filter="booking">📅 Buchungen</button>
         <button class="filter-btn" data-filter="system">⚙️ System</button>
     </div>
 
     <?php if (empty($activities)): ?>
         <div class="no-activities">
-            <h3>Keine Activities gefunden</h3>
-            <p>Dieser Customer hat noch keine getrackte Aktivitäten.</p>
+            <h3>Keine Aktivitäten gefunden</h3>
+            <p>Für diesen Kunden wurden noch keine Aktivitäten protokolliert.</p>
         </div>
     <?php else: ?>
         <!-- Activity Timeline -->
@@ -757,25 +936,25 @@ if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
 
                 // Format activity title
                 $titles = [
-                    'login' => 'Successfully logged in',
-                    'login_failed' => 'Login attempt failed',
-                    'logout' => 'Logged out',
-                    'pin_request' => 'PIN requested by admin',
-                    'session_timeout' => 'Session timed out',
-                    'dashboard_accessed' => 'Accessed dashboard',
-                    'page_view' => 'Viewed page',
-                    'profile_refreshed' => 'Profile data refreshed',
-                    'slots_api_called' => 'Searched for available slots',
-                    'service_viewed' => 'Viewed service details',
-                    'availability_checked' => 'Checked availability',
-                    'slots_found' => 'Found available slots',
-                    'slots_not_found' => 'No slots available',
-                    'booking_initiated' => 'Started booking process',
-                    'booking_completed' => 'Booking confirmed',
-                    'booking_failed' => 'Booking failed'
+                    'login' => 'Erfolgreich angemeldet',
+                    'login_failed' => 'Anmeldeversuch fehlgeschlagen',
+                    'logout' => 'Abgemeldet',
+                    'pin_request' => 'PIN durch Admin angefordert',
+                    'session_timeout' => 'Sitzung abgelaufen',
+                    'dashboard_accessed' => 'Dashboard aufgerufen',
+                    'page_view' => 'Seite angesehen',
+                    'profile_refreshed' => 'Profildaten aktualisiert',
+                    'slots_api_called' => 'Terminslots angefragt',
+                    'service_viewed' => 'Kursdetails angesehen',
+                    'availability_checked' => 'Verfügbarkeit geprüft',
+                    'slots_found' => 'Freie Slots gefunden',
+                    'slots_not_found' => 'Keine Slots gefunden',
+                    'booking_initiated' => 'Buchung gestartet',
+                    'booking_completed' => 'Buchung abgeschlossen',
+                    'booking_failed' => 'Buchung fehlgeschlagen'
                 ];
 
-                $title = $titles[$type] ?? ucfirst(str_replace('_', ' ', $type));
+                $title = $titles[$type] ?? ucwords(str_replace('_', ' ', $type));
             ?>
                 <div class="timeline-item" data-category="<?= $category ?>">
                     <div class="timeline-icon icon-<?= $category ?>">
@@ -791,7 +970,7 @@ if (isset($_GET['view_activity']) && is_numeric($_GET['view_activity'])) {
                         <?php if (!empty($data)): ?>
                             <div class="activity-details">
                                 <?php foreach ($data as $key => $value):
-                                    if (is_bool($value)) $value = $value ? 'true' : 'false';
+                                    if (is_bool($value)) $value = $value ? 'ja' : 'nein';
                                     if (is_array($value)) $value = json_encode($value);
 
                                     // Format key names
@@ -1389,17 +1568,18 @@ function refreshTodaysSchedule() {
 }
 </script>
 <script>
+function confirmSendPin(email) {
+    return confirm(
+        `Wirklich einen neuen PIN an ${email} senden?\n\n` +
+        `Ein neuer PIN überschreibt einen eventuell noch gültigen Code.`
+    );
+}
+
 function confirmDelete(email) {
     return confirm(
-        `🚨 CUSTOMER DELETION WARNING 🚨\n\n` +
-        `You are about to permanently delete:\n` +
-        `Email: ${email}\n\n` +
-        `This action will:\n` +
-        `✗ Delete the customer account\n` +
-        `✗ Delete all session data\n` +
-        `✗ Delete all activity history\n` +
-        `✗ Cannot be undone\n\n` +
-        `Are you absolutely sure?`
+        `⚠️ Kunde wirklich löschen?\n\n` +
+        `E-Mail: ${email}\n\n` +
+        `Diese Aktion löscht alle Kundendaten dauerhaft und kann nicht rückgängig gemacht werden.`
     );
 }
 </script>

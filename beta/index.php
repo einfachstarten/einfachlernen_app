@@ -1,13 +1,14 @@
 <?php
-// beta/index.php - CORRECTED BETA CUSTOMER APP
+// beta/index.php - Enhanced Beta Customer App with Live Messaging
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 session_start();
 
-// Function to get PDO connection
-function getPDO() {
+function getPDO(): PDO
+{
     $config = require __DIR__ . '/../admin/config.php';
+
     try {
         return new PDO(
             "mysql:host={$config['DB_HOST']};dbname={$config['DB_NAME']};charset=utf8mb4",
@@ -16,11 +17,10 @@ function getPDO() {
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
     } catch (PDOException $e) {
-        die('DB connection failed: ' . htmlspecialchars($e->getMessage()));
+        die('DB connection failed: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
     }
 }
 
-// Create beta_messages table if not exists
 try {
     $pdo = getPDO();
     $pdo->exec("CREATE TABLE IF NOT EXISTS beta_messages (
@@ -31,173 +31,675 @@ try {
         message_type ENUM('info', 'success', 'warning', 'question') DEFAULT 'info',
         is_read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        
         INDEX idx_customer_email (to_customer_email),
         INDEX idx_unread (is_read, to_customer_email),
         INDEX idx_created (created_at)
-    )");
-} catch (Exception $e) {
-    die('Beta table creation failed: ' . htmlspecialchars($e->getMessage()));
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+} catch (Throwable $e) {
+    die('Beta table creation failed: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
 }
 
-// Check if user is logged in first
 if (empty($_SESSION['customer_id']) || empty($_SESSION['session_authenticated'])) {
-    echo '<!DOCTYPE html>
-    <html><head><meta charset="UTF-8"><title>Beta Login Required</title></head>
-    <body style="font-family:Arial;text-align:center;padding:3rem;background:#f8fafc">
-        <h1>🧪 Beta App</h1>
-        <p>Bitte zuerst <a href="../login.php">einloggen</a> um die Beta-Funktionen zu nutzen.</p>
-        <div style="margin:2rem;padding:1rem;background:#fff3cd;border-radius:8px;color:#856404">
-            <strong>Debug Info:</strong><br>
-            Session ID: ' . session_id() . '<br>
-            Customer ID: ' . ($_SESSION['customer_id'] ?? 'not set') . '<br>
-            Authenticated: ' . ($_SESSION['session_authenticated'] ?? 'false') . '
-        </div>
-    </body></html>';
+    header('Location: ../login.php?message=' . urlencode('Bitte zuerst einloggen für Beta-Zugang'));
     exit;
 }
 
-// Get customer from database
 $stmt = $pdo->prepare('SELECT * FROM customers WHERE id = ?');
 $stmt->execute([$_SESSION['customer_id']]);
 $customer = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$customer) {
     session_destroy();
-    die('Customer not found in database. Please login again.');
+    die('Customer not found. Please login again.');
 }
 
-// BETA ACCESS CHECK - Only for test user
 if ($customer['email'] !== 'marcus@einfachstarten.jetzt') {
-    echo '<!DOCTYPE html>
-    <html><head><meta charset="UTF-8"><title>Beta Access</title></head>
-    <body style="font-family:Arial;text-align:center;padding:3rem;background:#f8fafc">
-        <h1>🧪 Beta Access</h1>
-        <p>Diese Beta-App ist nur für autorisierte Testuser zugänglich.</p>
-        <p>Aktueller User: <strong>' . htmlspecialchars($customer['email']) . '</strong></p>
-        <p>Benötigt: <strong>marcus@einfachstarten.jetzt</strong></p>
-        <p><a href="../customer/index.php">← Zur normalen Customer App</a></p>
-    </body></html>';
+    echo '<!DOCTYPE html>'
+        . '<html><head><meta charset="UTF-8"><title>Beta Access</title></head>'
+        . '<body style="font-family:Arial;text-align:center;padding:3rem;background:#f8fafc">'
+        . '<h1>🧪 Beta Access</h1>'
+        . '<p>Diese Beta-App ist nur für autorisierte Testuser zugänglich.</p>'
+        . '<p><a href="../customer/index.php">← Zur normalen Customer App</a></p>'
+        . '</body></html>';
     exit;
 }
 
-// Get unread messages for this user
-$stmt = $pdo->prepare('SELECT * FROM beta_messages WHERE to_customer_email = ? AND is_read = 0 ORDER BY created_at DESC');
-$stmt->execute([$customer['email']]);
-$messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-$icons = ['info' => 'ℹ️', 'success' => '✅', 'warning' => '⚠️', 'question' => '❓'];
-$hasMessages = !empty($messages);
-$messageListHtml = '';
-
-if ($hasMessages) {
-    foreach ($messages as $msg) {
-        $icon = $icons[$msg['message_type']] ?? 'ℹ️';
-        $messageListHtml .= '<div class="message ' . htmlspecialchars($msg['message_type']) . '">';
-        $messageTypeLabel = htmlspecialchars(ucfirst($msg['message_type']), ENT_QUOTES, 'UTF-8');
-        $messageListHtml .= '<div class="message-meta">📅 ' . date('d.m.Y H:i', strtotime($msg['created_at'])) . ' • ' . $icon . ' ' . $messageTypeLabel . '</div>';
-        $messageListHtml .= '<div class="message-text">' . nl2br(htmlspecialchars($msg['message_text'])) . '</div>';
-        $messageListHtml .= '<form method="post" style="margin:0;display:inline">';
-        $messageListHtml .= '<input type="hidden" name="message_id" value="' . (int) $msg['id'] . '">';
-        $messageListHtml .= '<input type="hidden" name="mark_read" value="1">';
-        $messageListHtml .= '<button type="submit" class="mark-read-btn">✓ Als gelesen markieren</button>';
-        $messageListHtml .= '</form>';
-        $messageListHtml .= '</div>';
-    }
-}
-
-// Handle mark as read
-if ($_POST['mark_read'] ?? false) {
+if (!empty($_POST['mark_read'])) {
     $messageId = isset($_POST['message_id']) ? (int) $_POST['message_id'] : 0;
+
     if ($messageId > 0) {
         $stmt = $pdo->prepare('UPDATE beta_messages SET is_read = 1 WHERE id = ? AND to_customer_email = ?');
         $stmt->execute([$messageId, $customer['email']]);
     }
-    header('Location: index.php');
+
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true]);
     exit;
 }
+
+if (!empty($_GET['ajax'])) {
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM beta_messages WHERE to_customer_email = ? AND is_read = 0');
+    $stmt->execute([$customer['email']]);
+    $unreadCount = (int) $stmt->fetchColumn();
+
+    $stmt = $pdo->prepare('SELECT id, message_text, message_type, created_at FROM beta_messages WHERE to_customer_email = ? AND is_read = 0 ORDER BY created_at DESC LIMIT 10');
+    $stmt->execute([$customer['email']]);
+
+    $unreadMessages = [];
+
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $unreadMessages[] = [
+            'id' => (int) $row['id'],
+            'message_text' => htmlspecialchars($row['message_text'], ENT_QUOTES, 'UTF-8'),
+            'message_type' => htmlspecialchars($row['message_type'], ENT_QUOTES, 'UTF-8'),
+            'created_at' => $row['created_at'],
+        ];
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode([
+        'unread_count' => $unreadCount,
+        'messages' => $unreadMessages,
+    ]);
+    exit;
+}
+
+$stmt = $pdo->prepare('SELECT COUNT(*) FROM beta_messages WHERE to_customer_email = ? AND is_read = 0');
+$stmt->execute([$customer['email']]);
+$initialUnreadCount = (int) $stmt->fetchColumn();
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>🧪 Beta Customer Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4a90b8">
+    <title>🧪 Beta Dashboard - Anna Braun Lerncoaching</title>
     <style>
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;background:#f8fafc}
-        .beta-banner{background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:0.75rem;text-align:center;font-weight:bold;animation:pulse 2s infinite}
-        @keyframes pulse{0%{opacity:1}50%{opacity:0.8}100%{opacity:1}}
-        .container{max-width:800px;margin:2rem auto;padding:0 1rem}
-        .welcome{background:white;padding:2rem;border-radius:12px;margin-bottom:2rem;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-        .debug-info{background:#fff3cd;color:#856404;padding:1rem;border-radius:8px;margin-bottom:2rem;font-size:0.875rem}
-        .messages-section{background:white;padding:2rem;border-radius:12px;margin-bottom:2rem;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-        .message{border-left:4px solid #4a90b8;padding:1rem;margin:1rem 0;background:#f8f9fa;border-radius:0 8px 8px 0}
-        .message.success{border-left-color:#28a745}
-        .message.warning{border-left-color:#ffc107}
-        .message.question{border-left-color:#6f42c1}
-        .message-meta{font-size:0.875rem;color:#6b7280;margin-bottom:0.5rem}
-        .message-text{color:#1f2937;line-height:1.6}
-        .mark-read-btn{background:#28a745;color:white;border:none;padding:0.25rem 0.75rem;border-radius:4px;cursor:pointer;font-size:0.75rem;margin-top:0.5rem}
-        .nav-links{text-align:center;margin:2rem 0}
-        .nav-links a{color:#4a90b8;text-decoration:none;margin:0 1rem;padding:0.5rem 1rem;border:1px solid #4a90b8;border-radius:6px;transition:all 0.2s;display:inline-block}
-        .nav-links a:hover{background:#4a90b8;color:white}
-        .beta-features{background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:2rem;border-radius:12px;margin:2rem 0}
+        :root {
+            --primary: #4a90b8;
+            --secondary: #52b3a4;
+            --accent-green: #7cb342;
+            --accent-teal: #26a69a;
+            --light-blue: #e3f2fd;
+            --white: #ffffff;
+            --gray-light: #f8f9fa;
+            --gray-medium: #6c757d;
+            --gray-dark: #343a40;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--light-blue) 0%, var(--white) 100%);
+            min-height: 100vh;
+            color: var(--gray-dark);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.5;
+        }
+
+        .beta-banner {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 0.5rem;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            animation: betaPulse 3s ease-in-out infinite;
+            position: relative;
+            overflow: hidden;
+        }
+
+        @keyframes betaPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.9; }
+        }
+
+        .beta-banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            animation: shimmer 4s linear infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        .app-container {
+            max-width: 800px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background: white;
+            box-shadow: 0 0 30px var(--shadow);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20px;
+            width: 100px;
+            height: 200%;
+            background: rgba(255, 255, 255, 0.1);
+            transform: rotate(15deg);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .user-avatar:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.6);
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
+        }
+
+        .message-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ff4757;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border: 2px solid white;
+            animation: badgePulse 2s infinite;
+            min-width: 24px;
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .user-info h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .user-info p {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .logout-btn {
+            margin-left: auto;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            text-decoration: none;
+        }
+
+        .app-content {
+            flex: 1;
+            padding: 1.5rem;
+        }
+
+        .message-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100vh;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+            z-index: 1001;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-panel.open {
+            right: 0;
+        }
+
+        .message-panel-header {
+            background: var(--primary);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-panel {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem;
+        }
+
+        .message-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .message-item {
+            border-left: 4px solid var(--primary);
+            background: #f8f9fa;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0 8px 8px 0;
+            transition: all 0.3s ease;
+        }
+
+        .message-item.success { border-left-color: var(--success); }
+        .message-item.warning { border-left-color: var(--warning); }
+        .message-item.question { border-left-color: #6f42c1; }
+
+        .message-meta {
+            font-size: 0.875rem;
+            color: var(--gray-medium);
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message-text {
+            color: var(--gray-dark);
+            line-height: 1.6;
+            margin-bottom: 0.75rem;
+        }
+
+        .mark-read-btn {
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .mark-read-btn:hover {
+            background: #218838;
+            transform: translateY(-1px);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .welcome-section {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: var(--light-blue);
+            border-radius: 16px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .welcome-section h2 {
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .action-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: 0 2px 10px var(--shadow);
+            border: 1px solid #f0f0f0;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--shadow);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .action-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        .action-content h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--gray-dark);
+        }
+
+        .action-content p {
+            margin: 0.25rem 0 0 0;
+            font-size: 0.85rem;
+            color: var(--gray-medium);
+        }
+
+        @media (max-width: 768px) {
+            .message-panel {
+                width: 100%;
+                right: -100%;
+            }
+
+            .actions-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-content {
+                gap: 0.75rem;
+            }
+
+            .user-avatar {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
+            }
+
+            .message-badge {
+                width: 20px;
+                height: 20px;
+                font-size: 0.65rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="beta-banner">
-        🧪 BETA VERSION - Experimentelle Features für <?=htmlspecialchars($customer['email'])?>
+        🧪 BETA VERSION - Experimentelle Features in Entwicklung
     </div>
-    
-    <div class="container">
-        <div class="debug-info">
-            <strong>🔍 Debug Info:</strong><br>
-            User: <?=htmlspecialchars($customer['first_name'])?> (<?=htmlspecialchars($customer['email'])?>)<br>
-            Session: <?=session_id()?><br>
-            Ungelesene Nachrichten: <?=count($messages)?><br>
-            Timestamp: <?=date('d.m.Y H:i:s')?>
+
+    <div class="app-container">
+        <div class="app-header">
+            <div class="header-content">
+                <div class="user-avatar" onclick="toggleMessagePanel()">
+                    👤
+                    <div class="message-badge" id="messageBadge" style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
+                        <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
+                    </div>
+                </div>
+                <div class="user-info">
+                    <h1>Beta-Modus: <?= htmlspecialchars($customer['first_name'], ENT_QUOTES, 'UTF-8'); ?></h1>
+                    <p>🧪 Testing new features</p>
+                </div>
+                <a href="../login.php?logout=1" class="logout-btn">
+                    🚪 Abmelden
+                </a>
+            </div>
         </div>
-        
-        <div class="welcome">
-            <h1>Willkommen in der Beta, <?=htmlspecialchars($customer['first_name'])?>! 👋</h1>
-            <p>Du nutzt die Beta-Version mit experimentellen Features. Alles hier ist Work-in-Progress!</p>
-        </div>
-        
-        <?php if ($hasMessages): ?>
-        <div class="messages-section">
-            <h2>📨 Neue Beta-Nachrichten (<?=count($messages)?>)</h2>
-            <p style="color:#6b7280;font-size:0.875rem;margin-bottom:1rem">
-                ℹ️ Diese Nachrichten kommen direkt vom Admin und sind nur in der Beta-Version sichtbar.
-            </p>
-            <?=$messageListHtml?>
-        </div>
-        <?php else: ?>
-        <div class="messages-section">
-            <h2>📨 Beta-Nachrichten</h2>
-            <p style="color:#6b7280;font-style:italic">Keine ungelesenen Nachrichten. Der Admin kann dir hier Updates und Feedback-Anfragen senden.</p>
-        </div>
-        <?php endif; ?>
-        
-        <div class="beta-features">
-            <h3>🚀 Beta Features in Entwicklung</h3>
-            <ul style="margin:1rem 0;padding-left:2rem">
-                <li>✅ Admin-Messaging System</li>
-                <li>🔄 Push Notifications (coming soon)</li>
-                <li>🔄 Erweiterte Booking Features</li>
-                <li>🔄 Dark Mode</li>
-                <li>🔄 Offline Capabilities</li>
-            </ul>
-        </div>
-        
-        <div class="nav-links">
-            <a href="../customer/index.php">📊 Normal Dashboard</a>
-            <a href="../customer/booking.php">📅 Termine buchen</a>
-            <a href="../customer/appointments.php">📋 Meine Termine</a>
-            <a href="../login.php?logout=1">🚪 Abmelden</a>
-        </div>
-        
-        <div style="text-align:center;margin:2rem 0;color:#6b7280;font-size:0.875rem">
-            <p>🧪 Du hilfst beim Testen neuer Features - Vielen Dank!</p>
+
+        <div class="app-content">
+            <div class="welcome-section">
+                <h2>Willkommen in der Beta-Umgebung!</h2>
+                <p>Hier testest du neue Features bevor sie für alle verfügbar sind. Klicke auf dein Profilbild um Nachrichten zu sehen.</p>
+            </div>
+
+            <div class="actions-grid">
+                <a href="../customer/booking.php" class="action-card">
+                    <div class="action-icon">📅</div>
+                    <div class="action-content">
+                        <h3>Termine buchen</h3>
+                        <p>Verfügbare Termine finden und buchen</p>
+                    </div>
+                </a>
+
+                <a href="../customer/appointments.php" class="action-card">
+                    <div class="action-icon">📋</div>
+                    <div class="action-content">
+                        <h3>Meine Termine</h3>
+                        <p>Gebuchte Termine verwalten</p>
+                    </div>
+                </a>
+
+                <a href="../customer/index.php" class="action-card">
+                    <div class="action-icon">🏠</div>
+                    <div class="action-content">
+                        <h3>Normal Dashboard</h3>
+                        <p>Zur Standard Customer App wechseln</p>
+                    </div>
+                </a>
+
+                <div class="action-card" style="border: 2px dashed #667eea; opacity: 0.7; cursor: default;">
+                    <div class="action-icon" style="background: #667eea;">🚀</div>
+                    <div class="action-content">
+                        <h3>Mehr Features Coming Soon</h3>
+                        <p>Push Notifications, Dark Mode, etc.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
+    <div class="overlay" id="overlay" onclick="closeMessagePanel()"></div>
+    <div class="message-panel" id="messagePanel">
+        <div class="message-panel-header">
+            <h3>📨 Beta Nachrichten</h3>
+            <button class="close-panel" type="button" onclick="closeMessagePanel()">×</button>
+        </div>
+        <div class="message-list" id="messageList"></div>
+    </div>
+
+    <script>
+        const messagePanel = document.getElementById('messagePanel');
+        const overlay = document.getElementById('overlay');
+        const messageBadge = document.getElementById('messageBadge');
+        const messageList = document.getElementById('messageList');
+
+        function toggleMessagePanel() {
+            if (messagePanel.classList.contains('open')) {
+                closeMessagePanel();
+            } else {
+                openMessagePanel();
+            }
+        }
+
+        function openMessagePanel() {
+            messagePanel.classList.add('open');
+            overlay.classList.add('active');
+            loadMessages();
+        }
+
+        function closeMessagePanel() {
+            messagePanel.classList.remove('open');
+            overlay.classList.remove('active');
+        }
+
+        function loadMessages() {
+            fetch('?ajax=1', { credentials: 'same-origin' })
+                .then((response) => response.json())
+                .then((data) => {
+                    updateMessageBadge(data.unread_count);
+                    renderMessages(Array.isArray(data.messages) ? data.messages : []);
+                })
+                .catch((error) => {
+                    console.error('Error loading messages:', error);
+                });
+        }
+
+        function renderMessages(messages) {
+            if (!messages.length) {
+                messageList.innerHTML = `
+                    <div style="text-align:center;padding:2rem;color:#6b7280;">
+                        <p>📭 Keine ungelesenen Nachrichten</p>
+                        <p style="font-size:0.875rem;margin-top:0.5rem;">Der Admin kann dir hier Updates senden</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const icons = {
+                info: 'ℹ️',
+                success: '✅',
+                warning: '⚠️',
+                question: '❓'
+            };
+
+            messageList.innerHTML = messages.map((msg) => {
+                const type = msg.message_type || 'info';
+                const icon = icons[type] || 'ℹ️';
+                const createdAt = new Date(msg.created_at).toLocaleString('de-DE');
+                const text = String(msg.message_text || '')
+                    .replace(/\n/g, '<br>');
+
+                return `
+                    <div class="message-item ${type}">
+                        <div class="message-meta">
+                            <span>${icon} ${type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                            <span>${createdAt}</span>
+                        </div>
+                        <div class="message-text">${text}</div>
+                        <button class="mark-read-btn" type="button" onclick="markAsRead(${Number(msg.id)})">
+                            ✓ Als gelesen markieren
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function markAsRead(messageId) {
+            if (!messageId) {
+                return;
+            }
+
+            fetch('', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `mark_read=1&message_id=${encodeURIComponent(messageId)}`,
+                credentials: 'same-origin'
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data && data.success) {
+                        loadMessages();
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error marking message as read:', error);
+                });
+        }
+
+        function updateMessageBadge(count) {
+            const parsed = Number(count) || 0;
+
+            if (parsed > 0) {
+                messageBadge.style.display = 'flex';
+                messageBadge.textContent = parsed > 99 ? '99+' : parsed;
+            } else {
+                messageBadge.style.display = 'none';
+            }
+        }
+
+        setInterval(() => {
+            fetch('?ajax=1', { credentials: 'same-origin' })
+                .then((response) => response.json())
+                .then((data) => {
+                    updateMessageBadge(data.unread_count);
+
+                    if (messagePanel.classList.contains('open')) {
+                        renderMessages(Array.isArray(data.messages) ? data.messages : []);
+                    }
+                })
+                .catch((error) => {
+                    console.error('Auto-refresh error:', error);
+                });
+        }, 30000);
+
+        loadMessages();
+    </script>
 </body>
 </html>

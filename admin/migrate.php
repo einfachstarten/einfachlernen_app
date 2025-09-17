@@ -110,15 +110,41 @@ try {
             to_customer_email VARCHAR(100) NOT NULL,
             message_text TEXT NOT NULL,
             message_type ENUM('info', 'success', 'warning', 'question') DEFAULT 'info',
-            is_read BOOLEAN DEFAULT FALSE,
+            expects_response TINYINT(1) DEFAULT 0,
+            response_question TEXT NULL,
+            is_read TINYINT(1) DEFAULT 0,
+            read_at DATETIME NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_customer_email (to_customer_email),
             INDEX idx_unread (is_read, to_customer_email),
             INDEX idx_created (created_at)
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        try { $pdo->exec("ALTER TABLE beta_messages ADD COLUMN expects_response TINYINT(1) DEFAULT 0 AFTER message_type"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE beta_messages ADD COLUMN response_question TEXT NULL AFTER expects_response"); } catch (Throwable $e) {}
+        try { $pdo->exec("ALTER TABLE beta_messages ADD COLUMN read_at DATETIME NULL AFTER is_read"); } catch (Throwable $e) {}
+
         echo "<p style='color:green'>✅ beta_messages table ready</p>";
     } catch (PDOException $e) {
         echo "<p style='color:red'>❌ beta_messages creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
+
+    echo "<h3>Creating beta_message_responses table:</h3>";
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS beta_message_responses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            message_id INT NOT NULL,
+            customer_email VARCHAR(100) NOT NULL,
+            response_type ENUM('yes','no') NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_response (message_id, customer_email),
+            INDEX idx_response_email (customer_email),
+            CONSTRAINT fk_beta_message_response FOREIGN KEY (message_id)
+                REFERENCES beta_messages(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        echo "<p style='color:green'>✅ beta_message_responses table ready</p>";
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ beta_message_responses creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
     }
 
     // Create analytics views

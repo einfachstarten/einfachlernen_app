@@ -1,13 +1,9 @@
 <?php
-// admin/beta_messaging.php - ADMIN MESSAGING INTERFACE
+// admin/beta_messaging.php - Korrigierter Admin Bereich
 session_start();
-if (empty($_SESSION['admin'])) {
-    header('Location: login.php');
-    exit;
-}
+if(empty($_SESSION['admin'])){header('Location: login.php');exit;}
 
-function getPDO()
-{
+function getPDO() {
     $config = require __DIR__ . '/config.php';
     return new PDO(
         "mysql:host={$config['DB_HOST']};dbname={$config['DB_NAME']};charset=utf8mb4",
@@ -19,7 +15,7 @@ function getPDO()
 
 $pdo = getPDO();
 
-// Create table if not exists (beta feature safeguard)
+// Create table automatically
 $pdo->exec("CREATE TABLE IF NOT EXISTS beta_messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
     from_admin BOOLEAN DEFAULT TRUE,
@@ -28,6 +24,7 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS beta_messages (
     message_type ENUM('info', 'success', 'warning', 'question') DEFAULT 'info',
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     INDEX idx_customer_email (to_customer_email),
     INDEX idx_unread (is_read, to_customer_email),
     INDEX idx_created (created_at)
@@ -35,20 +32,31 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS beta_messages (
 
 $success = '';
 
-// Send message
-if (($_POST['action'] ?? '') === 'send' && isset($_POST['message'])) {
-    $message = trim($_POST['message']);
-    $allowed_types = ['info', 'success', 'warning', 'question'];
-    $message_type = in_array($_POST['type'] ?? 'info', $allowed_types, true) ? $_POST['type'] : 'info';
+// Check if beta user exists
+$beta_user_check = $pdo->prepare('SELECT * FROM customers WHERE email = ?');
+$beta_user_check->execute(['marcus@einfachstarten.jetzt']);
+$beta_user = $beta_user_check->fetch(PDO::FETCH_ASSOC);
 
+if (!$beta_user) {
+    echo '<div style="background:#f8d7da;color:#721c24;padding:1rem;border-radius:5px;margin:2rem;text-align:center">
+        ❌ Beta-User marcus@einfachstarten.jetzt nicht in der Datenbank gefunden!<br>
+        Bitte erst den User anlegen bevor das Messaging getestet wird.
+    </div>';
+    exit;
+}
+
+// Send message
+if (($_POST['action'] ?? '') === 'send') {
+    $message = trim($_POST['message'] ?? '');
+    $type = $_POST['type'] ?? 'info';
+    $allowedTypes = ['info', 'success', 'warning', 'question'];
     if ($message !== '') {
+        if (!in_array($type, $allowedTypes, true)) {
+            $type = 'info';
+        }
         $stmt = $pdo->prepare('INSERT INTO beta_messages (to_customer_email, message_text, message_type) VALUES (?, ?, ?)');
-        $stmt->execute([
-            'marcus@einfachstarten.jetzt',
-            $message,
-            $message_type
-        ]);
-        $success = '✅ Beta-Nachricht an marcus@einfachstarten.jetzt gesendet!';
+        $stmt->execute(['marcus@einfachstarten.jetzt', $message, $type]);
+        $success = "✅ Beta-Nachricht erfolgreich gesendet!";
     }
 }
 
@@ -63,8 +71,9 @@ $message_history = $messages->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8">
     <title>🧪 Beta Messaging</title>
     <style>
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:2rem;background:#f8fafc;color:#1f2937}
-        .container{max-width:800px;margin:0 auto}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:2rem;background:#f8fafc}
+        .container{max-width:900px;margin:0 auto}
+        .header{background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:2rem;border-radius:12px;margin-bottom:2rem;text-align:center}
         .send-form{background:white;padding:2rem;border-radius:12px;margin-bottom:2rem;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
         .history{background:white;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
         .message{border-left:4px solid #4a90b8;padding:1rem;margin:1rem 0;background:#f8f9fa;border-radius:0 8px 8px 0}
@@ -75,58 +84,73 @@ $message_history = $messages->fetchAll(PDO::FETCH_ASSOC);
         button:hover{background:#2563eb;transform:translateY(-1px)}
         textarea{width:100%;min-height:120px;resize:vertical}
         .beta-badge{background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:0.5rem 1rem;border-radius:20px;font-size:0.875rem;font-weight:bold}
-        .back-link{color:#2563eb;text-decoration:none}
-        .back-link:hover{text-decoration:underline}
+        .user-info{background:#e3f2fd;padding:1rem;border-radius:8px;margin:1rem 0}
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🧪 Beta Messaging System</h1>
-    <p><a class="back-link" href="dashboard.php">← Zurück zum Dashboard</a></p>
-    <p><span class="beta-badge">BETA FEATURE</span> Nur für marcus@einfachstarten.jetzt</p>
-
-    <?php if ($success): ?>
+    <div class="header">
+        <h1>🧪 Beta Messaging System</h1>
+        <p>Direkter Kommunikationskanal mit Beta-Usern</p>
+    </div>
+    
+    <p><a href="dashboard.php">← Zurück zum Dashboard</a></p>
+    
+    <div class="user-info">
+        <strong>Beta-User Status:</strong><br>
+        Name: <?=htmlspecialchars($beta_user['first_name'] . ' ' . $beta_user['last_name'])?><br>
+        Email: <?=htmlspecialchars($beta_user['email'])?><br>
+        Status: <?=htmlspecialchars($beta_user['status'])?><br>
+        Registriert: <?=htmlspecialchars($beta_user['created_at'])?>
+    </div>
+    
+    <?php if(!empty($success)): ?>
         <div class="success"><?=$success?></div>
     <?php endif; ?>
-
+    
     <div class="send-form">
         <h3>📤 Nachricht an Beta-User senden</h3>
         <form method="post">
             <input type="hidden" name="action" value="send">
-
-            <p><strong>Empfänger:</strong> marcus@einfachstarten.jetzt</p>
-
-            <select name="type" style="width:200px">
-                <option value="info">ℹ️ Information</option>
+            
+            <p><strong>Empfänger:</strong> <?=htmlspecialchars($beta_user['first_name'])?> (marcus@einfachstarten.jetzt)</p>
+            
+            <select name="type" style="width:250px">
+                <option value="info">ℹ️ Information/Update</option>
                 <option value="success">✅ Erfolg/Bestätigung</option>
-                <option value="warning">⚠️ Warnung/Hinweis</option>
-                <option value="question">❓ Frage/Feedback</option>
+                <option value="warning">⚠️ Warnung/Wichtiger Hinweis</option>
+                <option value="question">❓ Frage/Feedback benötigt</option>
             </select>
+            
+            <textarea name="message" placeholder="Beta-Nachricht eingeben... 
 
-            <textarea name="message" placeholder="Nachricht eingeben..." required></textarea>
-
+Beispiele:
+- Neues Feature xyz ist verfügbar zum Testen
+- Bitte teste die neue Booking-Funktion und gib Feedback
+- Warnung: Beta-System wird morgen um 14:00 neu gestartet" required></textarea>
+            
             <button type="submit">📨 Beta-Nachricht senden</button>
         </form>
     </div>
-
+    
     <div class="history">
         <h3>📋 Nachrichten-Verlauf (<?=count($message_history)?>)</h3>
-        <?php if (empty($message_history)): ?>
-            <p style="color:#6b7280;font-style:italic">Noch keine Nachrichten gesendet.</p>
+        <?php if(empty($message_history)): ?>
+            <p style="color:#6b7280;font-style:italic">Noch keine Nachrichten gesendet. Schicke die erste Beta-Nachricht!</p>
         <?php else: ?>
-            <?php foreach ($message_history as $msg): ?>
+            <?php foreach($message_history as $msg): ?>
             <div class="message <?=$msg['is_read'] ? 'read' : ''?>">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
                     <span style="font-size:0.875rem;color:#6b7280">
-                        <?=date('d.m.Y H:i', strtotime($msg['created_at']))?> •
+                        <?=date('d.m.Y H:i', strtotime($msg['created_at']))?> • 
                         <?php
                         $icons = ['info' => 'ℹ️', 'success' => '✅', 'warning' => '⚠️', 'question' => '❓'];
                         echo $icons[$msg['message_type']] ?? 'ℹ️';
                         ?>
                         <?=ucfirst($msg['message_type'])?>
                     </span>
-                    <span style="font-size:0.75rem;color:<?=$msg['is_read'] ? '#28a745' : '#dc3545'?>">
-                        <?=$msg['is_read'] ? '✓ Gelesen' : '● Ungelesen'?>
+                    <span style="font-size:0.75rem;color:<?=$msg['is_read'] ? '#28a745' : '#dc3545'?>;font-weight:bold">
+                        <?=$msg['is_read'] ? '✓ GELESEN' : '● UNGELESEN'?>
                     </span>
                 </div>
                 <div><?=nl2br(htmlspecialchars($msg['message_text']))?></div>

@@ -39,7 +39,7 @@ try {
     // Add missing columns
     $migrations = [
         'pin' => "ALTER TABLE customers ADD COLUMN pin VARCHAR(255) NULL",
-        'pin_expires' => "ALTER TABLE customers ADD COLUMN pin_expires DATETIME NULL", 
+        'pin_expires' => "ALTER TABLE customers ADD COLUMN pin_expires DATETIME NULL",
         'last_login' => "ALTER TABLE customers ADD COLUMN last_login DATETIME NULL"
     ];
     
@@ -57,6 +57,26 @@ try {
         }
     }
     
+    echo "<h3>Adding beta_access column:</h3>";
+    try {
+        $pdo->exec("ALTER TABLE customers ADD COLUMN beta_access TINYINT(1) DEFAULT 0");
+        echo "<p style='color:green'>✅ beta_access column added</p>";
+    } catch (PDOException $e) {
+        if ($e->getCode() === '42S21') {
+            echo "<p style='color:orange'>⚠️ beta_access column already exists</p>";
+        } else {
+            echo "<p style='color:red'>❌ Failed to add beta_access: " . htmlspecialchars($e->getMessage()) . "</p>";
+        }
+    }
+
+    try {
+        $stmt = $pdo->prepare("UPDATE customers SET beta_access = 1 WHERE email IN (?, ?)");
+        $stmt->execute(['marcus@einfachstarten.jetzt', 'annabraun@outlook.com']);
+        echo "<p style='color:green'>✅ Beta access enabled for existing beta users</p>";
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ Failed to update beta users: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
+
     // Create customer_sessions table if not exists
     echo "<h3>Creating customer_sessions table:</h3>";
     try {
@@ -168,7 +188,7 @@ try {
         $final_columns[] = $row['Field'];
     }
     
-    $required_columns = ['id', 'email', 'first_name', 'last_name', 'phone', 'status', 'created_at', 'pin', 'pin_expires', 'last_login'];
+    $required_columns = ['id', 'email', 'first_name', 'last_name', 'phone', 'status', 'created_at', 'pin', 'pin_expires', 'last_login', 'beta_access'];
     
     foreach ($required_columns as $req_col) {
         if (in_array($req_col, $final_columns)) {

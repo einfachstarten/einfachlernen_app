@@ -22,13 +22,16 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS beta_messages (
     to_customer_email VARCHAR(100) NOT NULL,
     message_text TEXT NOT NULL,
     message_type ENUM('info', 'success', 'warning', 'question') DEFAULT 'info',
+    expects_response TINYINT(1) DEFAULT 0,
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     INDEX idx_customer_email (to_customer_email),
     INDEX idx_unread (is_read, to_customer_email),
     INDEX idx_created (created_at)
 )");
+try { $pdo->exec("ALTER TABLE beta_messages ADD COLUMN expects_response TINYINT(1) DEFAULT 0"); } catch (PDOException $e) { if ($e->getCode() !== '42S21') { throw $e; } }
+$pdo->exec("CREATE TABLE IF NOT EXISTS beta_responses (id INT AUTO_INCREMENT PRIMARY KEY, message_id INT NOT NULL UNIQUE, response ENUM('yes','no') NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (message_id) REFERENCES beta_messages(id) ON DELETE CASCADE)");
 
 $success = '';
 
@@ -50,12 +53,13 @@ if (($_POST['action'] ?? '') === 'send') {
     $message = trim($_POST['message'] ?? '');
     $type = $_POST['type'] ?? 'info';
     $allowedTypes = ['info', 'success', 'warning', 'question'];
+    $expectsResponse = !empty($_POST['expects_response']) ? 1 : 0;
     if ($message !== '') {
         if (!in_array($type, $allowedTypes, true)) {
             $type = 'info';
         }
-        $stmt = $pdo->prepare('INSERT INTO beta_messages (to_customer_email, message_text, message_type) VALUES (?, ?, ?)');
-        $stmt->execute(['marcus@einfachstarten.jetzt', $message, $type]);
+        $stmt = $pdo->prepare('INSERT INTO beta_messages (to_customer_email, message_text, message_type, expects_response) VALUES (?, ?, ?, ?)');
+        $stmt->execute(['marcus@einfachstarten.jetzt', $message, $type, $expectsResponse]);
         $success = "✅ Beta-Nachricht erfolgreich gesendet!";
     }
 }
@@ -64,6 +68,9 @@ if (($_POST['action'] ?? '') === 'send') {
 $messages = $pdo->prepare('SELECT * FROM beta_messages WHERE to_customer_email = ? ORDER BY created_at DESC LIMIT 20');
 $messages->execute(['marcus@einfachstarten.jetzt']);
 $message_history = $messages->fetchAll(PDO::FETCH_ASSOC);
+$response_stats_stmt = $pdo->prepare('SELECT m.message_text, SUM(r.response = "yes") AS yes_count, SUM(r.response = "no") AS no_count FROM beta_messages m LEFT JOIN beta_responses r ON r.message_id = m.id WHERE m.to_customer_email = ? AND m.expects_response = 1 GROUP BY m.id, m.message_text ORDER BY m.created_at DESC LIMIT 20');
+$response_stats_stmt->execute(['marcus@einfachstarten.jetzt']);
+$response_stats = $response_stats_stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html>
@@ -121,8 +128,9 @@ $message_history = $messages->fetchAll(PDO::FETCH_ASSOC);
                 <option value="warning">⚠️ Warnung/Wichtiger Hinweis</option>
                 <option value="question">❓ Frage/Feedback benötigt</option>
             </select>
-            
-            <textarea name="message" placeholder="Beta-Nachricht eingeben... 
+            <label style="display:block;margin:0.5rem 0 0.75rem 0;font-weight:500;"><input type="checkbox" name="expects_response" value="1"> Ja/Nein Frage?</label>
+
+            <textarea name="message" placeholder="Beta-Nachricht eingeben...
 
 Beispiele:
 - Neues Feature xyz ist verfügbar zum Testen
@@ -153,11 +161,16 @@ Beispiele:
                         <?=$msg['is_read'] ? '✓ GELESEN' : '● UNGELESEN'?>
                     </span>
                 </div>
-                <div><?=nl2br(htmlspecialchars($msg['message_text']))?></div>
+                <div><?=nl2br(htmlspecialchars($msg['message_text']))?></div><?php if(!empty($msg['expects_response'])) echo '<div style="margin-top:0.5rem;font-size:0.85rem;color:#4a90b8;font-weight:600;">Antwort erwartet: Ja/Nein</div>'; ?>
             </div>
             <?php endforeach; ?>
         <?php endif; ?>
     </div>
+    <?php if(!empty($response_stats)): ?>
+    <div class="history" style="margin-top:1.5rem;"><h3>🗳️ Antworten</h3><ul style="list-style:none;padding:0;margin:0;">
+        <?php foreach($response_stats as $stat): ?><li style="margin:0.5rem 0;padding:0.5rem 0;border-bottom:1px solid #e5e7eb;"><strong><?=htmlspecialchars(mb_strimwidth($stat['message_text'], 0, 80, '…'))?></strong><br><span style="font-size:0.9rem;color:#4a5568;">Ja: <?= (int)($stat['yes_count'] ?? 0) ?>x • Nein: <?= (int)($stat['no_count'] ?? 0) ?>x</span></li><?php endforeach; ?>
+    </ul></div>
+    <?php endif; ?>
 </div>
 </body>
 </html>

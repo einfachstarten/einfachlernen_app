@@ -150,7 +150,7 @@ Beispiele:
             <div class="message <?=$msg['is_read'] ? 'read' : ''?>">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
                     <span style="font-size:0.875rem;color:#6b7280">
-                        <?=date('d.m.Y H:i', strtotime($msg['created_at']))?> • 
+                        <?=date('d.m.Y H:i', strtotime($msg['created_at']))?> •
                         <?php
                         $icons = ['info' => 'ℹ️', 'success' => '✅', 'warning' => '⚠️', 'question' => '❓'];
                         echo $icons[$msg['message_type']] ?? 'ℹ️';
@@ -161,15 +161,41 @@ Beispiele:
                         <?=$msg['is_read'] ? '✓ GELESEN' : '● UNGELESEN'?>
                     </span>
                 </div>
-                <div><?=nl2br(htmlspecialchars($msg['message_text']))?></div><?php if(!empty($msg['expects_response'])) echo '<div style="margin-top:0.5rem;font-size:0.85rem;color:#4a90b8;font-weight:600;">Antwort erwartet: Ja/Nein</div>'; ?>
+                <div><?=nl2br(htmlspecialchars($msg['message_text']))?></div>
+                <?php if(!empty($msg['expects_response'])): ?>
+                    <div style="color:#3b82f6;font-size:0.875rem;margin-top:0.5rem;">
+                        Antwort erwartet: Ja/Nein
+                    </div>
+                <?php endif; ?>
             </div>
             <?php endforeach; ?>
         <?php endif; ?>
     </div>
     <?php if(!empty($response_stats)): ?>
-    <div class="history" style="margin-top:1.5rem;"><h3>🗳️ Antworten</h3><ul style="list-style:none;padding:0;margin:0;">
-        <?php foreach($response_stats as $stat): ?><li style="margin:0.5rem 0;padding:0.5rem 0;border-bottom:1px solid #e5e7eb;"><strong><?=htmlspecialchars(mb_strimwidth($stat['message_text'], 0, 80, '…'))?></strong><br><span style="font-size:0.9rem;color:#4a5568;">Ja: <?= (int)($stat['yes_count'] ?? 0) ?>x • Nein: <?= (int)($stat['no_count'] ?? 0) ?>x</span></li><?php endforeach; ?>
-    </ul></div>
+    <div style="background:white;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin-top:2rem;">
+        <h3>📊 Ja/Nein Antworten</h3>
+        <?php foreach($response_stats as $stat): ?>
+            <?php
+            $yesCount = (int)($stat['yes_count'] ?? 0);
+            $noCount = (int)($stat['no_count'] ?? 0);
+            if(($yesCount > 0) || ($noCount > 0)):
+            ?>
+            <div style="border:1px solid #e5e7eb;border-radius:8px;padding:1rem;margin:1rem 0;">
+                <div style="font-weight:600;margin-bottom:1rem;">"<?=htmlspecialchars($stat['message_text'])?>"</div>
+                <div style="display:flex;gap:1rem;text-align:center;">
+                    <div style="background:#dcfce7;padding:1rem;border-radius:6px;flex:1;">
+                        <div style="font-size:1.5rem;font-weight:bold;color:#15803d;"><?=$yesCount?></div>
+                        <div style="color:#15803d;">✅ Ja</div>
+                    </div>
+                    <div style="background:#fef2f2;padding:1rem;border-radius:6px;flex:1;">
+                        <div style="font-size:1.5rem;font-weight:bold;color:#dc2626;"><?=$noCount?></div>
+                        <div style="color:#dc2626;">❌ Nein</div>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
     <?php endif; ?>
 </div>
 </body>

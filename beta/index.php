@@ -29,12 +29,15 @@ try {
         to_customer_email VARCHAR(100) NOT NULL,
         message_text TEXT NOT NULL,
         message_type ENUM('info', 'success', 'warning', 'question') DEFAULT 'info',
+        expects_response TINYINT(1) DEFAULT 0,
         is_read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_customer_email (to_customer_email),
         INDEX idx_unread (is_read, to_customer_email),
         INDEX idx_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+    try { $pdo->exec("ALTER TABLE beta_messages ADD COLUMN expects_response TINYINT(1) DEFAULT 0"); } catch (PDOException $e) { if ($e->getCode() !== '42S21') { throw $e; } }
+    $pdo->exec("CREATE TABLE IF NOT EXISTS beta_responses (id INT AUTO_INCREMENT PRIMARY KEY, message_id INT NOT NULL UNIQUE, response ENUM('yes','no') NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (message_id) REFERENCES beta_messages(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 } catch (Throwable $e) {
     die('Beta table creation failed: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
 }
@@ -64,6 +67,22 @@ if ($customer['email'] !== 'marcus@einfachstarten.jetzt') {
     exit;
 }
 
+if (!empty($_POST['respond'])) {
+    header('Content-Type: application/json');
+    $messageId = (int)($_POST['message_id'] ?? 0); $choice = $_POST['response'] ?? '';
+    if ($messageId && in_array($choice, ['yes', 'no'], true)) {
+        $check = $pdo->prepare('SELECT expects_response FROM beta_messages WHERE id = ? AND to_customer_email = ?');
+        $check->execute([$messageId, $customer['email']]);
+        $message = $check->fetch(PDO::FETCH_ASSOC);
+        if ($message && !empty($message['expects_response'])) {
+            $pdo->prepare('INSERT INTO beta_responses (message_id, response) VALUES (?, ?) ON DUPLICATE KEY UPDATE response = VALUES(response), created_at = CURRENT_TIMESTAMP')->execute([$messageId, $choice]);
+            $pdo->prepare('UPDATE beta_messages SET is_read = 1 WHERE id = ? AND to_customer_email = ?')->execute([$messageId, $customer['email']]);
+            echo json_encode(['success' => true]); exit;
+        }
+    }
+    echo json_encode(['success' => false]); exit;
+}
+
 if (!empty($_POST['mark_read'])) {
     $messageId = isset($_POST['message_id']) ? (int) $_POST['message_id'] : 0;
 
@@ -78,29 +97,28 @@ if (!empty($_POST['mark_read'])) {
 }
 
 if (!empty($_GET['ajax'])) {
+    $tab = ($_GET['tab'] ?? '') === 'read' ? 1 : 0;
     $stmt = $pdo->prepare('SELECT COUNT(*) FROM beta_messages WHERE to_customer_email = ? AND is_read = 0');
     $stmt->execute([$customer['email']]);
     $unreadCount = (int) $stmt->fetchColumn();
 
-    $stmt = $pdo->prepare('SELECT id, message_text, message_type, created_at FROM beta_messages WHERE to_customer_email = ? AND is_read = 0 ORDER BY created_at DESC LIMIT 10');
-    $stmt->execute([$customer['email']]);
+    $stmt = $pdo->prepare('SELECT m.id, m.message_text, m.message_type, m.created_at, m.expects_response, r.response FROM beta_messages m LEFT JOIN beta_responses r ON r.message_id = m.id WHERE m.to_customer_email = ? AND m.is_read = ? ORDER BY m.created_at DESC LIMIT 15');
+    $stmt->execute([$customer['email'], $tab]);
 
-    $unreadMessages = [];
-
+    $messages = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $unreadMessages[] = [
+        $messages[] = [
             'id' => (int) $row['id'],
             'message_text' => htmlspecialchars($row['message_text'], ENT_QUOTES, 'UTF-8'),
             'message_type' => htmlspecialchars($row['message_type'], ENT_QUOTES, 'UTF-8'),
             'created_at' => $row['created_at'],
+            'expects_response' => !empty($row['expects_response']),
+            'user_response' => $row['response'] ? htmlspecialchars($row['response'], ENT_QUOTES, 'UTF-8') : null,
         ];
     }
 
     header('Content-Type: application/json');
-    echo json_encode([
-        'unread_count' => $unreadCount,
-        'messages' => $unreadMessages,
-    ]);
+    echo json_encode(['unread_count' => $unreadCount, 'messages' => $messages]);
     exit;
 }
 
@@ -324,6 +342,10 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             justify-content: space-between;
             align-items: center;
         }
+
+        .message-tabs{display:flex;border-bottom:1px solid #e5e7eb;}
+        .message-tabs button{flex:1;padding:0.75rem;border:none;background:transparent;font-weight:600;color:var(--gray-medium);cursor:pointer;border-bottom:2px solid transparent;}
+        .message-tabs button.active{color:var(--primary);border-bottom-color:var(--primary);}
 
         .close-panel {
             background: none;
@@ -569,6 +591,10 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             <h3>📨 Beta Nachrichten</h3>
             <button class="close-panel" type="button" onclick="closeMessagePanel()">×</button>
         </div>
+        <div class="message-tabs">
+            <button type="button" class="active" data-tab="new" onclick="loadMessages('new')">Neu</button>
+            <button type="button" data-tab="read" onclick="loadMessages('read')">Gelesen</button>
+        </div>
         <div class="message-list" id="messageList"></div>
     </div>
 
@@ -577,6 +603,8 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         const overlay = document.getElementById('overlay');
         const messageBadge = document.getElementById('messageBadge');
         const messageList = document.getElementById('messageList');
+        const tabButtons = document.querySelectorAll('.message-tabs button');
+        let currentTab = 'new';
 
         function toggleMessagePanel() {
             if (messagePanel.classList.contains('open')) {
@@ -597,8 +625,14 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             overlay.classList.remove('active');
         }
 
-        function loadMessages() {
-            fetch('?ajax=1', { credentials: 'same-origin' })
+        function loadMessages(tab) {
+            if (tab) {
+                currentTab = tab === 'read' ? 'read' : 'new';
+            }
+            tabButtons.forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.tab === currentTab);
+            });
+            fetch(`?ajax=1&tab=${encodeURIComponent(currentTab)}`, { credentials: 'same-origin' })
                 .then((response) => response.json())
                 .then((data) => {
                     updateMessageBadge(data.unread_count);
@@ -611,12 +645,8 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
         function renderMessages(messages) {
             if (!messages.length) {
-                messageList.innerHTML = `
-                    <div style="text-align:center;padding:2rem;color:#6b7280;">
-                        <p>📭 Keine ungelesenen Nachrichten</p>
-                        <p style="font-size:0.875rem;margin-top:0.5rem;">Der Admin kann dir hier Updates senden</p>
-                    </div>
-                `;
+                const empty = currentTab === 'read' ? '📁 Noch keine gelesenen Nachrichten' : '📭 Keine ungelesenen Nachrichten';
+                messageList.innerHTML = `<div style="text-align:center;padding:2rem;color:#6b7280;"><p>${empty}</p><p style="font-size:0.875rem;margin-top:0.5rem;">Der Admin kann dir hier Updates senden</p></div>`;
                 return;
             }
 
@@ -634,18 +664,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 const text = String(msg.message_text || '')
                     .replace(/\n/g, '<br>');
 
-                return `
-                    <div class="message-item ${type}">
-                        <div class="message-meta">
-                            <span>${icon} ${type.charAt(0).toUpperCase() + type.slice(1)}</span>
-                            <span>${createdAt}</span>
-                        </div>
-                        <div class="message-text">${text}</div>
-                        <button class="mark-read-btn" type="button" onclick="markAsRead(${Number(msg.id)})">
-                            ✓ Als gelesen markieren
-                        </button>
-                    </div>
-                `;
+                return `<div class="message-item ${type}"><div class="message-meta"><span>${icon} ${type.charAt(0).toUpperCase() + type.slice(1)}</span><span>${createdAt}</span></div><div class="message-text">${text}</div>${msg.expects_response ? (msg.user_response ? `<div style="font-size:0.85rem;color:#6b7280;margin-bottom:0.5rem;">Antwort gesendet: ${msg.user_response === 'yes' ? '✅ Ja' : '❌ Nein'}</div>` : `<div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;"><button type="button" style="flex:1;padding:0.5rem;border-radius:6px;border:1px solid #bbf7d0;background:#e6f4ea;color:#166534;font-weight:600;" onclick="sendResponse(${Number(msg.id)}, 'yes')">Ja</button><button type="button" style="flex:1;padding:0.5rem;border-radius:6px;border:1px solid #fecaca;background:#fee2e2;color:#b91c1c;font-weight:600;" onclick="sendResponse(${Number(msg.id)}, 'no')">Nein</button></div>`) : ''}${currentTab === 'new' ? `<button class="mark-read-btn" type="button" onclick="markAsRead(${Number(msg.id)})">✓ Als gelesen markieren</button>` : ''}</div>`;
             }).join('');
         }
 
@@ -673,6 +692,29 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 });
         }
 
+        function sendResponse(messageId, response) {
+            if (!messageId || !response) {
+                return;
+            }
+            fetch('', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `respond=1&message_id=${encodeURIComponent(messageId)}&response=${encodeURIComponent(response)}`,
+                credentials: 'same-origin'
+            })
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data && data.success) {
+                        loadMessages();
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error sending response:', error);
+                });
+        }
+
         function updateMessageBadge(count) {
             const parsed = Number(count) || 0;
 
@@ -684,20 +726,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             }
         }
 
-        setInterval(() => {
-            fetch('?ajax=1', { credentials: 'same-origin' })
-                .then((response) => response.json())
-                .then((data) => {
-                    updateMessageBadge(data.unread_count);
-
-                    if (messagePanel.classList.contains('open')) {
-                        renderMessages(Array.isArray(data.messages) ? data.messages : []);
-                    }
-                })
-                .catch((error) => {
-                    console.error('Auto-refresh error:', error);
-                });
-        }, 30000);
+        setInterval(() => loadMessages(), 30000);
 
         loadMessages();
     </script>

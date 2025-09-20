@@ -197,6 +197,39 @@ Beispiele:
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
+    <?php
+    $debug_responses = $pdo->query("SELECT m.id, m.message_text, m.expects_response, r.response, r.created_at as response_time 
+                                   FROM beta_messages m 
+                                   LEFT JOIN beta_responses r ON m.id = r.message_id 
+                                   WHERE m.to_customer_email = 'marcus@einfachstarten.jetzt' 
+                                   ORDER BY m.created_at DESC");
+    $all_responses = $debug_responses->fetchAll(PDO::FETCH_ASSOC);
+    ?>
+
+    <div style="background:white;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin-top:2rem;">
+        <h3>📊 Ja/Nein Antworten Debug</h3>
+        <?php if (empty($all_responses)): ?>
+            <p>Keine Messages gefunden</p>
+        <?php else: ?>
+            <div style="background:#f8f9fa;padding:1rem;border-radius:6px;margin:1rem 0;font-family:monospace;font-size:0.875rem;">
+                Total Messages: <?=count($all_responses)?><br>
+                Mit expects_response: <?=count(array_filter($all_responses, fn($r) => $r['expects_response']))?><br>
+                Mit Antworten: <?=count(array_filter($all_responses, fn($r) => $r['response']))?>
+            </div>
+            <?php foreach ($all_responses as $resp): ?>
+            <div style="border:1px solid #e5e7eb;padding:1rem;margin:0.5rem 0;border-radius:6px;">
+                <div style="font-weight:600;"><?=htmlspecialchars(mb_strimwidth($resp['message_text'], 0, 60, '...'))?></div>
+                <div style="font-size:0.875rem;color:#6b7280;">
+                    Expects Response: <?=$resp['expects_response'] ? 'JA' : 'NEIN'?><br>
+                    User Antwort: <?=$resp['response'] ? htmlspecialchars($resp['response']) : 'Keine'?><br>
+                    <?php if ($resp['response_time']): ?>
+                    Geantwortet: <?=date('d.m.Y H:i', strtotime($resp['response_time']))?>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
 </div>
 </body>
 </html>

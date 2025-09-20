@@ -137,8 +137,6 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         :root {
             --primary: #4a90b8;
             --secondary: #52b3a4;
-            --accent-green: #7cb342;
-            --accent-teal: #26a69a;
             --light-blue: #e3f2fd;
             --white: #ffffff;
             --gray-light: #f8f9fa;
@@ -162,39 +160,6 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             color: var(--gray-dark);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.5;
-        }
-
-        .beta-banner {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
-            padding: 0.5rem;
-            text-align: center;
-            font-weight: bold;
-            font-size: 0.85rem;
-            animation: betaPulse 3s ease-in-out infinite;
-            position: relative;
-            overflow: hidden;
-        }
-
-        @keyframes betaPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.9; }
-        }
-
-        .beta-banner::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
-            animation: shimmer 4s linear infinite;
-        }
-
-        @keyframes shimmer {
-            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
-            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
         }
 
         .app-container {
@@ -244,39 +209,36 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             justify-content: center;
             font-size: 1.8rem;
             border: 2px solid rgba(255, 255, 255, 0.3);
-            cursor: pointer;
-            transition: all 0.3s ease;
             position: relative;
         }
 
-        .user-avatar:hover {
+        .user-avatar.clickable {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-avatar.clickable:hover {
             transform: scale(1.05);
             border-color: rgba(255, 255, 255, 0.6);
             box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
 
-        .message-badge {
+        .notification-badge {
             position: absolute;
             top: -5px;
             right: -5px;
-            background: #ff4757;
+            background: #ff4444;
             color: white;
             border-radius: 50%;
-            width: 24px;
-            height: 24px;
+            min-width: 20px;
+            height: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: bold;
             border: 2px solid white;
-            animation: badgePulse 2s infinite;
-            min-width: 24px;
-        }
-
-        @keyframes badgePulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+            z-index: 10;
         }
 
         .user-info h1 {
@@ -316,6 +278,117 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             padding: 1.5rem;
         }
 
+        .welcome-section {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: var(--light-blue);
+            border-radius: 16px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .welcome-section h2 {
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }
+
+        .welcome-section p {
+            color: var(--gray-medium);
+            font-size: 0.9rem;
+        }
+
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .action-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: 0 2px 10px var(--shadow);
+            border: 1px solid #f0f0f0;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--shadow);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .action-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        .action-content h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--gray-dark);
+        }
+
+        .action-content p {
+            margin: 0.25rem 0 0 0;
+            font-size: 0.85rem;
+            color: var(--gray-medium);
+        }
+
+        @media (max-width: 768px) {
+            .action-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .app-content {
+                padding: 1rem;
+            }
+
+            .header-content {
+                gap: 0.75rem;
+            }
+
+            .user-avatar {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Message Panel Styles bleiben identisch - nicht ändern! */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
         .message-panel {
             position: fixed;
             top: 0;
@@ -343,9 +416,9 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             align-items: center;
         }
 
-        .message-tabs{display:flex;border-bottom:1px solid #e5e7eb;}
-        .message-tabs button{flex:1;padding:0.75rem;border:none;background:transparent;font-weight:600;color:var(--gray-medium);cursor:pointer;border-bottom:2px solid transparent;}
-        .message-tabs button.active{color:var(--primary);border-bottom-color:var(--primary);}
+        .message-tabs { display: flex; border-bottom: 1px solid #e5e7eb; }
+        .message-tabs button { flex: 1; padding: 0.75rem; border: none; background: transparent; font-weight: 600; color: var(--gray-medium); cursor: pointer; border-bottom: 2px solid transparent; }
+        .message-tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
 
         .close-panel {
             background: none;
@@ -405,137 +478,21 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             background: #218838;
             transform: translateY(-1px);
         }
-
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-        }
-
-        .overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .welcome-section {
-            text-align: center;
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            background: var(--light-blue);
-            border-radius: 16px;
-            border-left: 4px solid var(--primary);
-        }
-
-        .welcome-section h2 {
-            color: var(--primary);
-            margin-bottom: 0.5rem;
-            font-size: 1.2rem;
-        }
-
-        .actions-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .action-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1.25rem;
-            box-shadow: 0 2px 10px var(--shadow);
-            border: 1px solid #f0f0f0;
-            text-decoration: none;
-            color: inherit;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .action-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px var(--shadow);
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .action-icon {
-            width: 45px;
-            height: 45px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.4rem;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-        }
-
-        .action-content h3 {
-            margin: 0;
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--gray-dark);
-        }
-
-        .action-content p {
-            margin: 0.25rem 0 0 0;
-            font-size: 0.85rem;
-            color: var(--gray-medium);
-        }
-
-        @media (max-width: 768px) {
-            .message-panel {
-                width: 100%;
-                right: -100%;
-            }
-
-            .actions-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .header-content {
-                gap: 0.75rem;
-            }
-
-            .user-avatar {
-                width: 50px;
-                height: 50px;
-                font-size: 1.5rem;
-            }
-
-            .message-badge {
-                width: 20px;
-                height: 20px;
-                font-size: 0.65rem;
-            }
-        }
     </style>
 </head>
 <body>
-    <div class="beta-banner">
-        🧪 BETA VERSION - Experimentelle Features in Entwicklung
-    </div>
-
     <div class="app-container">
         <div class="app-header">
             <div class="header-content">
-                <div class="user-avatar" onclick="toggleMessagePanel()">
-                    👤
-                    <div class="message-badge" id="messageBadge" style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
+                <div class="user-avatar clickable" onclick="toggleMessagePanel()">
+                    <?= strtoupper(substr($customer['first_name'], 0, 1)) ?>
+                    <div class="notification-badge" id="notificationBadge" style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
                         <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
                     </div>
                 </div>
                 <div class="user-info">
-                    <h1>Beta-Modus: <?= htmlspecialchars($customer['first_name'], ENT_QUOTES, 'UTF-8'); ?></h1>
-                    <p>🧪 Testing new features</p>
+                    <h1>🧪 Beta: <?= htmlspecialchars($customer['first_name'], ENT_QUOTES, 'UTF-8'); ?></h1>
+                    <p>Testing neue Features vor Production</p>
                 </div>
                 <a href="../login.php?logout=1" class="logout-btn">
                     🚪 Abmelden
@@ -546,10 +503,10 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         <div class="app-content">
             <div class="welcome-section">
                 <h2>Willkommen in der Beta-Umgebung!</h2>
-                <p>Hier testest du neue Features bevor sie für alle verfügbar sind. Klicke auf dein Profilbild um Nachrichten zu sehen.</p>
+                <p>Du testest neue Features bevor sie für alle verfügbar sind. Klicke auf dein Profilbild um Nachrichten zu sehen.</p>
             </div>
 
-            <div class="actions-grid">
+            <div class="action-grid">
                 <a href="../customer/booking.php" class="action-card">
                     <div class="action-icon">📅</div>
                     <div class="action-content">
@@ -601,7 +558,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
     <script>
         const messagePanel = document.getElementById('messagePanel');
         const overlay = document.getElementById('overlay');
-        const messageBadge = document.getElementById('messageBadge');
+        const notificationBadge = document.getElementById('notificationBadge');
         const messageList = document.getElementById('messageList');
         const tabButtons = document.querySelectorAll('.message-tabs button');
         let currentTab = 'new';
@@ -725,13 +682,16 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         }
 
         function updateMessageBadge(count) {
+            if (!notificationBadge) {
+                return;
+            }
             const parsed = Number(count) || 0;
 
             if (parsed > 0) {
-                messageBadge.style.display = 'flex';
-                messageBadge.textContent = parsed > 99 ? '99+' : parsed;
+                notificationBadge.style.display = 'flex';
+                notificationBadge.textContent = parsed > 99 ? '99+' : parsed;
             } else {
-                messageBadge.style.display = 'none';
+                notificationBadge.style.display = 'none';
             }
         }
 

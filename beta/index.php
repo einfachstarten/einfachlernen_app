@@ -56,12 +56,13 @@ if (!$customer) {
     die('Customer not found. Please login again.');
 }
 
-if ($customer['email'] !== 'marcus@einfachstarten.jetzt') {
+if (empty($customer['beta_access'])) {
     echo '<!DOCTYPE html>'
         . '<html><head><meta charset="UTF-8"><title>Beta Access</title></head>'
         . '<body style="font-family:Arial;text-align:center;padding:3rem;background:#f8fafc">'
         . '<h1>🧪 Beta Access</h1>'
         . '<p>Diese Beta-App ist nur für autorisierte Testuser zugänglich.</p>'
+        . '<p>Kontaktiere den Administrator für Beta-Zugang.</p>'
         . '<p><a href="../customer/index.php">← Zur normalen Customer App</a></p>'
         . '</body></html>';
     exit;

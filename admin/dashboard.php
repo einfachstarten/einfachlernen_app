@@ -142,7 +142,15 @@ if(!empty($config['PIN_CLEANUP_EXPIRED'])) {
 }
 $countStmt = $pdo->query('SELECT COUNT(*) FROM customers');
 $total = $countStmt->fetchColumn();
-$customers = $pdo->query('SELECT * FROM customers ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+$customers = $pdo->query("
+    SELECT *,
+           CASE
+               WHEN beta_access = 1 THEN 1
+               ELSE 0
+           END AS beta_access
+    FROM customers
+    ORDER BY created_at DESC
+")->fetchAll(PDO::FETCH_ASSOC);
 foreach($customers as &$c) {
     if(!empty($c['pin']) && !empty($c['pin_expires'])){
         $expires_timestamp = strtotime($c['pin_expires']);
@@ -407,7 +415,7 @@ $email_stats = getEmailDeliveryStats(7);
 
 <div class="table-container">
     <table>
-        <tr><th>E-Mail</th><th>Name</th><th>Telefon</th><th>Status</th><th>Erstellt</th><th>PIN-Status</th><th>Aktion</th><th>Aktivität</th><th>Termine</th><th>Löschen</th></tr>
+        <tr><th>E-Mail</th><th>Name</th><th>Telefon</th><th>Status</th><th>Erstellt</th><th>PIN-Status</th><th>Beta-Zugang</th><th>Aktion</th><th>Aktivität</th><th>Termine</th><th>Löschen</th></tr>
         <?php foreach($customers as $c): ?>
         <tr>
             <td><?=htmlspecialchars($c['email'])?></td>
@@ -416,6 +424,15 @@ $email_stats = getEmailDeliveryStats(7);
             <td><?=htmlspecialchars($c['status'])?></td>
             <td><?=htmlspecialchars($c['created_at'])?></td>
             <td><?=$c['pin_status']?></td>
+            <td>
+                <form method="post" action="toggle_beta.php" style="margin:0;" onsubmit="return confirmBetaToggle('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>', <?=$c['beta_access'] ? 'true' : 'false'?>)">
+                    <input type="hidden" name="customer_id" value="<?=$c['id']?>">
+                    <input type="hidden" name="current_status" value="<?=$c['beta_access']?>">
+                    <button type="submit" style="background:<?=$c['beta_access'] ? '#28a745' : '#6c757d'?>;color:white;border:none;padding:0.4rem 0.8rem;border-radius:4px;cursor:pointer;font-size:0.8rem;">
+                        <?=$c['beta_access'] ? '🧪 Beta ON' : '⚪ Beta OFF'?>
+                    </button>
+                </form>
+            </td>
             <td>
                 <form method="post" action="send_pin.php" style="margin:0;" onsubmit="return confirmSendPin('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>')">
                     <input type="hidden" name="customer_id" value="<?=$c['id']?>">
@@ -1582,6 +1599,11 @@ function confirmDelete(email) {
         `E-Mail: ${email}\n\n` +
         `Diese Aktion löscht alle Kundendaten dauerhaft und kann nicht rückgängig gemacht werden.`
     );
+}
+
+function confirmBetaToggle(email, isActive) {
+    const action = isActive ? 'deaktivieren' : 'aktivieren';
+    return confirm(`Beta-Zugang für ${email} ${action}?`);
 }
 </script>
 <script src="../pwa-update.js"></script>

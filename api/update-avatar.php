@@ -1,68 +1,111 @@
 <?php
 require __DIR__ . '/../customer/auth.php';
+
 $customer = require_customer_login();
+
+header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    header('Content-Type: application/json');
     echo json_encode(['success' => false, 'error' => 'Method not allowed']);
     exit;
 }
 
 $input = json_decode(file_get_contents('php://input'), true);
-if (!is_array($input)) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'Invalid payload']);
+
+if (!is_array($input) || !isset($input['style'])) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Missing required fields']);
     exit;
 }
 
-$style = $input['style'] ?? '';
-$seed = $input['seed'] ?? '';
+$style = trim((string) $input['style']);
+$seed = isset($input['seed']) ? trim((string) $input['seed']) : '';
 
 $allowed_styles = ['avataaars', 'pixel-art', 'lorelei', 'adventurer', 'bottts', 'identicon'];
 if (!in_array($style, $allowed_styles, true)) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'Invalid style']);
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Invalid avatar style']);
     exit;
 }
 
-$seed = preg_replace('/[^a-zA-Z0-9@._-]/', '', (string) $seed);
 if ($seed === '') {
-    $seed = $customer['email'];
+    $seed = $customer['email'] ?? 'beta-user';
 }
+
+$seed = preg_replace('/[^a-zA-Z0-9@._-]/', '', $seed);
+
+if ($seed === '') {
+    $seed = $customer['email'] ?? 'beta-user';
+}
+
 if (strlen($seed) > 100) {
     $seed = substr($seed, 0, 100);
 }
 
 try {
     $pdo = getPDO();
+
+    $pdo->beginTransaction();
+
     $stmt = $pdo->prepare('UPDATE customers SET avatar_style = ?, avatar_seed = ? WHERE id = ?');
     $updated = $stmt->execute([$style, $seed, $customer['id']]);
 
-    header('Content-Type: application/json');
+    $previousStyle = $customer['avatar_style'] ?? null;
+    $previousSeed = $customer['avatar_seed'] ?? null;
 
-    if ($updated) {
-        $_SESSION['customer']['avatar_style'] = $style;
-        $_SESSION['customer']['avatar_seed'] = $seed;
+    if (!$updated) {
+        $pdo->rollBack();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Failed to update avatar']);
+        exit;
+    }
 
-        require_once __DIR__ . '/../admin/ActivityLogger.php';
-        $logger = new ActivityLogger($pdo);
-        $logger->logActivity($customer['id'], 'avatar_updated', [
-            'style' => $style,
-            'seed' => $seed,
-            'timestamp' => date('Y-m-d H:i:s'),
-        ]);
+    if (!isset($_SESSION['customer']) || !is_array($_SESSION['customer'])) {
+        $_SESSION['customer'] = [];
+    }
+
+    $_SESSION['customer']['avatar_style'] = $style;
+    $_SESSION['customer']['avatar_seed'] = $seed;
+
+    if ($previousStyle === $style && $previousSeed === $seed) {
+        $pdo->commit();
 
         echo json_encode([
             'success' => true,
             'style' => $style,
             'seed' => $seed,
+            'avatar_url' => 'https://api.dicebear.com/9.x/' . rawurlencode($style) . '/svg?seed=' . rawurlencode($seed),
         ]);
-    } else {
-        echo json_encode(['success' => false, 'error' => 'Update failed']);
+        exit;
     }
+
+    require_once __DIR__ . '/../admin/ActivityLogger.php';
+    $logger = new ActivityLogger($pdo);
+    $logger->logActivity($customer['id'], 'avatar_updated', [
+        'style' => $style,
+        'seed' => $seed,
+        'previous_style' => $previousStyle,
+        'previous_seed' => $previousSeed,
+        'timestamp' => date('Y-m-d H:i:s'),
+        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+    ]);
+
+    $pdo->commit();
+
+    echo json_encode([
+        'success' => true,
+        'style' => $style,
+        'seed' => $seed,
+        'avatar_url' => 'https://api.dicebear.com/9.x/' . rawurlencode($style) . '/svg?seed=' . rawurlencode($seed),
+    ]);
 } catch (Throwable $e) {
-    error_log('Avatar update error: ' . $e->getMessage());
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'Database error']);
+    if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
+    error_log('Avatar update error for customer ' . ($customer['id'] ?? 'unknown') . ': ' . $e->getMessage());
+
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Database error occurred']);
 }

@@ -58,6 +58,15 @@ try {
             }
         }
     }
+
+    echo "<h3>Updating avatar defaults:</h3>";
+    try {
+        $pdo->exec("UPDATE customers SET avatar_style = 'avataaars' WHERE avatar_style IS NULL OR avatar_style = ''");
+        $updatedSeeds = $pdo->exec("UPDATE customers SET avatar_seed = email WHERE (avatar_seed IS NULL OR avatar_seed = '') AND email IS NOT NULL");
+        echo "<p style='color:green'>✅ Avatar defaults ensured for existing customers (" . (int) $updatedSeeds . " seeds updated)</p>";
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ Failed to update avatar defaults: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
     
     echo "<h3>Adding beta_access column:</h3>";
     try {

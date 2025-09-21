@@ -43,6 +43,13 @@ try {
     try { $pdo->exec("ALTER TABLE customers ADD COLUMN avatar_style VARCHAR(50) DEFAULT 'avataaars'"); } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE customers ADD COLUMN avatar_seed VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
 
+    try {
+        $pdo->exec("UPDATE customers SET avatar_style = 'avataaars' WHERE avatar_style IS NULL OR avatar_style = ''");
+        $pdo->exec("UPDATE customers SET avatar_seed = email WHERE (avatar_seed IS NULL OR avatar_seed = '') AND email IS NOT NULL");
+    } catch (Exception $e) {
+        // Ignore failures during setup defaults
+    }
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS customer_sessions (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_id INT NOT NULL,

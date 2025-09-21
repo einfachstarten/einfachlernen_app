@@ -147,28 +147,51 @@ $customers = $pdo->query("
            CASE
                WHEN beta_access = 1 THEN 1
                ELSE 0
-           END AS beta_access
+           END AS beta_access,
+           COALESCE(avatar_style, 'avataaars') AS avatar_style,
+           COALESCE(avatar_seed, email) AS avatar_seed
     FROM customers
     ORDER BY created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 foreach($customers as &$c) {
+    $c['avatar_style'] = $c['avatar_style'] ?: 'avataaars';
+    $c['avatar_seed'] = $c['avatar_seed'] ?: $c['email'];
+
+    $c['avatar_url'] = 'https://api.dicebear.com/9.x/' .
+        rawurlencode($c['avatar_style']) .
+        '/svg?seed=' . rawurlencode($c['avatar_seed']);
+
     if(!empty($c['pin']) && !empty($c['pin_expires'])){
         $expires_timestamp = strtotime($c['pin_expires']);
         $now = time();
         if($expires_timestamp < $now){
-            $c['pin_status'] = '<span class="pin-status-expired">🔴 PIN abgelaufen (' . date('H:i', $expires_timestamp) . ')</span>';
+            $c['pin_status_icon'] = '🔴';
+            $c['pin_status_tooltip'] = 'PIN abgelaufen am ' . date('d.m.Y H:i', $expires_timestamp);
             $c['pin_status_raw'] = 'expired';
         } else {
-            $remaining_minutes = round(($expires_timestamp - $now) / 60);
-            if($remaining_minutes > 0) {
-                $c['pin_status'] = '<span class="pin-status-active">🟢 PIN aktiv (' . $remaining_minutes . ' Min.)</span>';
+            $remaining_seconds = $expires_timestamp - $now;
+            $remaining_days = floor($remaining_seconds / (24 * 3600));
+            $remaining_hours = floor(($remaining_seconds % (24 * 3600)) / 3600);
+            $remaining_minutes = floor(($remaining_seconds % 3600) / 60);
+
+            if($remaining_days > 0) {
+                $c['pin_status_icon'] = '🟢';
+                $c['pin_status_tooltip'] = "PIN aktiv - {$remaining_days} Tag(e) und {$remaining_hours} Stunde(n) verbleibend";
+            } elseif($remaining_hours > 0) {
+                $c['pin_status_icon'] = '🟡';
+                $c['pin_status_tooltip'] = "PIN läuft bald ab - {$remaining_hours} Stunde(n) und {$remaining_minutes} Minute(n) verbleibend";
+            } elseif($remaining_minutes > 5) {
+                $c['pin_status_icon'] = '🟡';
+                $c['pin_status_tooltip'] = "PIN läuft bald ab - {$remaining_minutes} Minute(n) verbleibend";
             } else {
-                $c['pin_status'] = '<span class="pin-status-active">🟡 PIN läuft gleich ab (&lt;1 Min.)</span>';
+                $c['pin_status_icon'] = '🟠';
+                $c['pin_status_tooltip'] = 'PIN läuft sehr bald ab - weniger als 5 Minuten verbleibend';
             }
             $c['pin_status_raw'] = 'active';
         }
     } else {
-        $c['pin_status'] = '<span class="pin-status-none">⚪ Noch kein PIN versendet</span>';
+        $c['pin_status_icon'] = '⚪';
+        $c['pin_status_tooltip'] = 'Noch kein PIN versendet';
         $c['pin_status_raw'] = 'none';
     }
 }
@@ -256,40 +279,66 @@ $email_stats = getEmailDeliveryStats(7);
             border: 1px solid #e2e8f0;
         }
 
-        /* Modern Table */
-        table {
+        /* Enhanced table styling for better avatar display */
+        .table-container table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
             width: 100%;
             border-collapse: collapse;
             margin: 0;
         }
 
-        th {
-            background: #f7fafc;
-            color: #374151;
+        .table-container th {
+            background: #f8fafc;
+            color: #475569;
             font-weight: 600;
             padding: 1rem 0.75rem;
             text-align: left;
             border-bottom: 2px solid #e2e8f0;
             font-size: 0.875rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.025em;
         }
 
-        td {
+        .table-container td {
             padding: 0.875rem 0.75rem;
             border-bottom: 1px solid #f1f5f9;
             vertical-align: middle;
         }
 
-        tr:hover {
-            background: #f8fafc;
+        .table-container tr:hover {
+            background-color: #f8fafc;
         }
 
-        tr:last-child td {
+        .table-container tr:last-child td {
             border-bottom: none;
         }
 
-        /* Button Styles */
+        /* Avatar styling */
+        .table-container td img {
+            transition: transform 0.2s ease;
+        }
+
+        .table-container td img:hover {
+            transform: scale(1.1);
+        }
+
+        /* PIN status icon styling */
+        .pin-status-icon {
+            font-size: 1.2rem;
+            cursor: help;
+            transition: transform 0.2s ease;
+            display: inline-block;
+        }
+
+        .pin-status-icon:hover {
+            transform: scale(1.2);
+        }
+
+        /* Action buttons consistent styling */
         button {
             background: #4a90b8;
             color: white;
@@ -311,10 +360,37 @@ $email_stats = getEmailDeliveryStats(7);
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
-        /* Status Indicators */
-        .pin-status-active { color: #059669; font-weight: 600; }
-        .pin-status-expired { color: #dc2626; font-weight: 600; }
-        .pin-status-none { color: #6b7280; }
+        .action-btn {
+            background: #4a90b8;
+            color: white;
+            border: none;
+            padding: 0.3em 0.75em;
+            font-size: 0.85em;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0.125rem;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .action-btn.activity {
+            background: #52b3a4;
+        }
+
+        .action-btn.danger {
+            background: #dc3545;
+        }
+
+        .action-btn.primary {
+            background: #4a90b8;
+        }
 
         /* Alert Styles */
         .alert {
@@ -366,6 +442,16 @@ $email_stats = getEmailDeliveryStats(7);
             margin-left: 0.5rem;
         }
 
+        @media (max-width: 1200px) {
+            .table-container {
+                overflow-x: auto;
+            }
+
+            .table-container table {
+                min-width: 1000px;
+            }
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
             body { padding: 1rem; }
@@ -384,8 +470,10 @@ $email_stats = getEmailDeliveryStats(7);
                 text-align: center;
             }
 
-            table { font-size: 0.8rem; }
-            th, td { padding: 0.5rem 0.25rem; }
+            .table-container table { font-size: 0.8rem; }
+            .table-container th, .table-container td { padding: 0.5rem 0.25rem; }
+            .table-container td img { width: 32px; height: 32px; }
+            .action-btn { padding: 0.25em 0.5em; font-size: 0.75em; }
         }
     </style>
 </head>
@@ -415,15 +503,36 @@ $email_stats = getEmailDeliveryStats(7);
 
 <div class="table-container">
     <table>
-        <tr><th>E-Mail</th><th>Name</th><th>Telefon</th><th>Status</th><th>Erstellt</th><th>PIN-Status</th><th>Beta-Zugang</th><th>Aktion</th><th>Aktivität</th><th>Termine</th><th>Löschen</th></tr>
+        <tr>
+            <th>Avatar</th>
+            <th>E-Mail</th>
+            <th>Name</th>
+            <th>Telefon</th>
+            <th>Erstellt</th>
+            <th>PIN</th>
+            <th>Beta</th>
+            <th>Aktionen</th>
+            <th>Termine</th>
+            <th>Löschen</th>
+        </tr>
         <?php foreach($customers as $c): ?>
         <tr>
+            <td style="text-align: center;">
+                <img src="<?= htmlspecialchars($c['avatar_url'], ENT_QUOTES) ?>"
+                     alt="Avatar"
+                     style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #e2e8f0;"
+                     title="<?= htmlspecialchars($c['first_name'] . ' ' . $c['last_name'], ENT_QUOTES) ?>">
+            </td>
             <td><?=htmlspecialchars($c['email'])?></td>
             <td><?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']))?></td>
             <td><?=htmlspecialchars($c['phone'])?></td>
-            <td><?=htmlspecialchars($c['status'])?></td>
-            <td><?=htmlspecialchars($c['created_at'])?></td>
-            <td><?=$c['pin_status']?></td>
+            <td title="<?= date('d.m.Y H:i', strtotime($c['created_at'])) ?>"><?= date('d.m.Y', strtotime($c['created_at'])) ?></td>
+            <td style="text-align: center;">
+                <span class="pin-status-icon"
+                      title="<?= htmlspecialchars($c['pin_status_tooltip'], ENT_QUOTES) ?>">
+                    <?= $c['pin_status_icon'] ?>
+                </span>
+            </td>
             <td>
                 <form method="post" action="toggle_beta.php" style="margin:0;" onsubmit="return confirmBetaToggle('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>', <?=$c['beta_access'] ? 'true' : 'false'?>)">
                     <input type="hidden" name="customer_id" value="<?=$c['id']?>">
@@ -433,16 +542,25 @@ $email_stats = getEmailDeliveryStats(7);
                     </button>
                 </form>
             </td>
-            <td>
-                <form method="post" action="send_pin.php" style="margin:0;" onsubmit="return confirmSendPin('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>')">
+            <td style="white-space: nowrap;">
+                <form method="post" action="send_pin.php" style="margin:0;display:inline-block;margin-right:0.5rem;" onsubmit="return confirmSendPin('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>')">
                     <input type="hidden" name="customer_id" value="<?=$c['id']?>">
-                    <button type="submit">📧 PIN senden</button>
+                    <button type="submit"
+                            class="action-btn primary"
+                            title="PIN per E-Mail senden">
+                        📧 PIN
+                    </button>
                 </form>
+                <a href='?view_activity=<?=$c['id']?>'
+                   class="action-btn activity"
+                   title="Kundenaktivitäten anzeigen">
+                    📊 Aktivitäten
+                </a>
             </td>
-            <td><a href='?view_activity=<?=$c['id']?>' style="color:#2563eb;font-weight:500;">Aktivitäten ansehen</a></td>
             <td>
                 <button onclick="showCustomerBookings(<?=$c['id']?>, '<?=htmlspecialchars($c['email'], ENT_QUOTES)?>', '<?=htmlspecialchars(trim($c['first_name'].' '.$c['last_name']), ENT_QUOTES)?>')"
-                        style="background:#4a90b8;color:white;border:none;padding:0.3em 0.75em;font-size:0.85em;border-radius:6px;cursor:pointer;">
+                        class="action-btn primary"
+                        title="Termine verwalten">
                     📅 Termine
                 </button>
             </td>
@@ -450,8 +568,9 @@ $email_stats = getEmailDeliveryStats(7);
                 <form method="post" action="delete_customer.php" style="margin:0;display:inline;">
                     <input type="hidden" name="customer_id" value="<?=$c['id']?>">
                     <button type="submit"
-                            style="background:#dc3545;color:white;border:none;padding:0.3em 0.75em;font-size:0.85em;border-radius:6px;cursor:pointer;"
-                            onclick="return confirmDelete('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>')">
+                            class="action-btn danger"
+                            onclick="return confirmDelete('<?=htmlspecialchars($c['email'], ENT_QUOTES)?>')"
+                            title="Kunde löschen">
                         🗑️ Löschen
                     </button>
                 </form>
@@ -1574,6 +1693,24 @@ function displayTodaysSchedule(data) {
 // Auto-load schedule when page loads
 document.addEventListener('DOMContentLoaded', function() {
     loadTodaysSchedule();
+
+    // Enhanced tooltips and hover effects
+    document.querySelectorAll('td img[alt="Avatar"]').forEach(img => {
+        img.addEventListener('mouseenter', function() {
+            this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        });
+        img.addEventListener('mouseleave', function() {
+            this.style.boxShadow = '';
+        });
+    });
+
+    document.querySelectorAll('.pin-status-icon, td span[title]').forEach(element => {
+        element.addEventListener('mouseenter', function() {
+            if (this.title) {
+                console.log('PIN Status:', this.title);
+            }
+        });
+    });
 
     // Refresh every 5 minutes
     setInterval(loadTodaysSchedule, 5 * 60 * 1000);

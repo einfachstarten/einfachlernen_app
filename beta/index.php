@@ -371,13 +371,13 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             }
         }
 
-        /* Message Panel Styles bleiben identisch - nicht ändern! */
+        /* Smart Panel Styles */
         .overlay {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            right: 0;
+            bottom: 0;
             background: rgba(0,0,0,0.5);
             z-index: 1000;
             opacity: 0;
@@ -390,49 +390,192 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             visibility: visible;
         }
 
-        .message-panel {
+        .smart-panel {
             position: fixed;
             top: 0;
-            right: -400px;
-            width: 400px;
+            right: -420px;
+            width: 420px;
             height: 100vh;
             background: white;
-            box-shadow: -4px 0 20px rgba(0,0,0,0.1);
-            z-index: 1001;
+            box-shadow: -5px 0 25px rgba(0,0,0,0.15);
             transition: right 0.3s ease;
+            z-index: 1001;
             display: flex;
             flex-direction: column;
         }
 
-        .message-panel.open {
+        .smart-panel.active {
             right: 0;
         }
 
-        .message-panel-header {
-            background: var(--primary);
+        .smart-panel-header {
+            padding: 1.5rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
-            padding: 1rem;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
         }
 
-        .message-tabs { display: flex; border-bottom: 1px solid #e5e7eb; }
-        .message-tabs button { flex: 1; padding: 0.75rem; border: none; background: transparent; font-weight: 600; color: var(--gray-medium); cursor: pointer; border-bottom: 2px solid transparent; }
-        .message-tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .smart-panel-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
 
         .close-panel {
-            background: none;
+            background: rgba(255,255,255,0.2);
             border: none;
             color: white;
             font-size: 1.5rem;
             cursor: pointer;
-            padding: 0.25rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
         }
 
-        .message-list {
+        .panel-tabs {
+            display: flex;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6b7280;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            background: white;
+            border-bottom: 2px solid var(--primary);
+        }
+
+        .tab-badge {
+            background: #ef4444;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            margin-left: 0.5rem;
+        }
+
+        .tab-content {
             flex: 1;
             overflow-y: auto;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Profile Section Styles */
+        .profile-section {
+            padding: 1.5rem;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+
+        .profile-avatar {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .profile-info h4 {
+            margin: 0 0 0.25rem 0;
+            color: var(--gray-dark);
+            font-size: 1.1rem;
+        }
+
+        .profile-info p {
+            margin: 0;
+            color: var(--gray-medium);
+            font-size: 0.9rem;
+        }
+
+        .detail-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .detail-label {
+            font-size: 0.85rem;
+            color: var(--gray-medium);
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            color: var(--gray-dark);
+            font-weight: 500;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: #e5f4ff;
+            color: var(--primary);
+        }
+
+        .status-badge.active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-badge.beta {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .message-tabs {
+            display: flex;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .message-tabs button {
+            flex: 1;
+            padding: 0.75rem;
+            border: none;
+            background: transparent;
+            font-weight: 600;
+            color: var(--gray-medium);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .message-tabs button.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .messages-container {
             padding: 1rem;
         }
 
@@ -479,13 +622,194 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             background: #218838;
             transform: translateY(-1px);
         }
+
+        /* Action Grid Enhanced Styles */
+        .action-icon.booking { background: linear-gradient(135deg, #42a5f5, #1e88e5); }
+        .action-icon.appointments { background: linear-gradient(135deg, var(--primary), var(--secondary)); }
+        .action-icon.contact { background: linear-gradient(135deg, #66bb6a, #43a047); }
+        .action-icon.phone { background: linear-gradient(135deg, #ff7043, #f4511e); }
+        .action-icon.normal { background: linear-gradient(135deg, #9c27b0, #673ab7); }
+        .action-icon.future { background: linear-gradient(135deg, #667eea, #764ba2); }
+
+        .beta-link {
+            border: 2px solid var(--primary);
+        }
+
+        .coming-soon {
+            border: 2px dashed #667eea;
+            opacity: 0.7;
+            cursor: default;
+        }
+
+        .coming-soon:hover {
+            transform: none;
+        }
+
+        /* Contact Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-container {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow: hidden;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.active .modal-container {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .modal-icon {
+            font-size: 1.5rem;
+        }
+
+        .modal-title h3 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.2rem;
+        }
+
+        .modal-title p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .modal-close {
+            margin-left: auto;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .modal-content {
+            padding: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-dark);
+            font-size: 0.9rem;
+        }
+
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-select:focus,
+        .form-textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 144, 184, 0.1);
+        }
+
+        .form-footer {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .btn-secondary,
+        .btn-primary {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: var(--gray-dark);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .smart-panel {
+                width: 100%;
+                right: -100%;
+            }
+
+            .modal-container {
+                width: 95%;
+                margin: 0 2.5%;
+            }
+
+            .modal-content {
+                padding: 1rem;
+            }
+
+            .form-footer {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="app-container">
         <div class="app-header">
             <div class="header-content">
-                <div class="user-avatar clickable" onclick="toggleMessagePanel()">
+                <div class="user-avatar clickable" onclick="toggleSmartPanel()" data-unread="<?= (int) $initialUnreadCount ?>">
                     <?= strtoupper(substr($customer['first_name'], 0, 1)) ?>
                     <div class="notification-badge" id="notificationBadge" style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
                         <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
@@ -509,7 +833,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
             <div class="action-grid">
                 <a href="../customer/booking.php" class="action-card">
-                    <div class="action-icon">📅</div>
+                    <div class="action-icon booking">📅</div>
                     <div class="action-content">
                         <h3>Termine buchen</h3>
                         <p>Verfügbare Termine finden und buchen</p>
@@ -517,83 +841,238 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 </a>
 
                 <a href="../customer/appointments.php" class="action-card">
-                    <div class="action-icon">📋</div>
+                    <div class="action-icon appointments">📋</div>
                     <div class="action-content">
                         <h3>Meine Termine</h3>
                         <p>Gebuchte Termine verwalten</p>
                     </div>
                 </a>
 
-                <a href="../customer/index.php" class="action-card">
-                    <div class="action-icon">🏠</div>
+                <div class="action-card" onclick="openContactModal()">
+                    <div class="action-icon contact">💬</div>
                     <div class="action-content">
-                        <h3>Normal Dashboard</h3>
-                        <p>Zur Standard Customer App wechseln</p>
+                        <h3>Kontakt aufnehmen</h3>
+                        <p>Fragen und Nachrichten senden</p>
+                    </div>
+                </div>
+
+                <a href="tel:+4312345678" class="action-card">
+                    <div class="action-icon phone">📞</div>
+                    <div class="action-content">
+                        <h3>Anrufen</h3>
+                        <p>Direkt mit Anna Braun sprechen</p>
                     </div>
                 </a>
 
-                <div class="action-card" style="border: 2px dashed #667eea; opacity: 0.7; cursor: default;">
-                    <div class="action-icon" style="background: #667eea;">🚀</div>
+                <a href="../customer/index.php?force_normal=1" class="action-card beta-link">
+                    <div class="action-icon normal">🏠</div>
                     <div class="action-content">
-                        <h3>Mehr Features Coming Soon</h3>
+                        <h3>Normal Dashboard</h3>
+                        <p>Zur Standard Customer App</p>
+                    </div>
+                </a>
+
+                <div class="action-card coming-soon">
+                    <div class="action-icon future">🚀</div>
+                    <div class="action-content">
+                        <h3>Mehr Beta Features</h3>
                         <p>Push Notifications, Dark Mode, etc.</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    <div class="overlay" id="overlay" onclick="closeSmartPanel()"></div>
+    <div class="smart-panel" id="smartPanel">
+        <div class="smart-panel-header">
+            <h3 id="panelTitle">👤 Mein Profil</h3>
+            <button class="close-panel" type="button" onclick="closeSmartPanel()">×</button>
+        </div>
 
-    <div class="overlay" id="overlay" onclick="closeMessagePanel()"></div>
-    <div class="message-panel" id="messagePanel">
-        <div class="message-panel-header">
-            <h3>📨 Beta Nachrichten</h3>
-            <button class="close-panel" type="button" onclick="closeMessagePanel()">×</button>
+        <div class="panel-tabs">
+            <button type="button" class="tab-btn active" data-tab="profile" onclick="switchTab('profile')">👤 Profil</button>
+            <button type="button" class="tab-btn" data-tab="messages" onclick="switchTab('messages')" id="messagesTab">
+                📨 Nachrichten <span class="tab-badge" id="tabBadge" style="display: <?= $initialUnreadCount > 0 ? 'inline' : 'none' ?>;">
+                    <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
+                </span>
+            </button>
         </div>
-        <div class="message-tabs">
-            <button type="button" class="active" data-tab="new" onclick="loadMessages('new')">Neu</button>
-            <button type="button" data-tab="read" onclick="loadMessages('read')">Gelesen</button>
+
+        <div class="tab-content active" id="profileContent">
+            <div class="profile-section">
+                <div class="profile-header">
+                    <div class="profile-avatar">
+                        <?= strtoupper(substr($customer['first_name'], 0, 1)) ?>
+                    </div>
+                    <div class="profile-info">
+                        <h4><?= htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name']) ?></h4>
+                        <p><?= htmlspecialchars($customer['email']) ?></p>
+                    </div>
+                </div>
+
+                <div class="profile-details">
+                    <div class="detail-group">
+                        <div class="detail-label">Telefon</div>
+                        <div class="detail-value"><?= htmlspecialchars($customer['phone'] ?: 'Nicht hinterlegt') ?></div>
+                    </div>
+
+                    <div class="detail-group">
+                        <div class="detail-label">Account-Status</div>
+                        <div class="detail-value">
+                            <span class="status-badge active">✅ <?= ucfirst(htmlspecialchars($customer['status'])) ?></span>
+                        </div>
+                    </div>
+
+                    <div class="detail-group">
+                        <div class="detail-label">Kunde seit</div>
+                        <div class="detail-value"><?= date('d.m.Y', strtotime($customer['created_at'])) ?></div>
+                    </div>
+
+                    <?php if(!empty($customer['last_login'])): ?>
+                    <div class="detail-group">
+                        <div class="detail-label">Letzter Login</div>
+                        <div class="detail-value"><?= date('d.m.Y, H:i', strtotime($customer['last_login'])) ?> Uhr</div>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="detail-group">
+                        <div class="detail-label">Beta-Status</div>
+                        <div class="detail-value">
+                            <span class="status-badge beta">🧪 Beta-Tester</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="message-list" id="messageList"></div>
+
+        <div class="tab-content" id="messagesContent">
+            <div class="message-tabs">
+                <button type="button" class="active" data-tab="new" onclick="loadMessages('new')">Neu</button>
+                <button type="button" data-tab="read" onclick="loadMessages('read')">Gelesen</button>
+            </div>
+            <div class="messages-container" id="messagesContainer"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="contactModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-icon">💬</div>
+                <div class="modal-title">
+                    <h3>Kontakt aufnehmen</h3>
+                    <p>Stelle deine Frage oder sende Feedback</p>
+                </div>
+                <button class="modal-close" type="button" onclick="closeContactModal()">×</button>
+            </div>
+
+            <div class="modal-content">
+                <form id="contactForm" onsubmit="submitContactForm(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="contactCategory">Kategorie</label>
+                        <select id="contactCategory" name="category" class="form-select" required>
+                            <option value="">Bitte wählen...</option>
+                            <option value="lerncoaching">💡 Lerncoaching</option>
+                            <option value="app">📱 App &amp; Beta-Features</option>
+                            <option value="sonstiges">💬 Sonstiges</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="contactMessage">Nachricht</label>
+                        <textarea id="contactMessage" name="message" class="form-textarea" rows="5" placeholder="Schreibe deine Nachricht hier..." required></textarea>
+                    </div>
+
+                    <div class="form-footer">
+                        <button type="button" class="btn-secondary" onclick="closeContactModal()">Abbrechen</button>
+                        <button type="submit" class="btn-primary">📤 Nachricht senden</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script>
-        const messagePanel = document.getElementById('messagePanel');
+        const smartPanel = document.getElementById('smartPanel');
         const overlay = document.getElementById('overlay');
         const notificationBadge = document.getElementById('notificationBadge');
-        const messageList = document.getElementById('messageList');
-        const tabButtons = document.querySelectorAll('.message-tabs button');
-        let currentTab = 'new';
+        const tabBadge = document.getElementById('tabBadge');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const panelTabButtons = document.querySelectorAll('.panel-tabs .tab-btn');
+        const messageFilterButtons = document.querySelectorAll('.message-tabs button');
+        const panelTitle = document.getElementById('panelTitle');
+        const userAvatar = document.querySelector('.user-avatar.clickable');
 
-        function toggleMessagePanel() {
-            if (messagePanel.classList.contains('open')) {
-                closeMessagePanel();
+        let currentPanelTab = 'profile';
+        let currentMessageTab = 'new';
+        let panelOpen = false;
+
+        function toggleSmartPanel() {
+            if (!smartPanel || !overlay) {
+                return;
+            }
+
+            if (!panelOpen) {
+                const unreadCount = parseInt(userAvatar?.dataset.unread || '0', 10);
+                if (unreadCount > 0) {
+                    switchTab('messages');
+                } else {
+                    switchTab('profile');
+                }
+
+                smartPanel.classList.add('active');
+                overlay.classList.add('active');
+                panelOpen = true;
             } else {
-                openMessagePanel();
+                closeSmartPanel();
             }
         }
 
-        function openMessagePanel() {
-            messagePanel.classList.add('open');
-            overlay.classList.add('active');
-            loadMessages();
+        function closeSmartPanel() {
+            if (!smartPanel || !overlay) {
+                return;
+            }
+            smartPanel.classList.remove('active');
+            overlay.classList.remove('active');
+            panelOpen = false;
         }
 
-        function closeMessagePanel() {
-            messagePanel.classList.remove('open');
-            overlay.classList.remove('active');
+        function switchTab(tab) {
+            currentPanelTab = tab === 'messages' ? 'messages' : 'profile';
+
+            panelTabButtons.forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.tab === currentPanelTab);
+            });
+
+            document.querySelectorAll('.tab-content').forEach((content) => {
+                content.classList.toggle('active', content.id === `${currentPanelTab}Content`);
+            });
+
+            if (panelTitle) {
+                panelTitle.innerHTML = currentPanelTab === 'profile' ? '👤 Mein Profil' : '📨 Beta Nachrichten';
+            }
+
+            if (currentPanelTab === 'messages') {
+                loadMessages(getCurrentMessageTab());
+            }
+        }
+
+        function getCurrentMessageTab() {
+            return currentMessageTab;
         }
 
         function loadMessages(tab) {
             if (tab) {
-                currentTab = tab === 'read' ? 'read' : 'new';
+                currentMessageTab = tab === 'read' ? 'read' : 'new';
             }
-            tabButtons.forEach((btn) => {
-                btn.classList.toggle('active', btn.dataset.tab === currentTab);
+
+            messageFilterButtons.forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.tab === currentMessageTab);
             });
-            fetch(`?ajax=1&tab=${encodeURIComponent(currentTab)}`, { credentials: 'same-origin' })
+
+            fetch(`?ajax=1&tab=${encodeURIComponent(currentMessageTab)}`, { credentials: 'same-origin' })
                 .then((response) => response.json())
                 .then((data) => {
-                    updateMessageBadge(data.unread_count);
+                    updateTabBadge(data.unread_count);
                     renderMessages(Array.isArray(data.messages) ? data.messages : []);
                 })
                 .catch((error) => {
@@ -602,9 +1081,13 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         }
 
         function renderMessages(messages) {
+            if (!messagesContainer) {
+                return;
+            }
+
             if (!messages.length) {
-                const empty = currentTab === 'read' ? '📁 Noch keine gelesenen Nachrichten' : '📭 Keine ungelesenen Nachrichten';
-                messageList.innerHTML = `<div style="text-align:center;padding:2rem;color:#6b7280;"><p>${empty}</p><p style="font-size:0.875rem;margin-top:0.5rem;">Der Admin kann dir hier Updates senden</p></div>`;
+                const empty = currentMessageTab === 'read' ? '📁 Noch keine gelesenen Nachrichten' : '📭 Keine ungelesenen Nachrichten';
+                messagesContainer.innerHTML = `<div style="text-align:center;padding:2rem;color:#6b7280;"><p>${empty}</p><p style="font-size:0.875rem;margin-top:0.5rem;">Der Admin kann dir hier Updates senden</p></div>`;
                 return;
             }
 
@@ -612,16 +1095,15 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 info: 'ℹ️',
                 success: '✅',
                 warning: '⚠️',
-                question: '❓'
+                question: '❓',
             };
 
-            messageList.innerHTML = messages.map((msg) => {
+            messagesContainer.innerHTML = messages.map((msg) => {
                 const type = msg.message_type || 'info';
                 const icon = icons[type] || 'ℹ️';
                 const createdAt = new Date(msg.created_at).toLocaleString('de-DE');
-                const text = String(msg.message_text || '')
-                    .replace(/\n/g, '<br>');
-                const markReadButton = currentTab === 'new' && !msg.expects_response
+                const text = String(msg.message_text || '').replace(/\n/g, '<br>');
+                const markReadButton = currentMessageTab === 'new' && !msg.expects_response
                     ? `<button class="mark-read-btn" type="button" onclick="markAsRead(${Number(msg.id)})">✓ Als gelesen markieren</button>`
                     : '';
 
@@ -643,15 +1125,15 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             fetch('', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
+                    'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: `mark_read=1&message_id=${encodeURIComponent(messageId)}`,
-                credentials: 'same-origin'
+                credentials: 'same-origin',
             })
                 .then((response) => response.json())
                 .then((data) => {
                     if (data && data.success) {
-                        loadMessages();
+                        loadMessages(getCurrentMessageTab());
                     }
                 })
                 .catch((error) => {
@@ -663,18 +1145,19 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             if (!messageId || !response) {
                 return;
             }
+
             fetch('', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
+                    'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: `respond=1&message_id=${encodeURIComponent(messageId)}&response=${encodeURIComponent(response)}`,
-                credentials: 'same-origin'
+                credentials: 'same-origin',
             })
                 .then((res) => res.json())
                 .then((data) => {
                     if (data && data.success) {
-                        loadMessages();
+                        loadMessages(getCurrentMessageTab());
                     }
                 })
                 .catch((error) => {
@@ -682,23 +1165,107 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 });
         }
 
-        function updateMessageBadge(count) {
-            if (!notificationBadge) {
-                return;
-            }
+        function updateTabBadge(count) {
             const parsed = Number(count) || 0;
 
-            if (parsed > 0) {
-                notificationBadge.style.display = 'flex';
-                notificationBadge.textContent = parsed > 99 ? '99+' : parsed;
-            } else {
-                notificationBadge.style.display = 'none';
+            if (tabBadge) {
+                if (parsed > 0) {
+                    tabBadge.style.display = 'inline';
+                    tabBadge.textContent = parsed > 99 ? '99+' : parsed;
+                } else {
+                    tabBadge.style.display = 'none';
+                }
+            }
+
+            if (notificationBadge) {
+                if (parsed > 0) {
+                    notificationBadge.style.display = 'flex';
+                    notificationBadge.textContent = parsed > 99 ? '99+' : parsed;
+                } else {
+                    notificationBadge.style.display = 'none';
+                }
+            }
+
+            if (userAvatar) {
+                userAvatar.dataset.unread = parsed;
             }
         }
 
-        setInterval(() => loadMessages(), 30000);
+        function openContactModal() {
+            document.getElementById('contactModal')?.classList.add('active');
+        }
 
-        loadMessages();
+        function closeContactModal() {
+            document.getElementById('contactModal')?.classList.remove('active');
+        }
+
+        async function submitContactForm(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('../customer/contact_form.php', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+
+                if (result?.success) {
+                    closeContactModal();
+                    form.reset();
+                    showNotification('✅ Nachricht erfolgreich gesendet!', 'success');
+                } else {
+                    showNotification(`❌ Fehler beim Senden: ${result?.message || 'Unbekannter Fehler'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error submitting contact form:', error);
+                showNotification('❌ Netzwerkfehler beim Senden', 'error');
+            }
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#d4edda' : '#f8d7da'};
+                color: ${type === 'success' ? '#155724' : '#721c24'};
+                padding: 1rem 1.25rem;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                z-index: 3000;
+                transform: translateX(100%);
+                transition: transform 0.3s ease;
+            `;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.transform = 'translateX(0)';
+            }, 100);
+
+            setTimeout(() => {
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 3000);
+        }
+
+        setInterval(() => {
+            if (panelOpen && currentPanelTab === 'messages') {
+                loadMessages(getCurrentMessageTab());
+            }
+        }, 5000);
+
+        updateTabBadge(<?= (int) $initialUnreadCount ?>);
+        loadMessages(getCurrentMessageTab());
     </script>
 </body>
 </html>

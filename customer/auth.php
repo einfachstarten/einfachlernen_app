@@ -59,10 +59,23 @@ function get_current_customer(){
         session_destroy();
         return null;
     }
-    
+
+    // Auto-redirect beta users into the beta app unless they intentionally access the classic dashboard
+    if (!empty($customer['beta_access'])
+        && !empty($_SERVER['REQUEST_URI'])
+        && strpos($_SERVER['REQUEST_URI'], '/beta/') === false
+        && strpos($_SERVER['REQUEST_URI'], '/admin/') === false
+        && !isset($_GET['force_normal'])
+    ) {
+        if (strpos($_SERVER['REQUEST_URI'], '/customer/index.php') !== false) {
+            header('Location: ../beta/index.php');
+            exit;
+        }
+    }
+
     // Update last activity
     $_SESSION['customer_last_activity'] = time();
-    
+
     return $customer;
 }
 function require_customer_login(){

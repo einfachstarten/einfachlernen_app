@@ -167,6 +167,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         :root {
             --primary: #4a90b8;
             --secondary: #52b3a4;
+            --accent-teal: #26a69a;
             --light-blue: #e3f2fd;
             --white: #ffffff;
             --gray-light: #f8f9fa;
@@ -564,6 +565,90 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             padding: 1.25rem;
             background: #f8fafc;
             border-radius: 12px;
+            display: none;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            max-height: none;
+            overflow: visible;
+        }
+
+        .avatar-selection.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .avatar-selection.hiding {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .avatar-change-link {
+            background: linear-gradient(135deg, var(--secondary), var(--accent-teal));
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .avatar-change-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(82, 179, 164, 0.3);
+        }
+
+        .avatar-change-link:active {
+            transform: translateY(0);
+        }
+
+        .avatar-change-link:focus {
+            outline: 3px solid var(--secondary);
+            outline-offset: 2px;
+        }
+
+        .avatar-change-link.loading {
+            opacity: 0.7;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .avatar-change-link.loading::after {
+            content: '⏳';
+            margin-left: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .avatar-change-link {
+                font-size: 0.75rem;
+                padding: 0.3rem 0.6rem;
+            }
+
+            .avatar-selection {
+                padding: 1rem;
+                margin-top: 1rem;
+            }
+
+            .avatar-grid {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                gap: 0.5rem;
+            }
+
+            .avatar-option {
+                padding: 0.5rem 0.25rem;
+            }
+
+            .avatar-option img {
+                width: 48px;
+                height: 48px;
+            }
         }
 
         .avatar-selection h4 {
@@ -1074,6 +1159,13 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                     <div class="profile-info">
                         <h4><?= htmlspecialchars(trim(($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))) ?></h4>
                         <p><?= htmlspecialchars($customer['email']) ?></p>
+                        <button type="button"
+                                class="avatar-change-link"
+                                onclick="toggleAvatarSelection()"
+                                id="avatarChangeBtn"
+                                title="Avatar-Auswahl öffnen">
+                            🎭 Avatar ändern
+                        </button>
                     </div>
                 </div>
 
@@ -1197,8 +1289,20 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         const panelTitle = document.getElementById('panelTitle');
         const userAvatar = document.querySelector('.user-avatar.clickable');
         const dicebearBaseUrl = 'https://api.dicebear.com/9.x';
+        const avatarSelectionElement = document.querySelector('.avatar-selection');
+        const avatarChangeBtn = document.getElementById('avatarChangeBtn');
+        let avatarSelectionVisible = false;
         let currentAvatarStyle = <?= json_encode($avatar_style) ?>;
         let currentAvatarSeed = <?= json_encode($avatar_seed) ?>;
+
+        if (avatarSelectionElement) {
+            avatarSelectionElement.classList.remove('show', 'hiding');
+            avatarSelectionElement.style.display = 'none';
+        }
+
+        if (avatarChangeBtn) {
+            avatarChangeBtn.setAttribute('aria-expanded', 'false');
+        }
 
         let currentPanelTab = 'profile';
         let currentMessageTab = 'new';
@@ -1389,6 +1493,79 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             }
         }
 
+        function toggleAvatarSelection() {
+            const avatarSelection = avatarSelectionElement;
+            const changeBtn = avatarChangeBtn;
+
+            if (!avatarSelection || !changeBtn) {
+                console.error('Avatar selection elements not found');
+                return;
+            }
+
+            if (avatarSelectionVisible) {
+                avatarSelection.classList.remove('show');
+                avatarSelection.classList.add('hiding');
+
+                setTimeout(() => {
+                    avatarSelection.classList.remove('hiding');
+                    avatarSelection.style.display = 'none';
+                }, 300);
+
+                changeBtn.innerHTML = '🎭 Avatar ändern';
+                changeBtn.title = 'Avatar-Auswahl öffnen';
+                changeBtn.setAttribute('aria-expanded', 'false');
+                avatarSelectionVisible = false;
+            } else {
+                avatarSelection.classList.remove('hiding');
+                avatarSelection.style.display = 'block';
+
+                requestAnimationFrame(() => {
+                    avatarSelection.classList.add('show');
+                });
+
+                changeBtn.innerHTML = '❌ Auswahl schließen';
+                changeBtn.title = 'Avatar-Auswahl schließen';
+                changeBtn.setAttribute('aria-expanded', 'true');
+                avatarSelectionVisible = true;
+
+                setTimeout(() => {
+                    avatarSelection.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest',
+                    });
+                }, 150);
+            }
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && avatarSelectionVisible) {
+                toggleAvatarSelection();
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!avatarSelectionVisible) {
+                return;
+            }
+
+            const avatarSelection = avatarSelectionElement;
+            const changeBtn = avatarChangeBtn;
+
+            if (!avatarSelection || !changeBtn) {
+                return;
+            }
+
+            if (avatarSelection.contains(event.target) || changeBtn.contains(event.target)) {
+                return;
+            }
+
+            setTimeout(() => {
+                if (avatarSelectionVisible) {
+                    toggleAvatarSelection();
+                }
+            }, 100);
+        });
+
         function selectAvatar(style) {
             console.log('selectAvatar called with style:', style);
             console.log('currentAvatarStyle:', currentAvatarStyle);
@@ -1405,13 +1582,33 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             }
 
             console.log('Updating avatar to style:', style);
-            updateAvatar(style, currentAvatarSeed);
+            return updateAvatar(style, currentAvatarSeed)
+                .then(() => {
+                    setTimeout(() => {
+                        if (avatarSelectionVisible) {
+                            toggleAvatarSelection();
+                        }
+                    }, 1500);
+                })
+                .catch((error) => {
+                    console.error('Error updating avatar style:', error);
+                });
         }
 
         function generateNewSeed() {
-            const newSeed = Math.random().toString(36).substring(2, 15);
+            const newSeed = 'avatar_' + Math.random().toString(36).substring(2, 12);
             console.log('Generating new avatar seed:', newSeed);
-            updateAvatar(currentAvatarStyle, newSeed);
+            return updateAvatar(currentAvatarStyle, newSeed)
+                .then(() => {
+                    setTimeout(() => {
+                        if (avatarSelectionVisible) {
+                            toggleAvatarSelection();
+                        }
+                    }, 1500);
+                })
+                .catch((error) => {
+                    console.error('Error generating new avatar seed:', error);
+                });
         }
 
         async function updateAvatar(style, seed) {
@@ -1419,7 +1616,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
             if (!style) {
                 showNotification('❌ Ungültiger Avatar-Stil', 'error');
-                return;
+                return Promise.reject(new Error('Invalid avatar style'));
             }
 
             const payload = {
@@ -1430,6 +1627,10 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             console.log('Sending payload:', payload);
 
             try {
+                if (avatarChangeBtn) {
+                    avatarChangeBtn.classList.add('loading');
+                }
+
                 const response = await fetch('../api/update-avatar.php', {
                     method: 'POST',
                     headers: {
@@ -1464,9 +1665,10 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                     console.log('Avatar update successful:', { nextStyle, nextSeed });
                     updateAvatarDisplay(nextStyle, nextSeed);
                     showNotification('✅ Avatar erfolgreich aktualisiert! 🎉', 'success');
-                } else {
-                    throw new Error(result?.error || 'Avatar konnte nicht gespeichert werden');
+                    return result;
                 }
+
+                throw new Error(result?.error || 'Avatar konnte nicht gespeichert werden');
             } catch (error) {
                 console.error('Avatar update error:', error);
 
@@ -1482,6 +1684,11 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 }
 
                 showNotification(errorMessage, 'error');
+                throw error;
+            } finally {
+                if (avatarChangeBtn) {
+                    avatarChangeBtn.classList.remove('loading');
+                }
             }
         }
 

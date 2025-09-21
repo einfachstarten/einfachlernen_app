@@ -230,6 +230,13 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             z-index: 1;
         }
 
+        .user-avatar-wrapper {
+            position: relative;
+            display: inline-block;
+            padding: 8px;
+            margin: -8px;
+        }
+
         .user-avatar {
             width: 60px;
             height: 60px;
@@ -240,7 +247,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             justify-content: center;
             border: 2px solid rgba(255, 255, 255, 0.35);
             position: relative;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .user-avatar img {
@@ -248,6 +255,9 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             height: 100%;
             border-radius: 50%;
             object-fit: cover;
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
         }
 
         .user-avatar.clickable {
@@ -263,20 +273,50 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
         .notification-badge {
             position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #ff4444;
+            top: -8px;
+            right: -8px;
+            background: linear-gradient(135deg, #dc2626, #ef4444);
             color: white;
-            border-radius: 50%;
-            min-width: 20px;
-            height: 20px;
+            border-radius: 999px;
+            min-width: 22px;
+            height: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 0.7rem;
             font-weight: bold;
             border: 2px solid white;
-            z-index: 10;
+            z-index: 20;
+            box-shadow: 0 2px 8px rgba(255, 68, 68, 0.3);
+            padding: 0 4px;
+            white-space: nowrap;
+            transform: translateZ(0);
+            visibility: hidden;
+            opacity: 0;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        .user-avatar:hover .notification-badge {
+            transform: scale(1.1) translateZ(0);
+        }
+
+        .notification-badge[data-count="99+"] {
+            font-size: 0.65rem;
+            min-width: 24px;
+            padding: 0 2px;
+        }
+
+        @media (prefers-high-contrast: active) {
+            .notification-badge {
+                background: red;
+                border: 2px solid white;
+                outline: 1px solid black;
+            }
+        }
+
+        .user-avatar:focus-within .notification-badge {
+            outline: 2px solid rgba(255, 255, 255, 0.8);
+            outline-offset: 2px;
         }
 
         .notification-toast {
@@ -402,6 +442,19 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         }
 
         @media (max-width: 768px) {
+            .user-avatar-wrapper {
+                padding: 6px;
+                margin: -6px;
+            }
+
+            .notification-badge {
+                top: -6px;
+                right: -6px;
+                min-width: 20px;
+                height: 20px;
+                font-size: 0.65rem;
+            }
+
             .action-grid {
                 grid-template-columns: 1fr;
             }
@@ -418,6 +471,12 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 width: 50px;
                 height: 50px;
                 font-size: 1.5rem;
+            }
+        }
+
+        @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+            .notification-badge {
+                border-width: 1px;
             }
         }
 
@@ -1077,12 +1136,17 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
     <div class="app-container">
         <div class="app-header">
             <div class="header-content">
-                <div class="user-avatar clickable" onclick="toggleSmartPanel()" data-unread="<?= (int) $initialUnreadCount ?>" data-avatar-style="<?= htmlspecialchars($avatar_style, ENT_QUOTES, 'UTF-8') ?>" data-avatar-seed="<?= htmlspecialchars($avatar_seed, ENT_QUOTES, 'UTF-8') ?>">
-                    <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>"
-                         alt="Avatar"
-                         style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
-                    <div class="notification-badge" id="notificationBadge" style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
-                        <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
+                <div class="user-avatar-wrapper">
+                    <div class="user-avatar clickable" onclick="toggleSmartPanel()" data-unread="<?= (int) $initialUnreadCount ?>" data-avatar-style="<?= htmlspecialchars($avatar_style, ENT_QUOTES, 'UTF-8') ?>" data-avatar-seed="<?= htmlspecialchars($avatar_seed, ENT_QUOTES, 'UTF-8') ?>">
+                        <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>"
+                             alt="Avatar">
+                        <div
+                            class="notification-badge"
+                            id="notificationBadge"
+                            data-count="<?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount ?>"
+                            style="<?= $initialUnreadCount > 0 ? 'display: flex; visibility: visible; opacity: 1;' : 'display: none;' ?>">
+                            <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
+                        </div>
                     </div>
                 </div>
                 <div class="user-info">
@@ -1390,7 +1454,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             fetch(`?ajax=1&tab=${encodeURIComponent(currentMessageTab)}`, { credentials: 'same-origin' })
                 .then((response) => response.json())
                 .then((data) => {
-                    updateTabBadge(data.unread_count);
+                    updateUnreadCount(data.unread_count);
                     renderMessages(Array.isArray(data.messages) ? data.messages : []);
                 })
                 .catch((error) => {
@@ -1483,29 +1547,40 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 });
         }
 
-        function updateTabBadge(count) {
-            const parsed = Number(count) || 0;
+        function updateUnreadCount(count) {
+            const parsed = parseInt(count, 10);
+            const safeCount = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+            const displayValue = safeCount > 99 ? '99+' : safeCount;
 
             if (tabBadge) {
-                if (parsed > 0) {
+                if (safeCount > 0) {
                     tabBadge.style.display = 'inline';
-                    tabBadge.textContent = parsed > 99 ? '99+' : parsed;
+                    tabBadge.textContent = displayValue;
                 } else {
                     tabBadge.style.display = 'none';
                 }
             }
 
             if (notificationBadge) {
-                if (parsed > 0) {
+                if (safeCount > 0) {
                     notificationBadge.style.display = 'flex';
-                    notificationBadge.textContent = parsed > 99 ? '99+' : parsed;
+                    notificationBadge.textContent = displayValue;
+                    notificationBadge.setAttribute('data-count', String(displayValue));
+
+                    setTimeout(() => {
+                        notificationBadge.style.visibility = 'visible';
+                        notificationBadge.style.opacity = '1';
+                    }, 10);
                 } else {
                     notificationBadge.style.display = 'none';
+                    notificationBadge.style.visibility = 'hidden';
+                    notificationBadge.style.opacity = '0';
+                    notificationBadge.setAttribute('data-count', '0');
                 }
             }
 
             if (userAvatar) {
-                userAvatar.dataset.unread = parsed;
+                userAvatar.dataset.unread = safeCount;
             }
         }
 
@@ -1845,13 +1920,20 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             }, 3000);
         }
 
+        document.addEventListener('DOMContentLoaded', () => {
+            if (notificationBadge && notificationBadge.style.display !== 'none') {
+                notificationBadge.style.visibility = 'visible';
+                notificationBadge.style.opacity = '1';
+            }
+        });
+
         setInterval(() => {
             if (panelOpen && currentPanelTab === 'messages') {
                 loadMessages(getCurrentMessageTab());
             }
         }, 5000);
 
-        updateTabBadge(<?= (int) $initialUnreadCount ?>);
+        updateUnreadCount(<?= (int) $initialUnreadCount ?>);
         loadMessages(getCurrentMessageTab());
     </script>
 </body>

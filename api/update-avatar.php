@@ -22,7 +22,14 @@ if (!is_array($input) || !isset($input['style'])) {
 $style = trim((string) $input['style']);
 $seed = isset($input['seed']) ? trim((string) $input['seed']) : '';
 
-$allowed_styles = ['avataaars', 'pixel-art', 'lorelei', 'adventurer', 'bottts', 'identicon'];
+$allowed_styles = [
+    'avataaars',
+    'adventurer-neutral',
+    'fun-emoji',
+    'lorelei',
+    'pixel-art',
+    'thumbs',
+];
 if (!in_array($style, $allowed_styles, true)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => 'Invalid avatar style']);

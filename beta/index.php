@@ -68,10 +68,26 @@ if (empty($customer['beta_access'])) {
     exit;
 }
 
-$availableAvatarStyles = ['avataaars', 'pixel-art', 'lorelei', 'adventurer', 'bottts', 'identicon'];
+$availableAvatarStyles = [
+    'avataaars',
+    'adventurer-neutral',
+    'fun-emoji',
+    'lorelei',
+    'pixel-art',
+    'thumbs',
+];
+
 $avatar_style = $customer['avatar_style'] ?? '';
 if (!in_array($avatar_style, $availableAvatarStyles, true)) {
     $avatar_style = 'avataaars';
+
+    try {
+        $pdo->prepare('UPDATE customers SET avatar_style = ? WHERE id = ?')
+            ->execute(['avataaars', $customer['id']]);
+        $_SESSION['customer']['avatar_style'] = 'avataaars';
+    } catch (Exception $e) {
+        error_log('Failed to update default avatar style: ' . $e->getMessage());
+    }
 }
 
 $avatar_seed = $customer['avatar_seed'] ?? ($customer['email'] ?? 'beta-user');
@@ -584,6 +600,8 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             font-weight: 600;
             font-family: inherit;
             outline: none;
+            pointer-events: auto;
+            user-select: none;
         }
 
         .avatar-option:hover {
@@ -598,6 +616,12 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             box-shadow: 0 8px 20px rgba(82, 179, 164, 0.3);
         }
 
+        .avatar-option:focus-visible,
+        .avatar-option:focus {
+            outline: 3px solid var(--secondary);
+            outline-offset: 2px;
+        }
+
         .avatar-option img {
             width: 56px;
             height: 56px;
@@ -606,13 +630,28 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
         .avatar-option span {
             text-align: center;
-            text-transform: capitalize;
             line-height: 1.2;
         }
 
-        .avatar-option:focus-visible {
-            outline: 3px solid var(--secondary);
-            outline-offset: 2px;
+        .avatar-option[data-style] {
+            position: relative;
+        }
+
+        .avatar-option[data-style]::after {
+            content: attr(data-style);
+            position: absolute;
+            bottom: -1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.6rem;
+            color: #999;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        .avatar-option[data-style]:hover::after {
+            opacity: 1;
         }
 
         .avatar-generate-btn {
@@ -1074,13 +1113,23 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 <div class="avatar-selection">
                     <h4>🎭 Avatar auswählen</h4>
                     <p class="avatar-hint">Wähle deinen Lieblingsstil oder würfle einen neuen Avatar aus.</p>
+                    <?php
+                        $styleLabelMap = [
+                            'avataaars' => 'Avataaars',
+                            'adventurer-neutral' => 'Adventurer Neutral',
+                            'fun-emoji' => 'Fun Emoji',
+                            'lorelei' => 'Lorelei',
+                            'pixel-art' => 'Pixel Art',
+                            'thumbs' => 'Thumbs',
+                        ];
+                    ?>
                     <div class="avatar-grid">
                         <?php foreach ($availableAvatarStyles as $style):
                             $isSelected = $style === $avatar_style;
-                            $styleLabel = ucfirst(str_replace('-', ' ', $style));
+                            $styleLabel = $styleLabelMap[$style] ?? ucfirst(str_replace('-', ' ', $style));
                             $styleUrl = 'https://api.dicebear.com/9.x/' . rawurlencode($style) . '/svg?seed=' . rawurlencode($avatar_seed);
                         ?>
-                            <button type="button" class="avatar-option <?= $isSelected ? 'selected' : '' ?>" data-style="<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>" onclick="selectAvatar(<?= json_encode($style) ?>)">
+                            <button type="button" class="avatar-option <?= $isSelected ? 'selected' : '' ?>" data-style="<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>">
                                 <img src="<?= htmlspecialchars($styleUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?>">
                                 <span><?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?></span>
                             </button>
@@ -1341,19 +1390,33 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         }
 
         function selectAvatar(style) {
-            if (!style || style === currentAvatarStyle) {
+            console.log('selectAvatar called with style:', style);
+            console.log('currentAvatarStyle:', currentAvatarStyle);
+
+            if (!style) {
+                console.error('No style provided to selectAvatar');
+                showNotification('❌ Kein Avatar-Stil ausgewählt', 'error');
                 return;
             }
 
+            if (style === currentAvatarStyle) {
+                console.log('Style already selected, skipping update');
+                return;
+            }
+
+            console.log('Updating avatar to style:', style);
             updateAvatar(style, currentAvatarSeed);
         }
 
         function generateNewSeed() {
             const newSeed = Math.random().toString(36).substring(2, 15);
+            console.log('Generating new avatar seed:', newSeed);
             updateAvatar(currentAvatarStyle, newSeed);
         }
 
         async function updateAvatar(style, seed) {
+            console.log('updateAvatar called:', { style, seed });
+
             if (!style) {
                 showNotification('❌ Ungültiger Avatar-Stil', 'error');
                 return;
@@ -1363,6 +1426,8 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 style,
                 seed: seed && String(seed).trim() ? seed : currentAvatarSeed,
             };
+
+            console.log('Sending payload:', payload);
 
             try {
                 const response = await fetch('../api/update-avatar.php', {
@@ -1375,12 +1440,15 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                     body: JSON.stringify(payload),
                 });
 
-                let result = null;
+                console.log('Response status:', response.status);
 
+                let result = null;
                 try {
                     result = await response.json();
+                    console.log('Response data:', result);
                 } catch (parseError) {
                     console.error('Failed to parse avatar response:', parseError);
+                    throw new Error('Invalid JSON response from server');
                 }
 
                 if (!response.ok) {
@@ -1393,6 +1461,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 if (result?.success) {
                     const nextStyle = result.style || payload.style;
                     const nextSeed = result.seed || payload.seed;
+                    console.log('Avatar update successful:', { nextStyle, nextSeed });
                     updateAvatarDisplay(nextStyle, nextSeed);
                     showNotification('✅ Avatar erfolgreich aktualisiert! 🎉', 'success');
                 } else {
@@ -1408,6 +1477,8 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                     errorMessage = '❌ Server-Fehler beim Speichern';
                 } else if (error.message.includes('Invalid avatar style')) {
                     errorMessage = '❌ Ungültiger Avatar-Stil gewählt';
+                } else if (error.message.includes('Invalid JSON')) {
+                    errorMessage = '❌ Server-Antwort fehlerhaft';
                 }
 
                 showNotification(errorMessage, 'error');
@@ -1450,6 +1521,27 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             const safeStyle = encodeURIComponent(style || 'avataaars');
             const safeSeed = encodeURIComponent(seed || 'beta-user');
             return `${dicebearBaseUrl}/${safeStyle}/svg?seed=${safeSeed}`;
+        }
+
+        function setupAvatarClickHandlers() {
+            document.querySelectorAll('.avatar-option').forEach((option) => {
+                option.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    const style = this.dataset?.style;
+                    console.log('Avatar option clicked:', style);
+                    selectAvatar(style);
+                }, { once: false });
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log('DOM loaded, setting up avatar click handlers');
+                setupAvatarClickHandlers();
+            });
+        } else {
+            console.log('DOM already loaded, initializing avatar click handlers immediately');
+            setupAvatarClickHandlers();
         }
 
         function openContactModal() {

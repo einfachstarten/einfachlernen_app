@@ -642,7 +642,8 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             }
 
             .avatar-option {
-                padding: 0.5rem 0.25rem;
+                padding: 0.5rem;
+                min-height: 80px;
             }
 
             .avatar-option img {
@@ -667,26 +668,28 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
             gap: 0.75rem;
+            transition: transform 0.15s ease;
         }
 
         .avatar-option {
             border: 2px solid #e5e7eb;
             border-radius: 12px;
-            padding: 0.75rem 0.5rem;
+            padding: 0.75rem;
             background: white;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: center;
             cursor: pointer;
             transition: all 0.2s ease;
-            font-size: 0.75rem;
             color: var(--gray-dark);
             font-weight: 600;
             font-family: inherit;
             outline: none;
             pointer-events: auto;
             user-select: none;
+            min-height: 90px;
+            position: relative;
         }
 
         .avatar-option:hover {
@@ -713,30 +716,30 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             border-radius: 50%;
         }
 
-        .avatar-option span {
-            text-align: center;
-            line-height: 1.2;
-        }
-
-        .avatar-option[data-style] {
-            position: relative;
-        }
-
-        .avatar-option[data-style]::after {
-            content: attr(data-style);
+        .avatar-option.selected::after {
+            content: '✓';
             position: absolute;
-            bottom: -1rem;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.6rem;
-            color: #999;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-            pointer-events: none;
+            bottom: 5px;
+            right: 5px;
+            background: var(--secondary);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
         }
 
-        .avatar-option[data-style]:hover::after {
-            opacity: 1;
+        .avatar-grid .avatar-option img {
+            transition: all 0.3s ease;
+        }
+
+        .avatar-grid .avatar-option img.updating {
+            opacity: 0.7;
+            transform: scale(0.9);
         }
 
         .avatar-generate-btn {
@@ -748,19 +751,26 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             color: white;
             border: none;
             border-radius: 10px;
-            padding: 0.6rem 1.2rem;
+            padding: 0.7rem 1.4rem;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s ease;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
         }
 
         .avatar-generate-btn:hover {
             background: #3d9b91;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(82, 179, 164, 0.3);
         }
 
         .avatar-generate-btn:focus-visible {
             outline: 3px solid rgba(82, 179, 164, 0.6);
             outline-offset: 2px;
+        }
+
+        .avatar-generate-btn:active {
+            transform: translateY(0);
         }
 
         .profile-info h4 {
@@ -1204,11 +1214,11 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
                 <div class="avatar-selection">
                     <h4>🎭 Avatar auswählen</h4>
-                    <p class="avatar-hint">Wähle deinen Lieblingsstil oder würfle einen neuen Avatar aus.</p>
+                    <p class="avatar-hint">Wähle deinen Style oder würfle ein neues Set von Avataren!</p>
                     <?php
                         $styleLabelMap = [
                             'avataaars' => 'Avataaars',
-                            'adventurer-neutral' => 'Adventurer Neutral',
+                            'adventurer-neutral' => 'Adventurer',
                             'fun-emoji' => 'Fun Emoji',
                             'lorelei' => 'Lorelei',
                             'pixel-art' => 'Pixel Art',
@@ -1221,13 +1231,18 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                             $styleLabel = $styleLabelMap[$style] ?? ucfirst(str_replace('-', ' ', $style));
                             $styleUrl = 'https://api.dicebear.com/9.x/' . rawurlencode($style) . '/svg?seed=' . rawurlencode($avatar_seed);
                         ?>
-                            <button type="button" class="avatar-option <?= $isSelected ? 'selected' : '' ?>" data-style="<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>">
+                            <button type="button"
+                                    class="avatar-option <?= $isSelected ? 'selected' : '' ?>"
+                                    data-style="<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>"
+                                    onclick="selectAvatar('<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>')"
+                                    title="<?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?> Avatar-Style">
                                 <img src="<?= htmlspecialchars($styleUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?>">
-                                <span><?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?></span>
                             </button>
                         <?php endforeach; ?>
                     </div>
-                    <button type="button" class="avatar-generate-btn" onclick="generateNewSeed()">🎲 Neuen Avatar generieren</button>
+                    <button type="button" class="avatar-generate-btn" onclick="generateNewSeed()">
+                        🎲 Neues Set würfeln
+                    </button>
                 </div>
             </div>
         </div>
@@ -1291,6 +1306,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         const dicebearBaseUrl = 'https://api.dicebear.com/9.x';
         const avatarSelectionElement = document.querySelector('.avatar-selection');
         const avatarChangeBtn = document.getElementById('avatarChangeBtn');
+        const avatarGridElement = document.querySelector('.avatar-grid');
         let avatarSelectionVisible = false;
         let currentAvatarStyle = <?= json_encode($avatar_style) ?>;
         let currentAvatarSeed = <?= json_encode($avatar_seed) ?>;
@@ -1587,6 +1603,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                     setTimeout(() => {
                         if (avatarSelectionVisible) {
                             toggleAvatarSelection();
+                            showNotification('🎨 Neuer Avatar-Style aktiviert!', 'success');
                         }
                     }, 1500);
                 })
@@ -1600,11 +1617,14 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             console.log('Generating new avatar seed:', newSeed);
             return updateAvatar(currentAvatarStyle, newSeed)
                 .then(() => {
-                    setTimeout(() => {
-                        if (avatarSelectionVisible) {
-                            toggleAvatarSelection();
-                        }
-                    }, 1500);
+                    showNotification('🎲 Neue Avatare gewürfelt!', 'success');
+
+                    if (avatarGridElement) {
+                        avatarGridElement.style.transform = 'scale(0.95)';
+                        setTimeout(() => {
+                            avatarGridElement.style.transform = 'scale(1)';
+                        }, 150);
+                    }
                 })
                 .catch((error) => {
                     console.error('Error generating new avatar seed:', error);
@@ -1626,10 +1646,14 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
             console.log('Sending payload:', payload);
 
+            const avatarImages = document.querySelectorAll('.avatar-grid .avatar-option img');
+
             try {
                 if (avatarChangeBtn) {
                     avatarChangeBtn.classList.add('loading');
                 }
+
+                avatarImages.forEach((img) => img.classList.add('updating'));
 
                 const response = await fetch('../api/update-avatar.php', {
                     method: 'POST',
@@ -1664,7 +1688,6 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                     const nextSeed = result.seed || payload.seed;
                     console.log('Avatar update successful:', { nextStyle, nextSeed });
                     updateAvatarDisplay(nextStyle, nextSeed);
-                    showNotification('✅ Avatar erfolgreich aktualisiert! 🎉', 'success');
                     return result;
                 }
 
@@ -1689,6 +1712,8 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 if (avatarChangeBtn) {
                     avatarChangeBtn.classList.remove('loading');
                 }
+
+                avatarImages.forEach((img) => img.classList.remove('updating'));
             }
         }
 
@@ -1730,27 +1755,6 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             return `${dicebearBaseUrl}/${safeStyle}/svg?seed=${safeSeed}`;
         }
 
-        function setupAvatarClickHandlers() {
-            document.querySelectorAll('.avatar-option').forEach((option) => {
-                option.addEventListener('click', function (event) {
-                    event.preventDefault();
-                    const style = this.dataset?.style;
-                    console.log('Avatar option clicked:', style);
-                    selectAvatar(style);
-                }, { once: false });
-            });
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                console.log('DOM loaded, setting up avatar click handlers');
-                setupAvatarClickHandlers();
-            });
-        } else {
-            console.log('DOM already loaded, initializing avatar click handlers immediately');
-            setupAvatarClickHandlers();
-        }
-
         function openContactModal() {
             document.getElementById('contactModal')?.classList.add('active');
         }
@@ -1788,9 +1792,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
         function showNotification(message, type = 'info') {
             const existing = document.querySelector('.notification-toast');
-            if (existing) {
-                existing.remove();
-            }
+            if (existing) existing.remove();
 
             const toast = document.createElement('div');
             toast.className = `notification-toast ${type}`;
@@ -1802,7 +1804,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 left: '50%',
                 transform: 'translateX(-50%)',
                 padding: '0.75rem 1.5rem',
-                borderRadius: '8px',
+                borderRadius: '12px',
                 fontWeight: '600',
                 fontSize: '0.9rem',
                 zIndex: '9999',
@@ -1810,29 +1812,37 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 transition: 'all 0.3s ease',
                 maxWidth: '90%',
                 textAlign: 'center',
+                backdropFilter: 'blur(10px)',
+                boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)'
             });
 
             if (type === 'success') {
-                toast.style.background = 'var(--success, #28a745)';
-                toast.style.color = '#fff';
+                toast.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+                toast.style.color = 'white';
             } else if (type === 'error') {
-                toast.style.background = '#dc3545';
-                toast.style.color = '#fff';
+                toast.style.background = 'linear-gradient(135deg, #dc3545, #e74c3c)';
+                toast.style.color = 'white';
             } else {
-                toast.style.background = 'var(--primary, #4a90b8)';
-                toast.style.color = '#fff';
+                toast.style.background = 'linear-gradient(135deg, var(--primary, #4a90b8), var(--secondary, #52b3a4))';
+                toast.style.color = 'white';
             }
 
             document.body.appendChild(toast);
 
-            requestAnimationFrame(() => {
+            setTimeout(() => {
                 toast.style.opacity = '1';
-            });
+                toast.style.transform = 'translateX(-50%) translateY(-5px)';
+            }, 100);
+
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(0)';
+            }, 200);
 
             setTimeout(() => {
                 toast.style.opacity = '0';
+                toast.style.transform = 'translateX(-50%) translateY(10px)';
                 setTimeout(() => toast.remove(), 300);
-            }, 4000);
+            }, 3000);
         }
 
         setInterval(() => {

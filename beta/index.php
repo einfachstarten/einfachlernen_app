@@ -627,7 +627,6 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         .action-icon.booking { background: linear-gradient(135deg, #42a5f5, #1e88e5); }
         .action-icon.appointments { background: linear-gradient(135deg, var(--primary), var(--secondary)); }
         .action-icon.contact { background: linear-gradient(135deg, #66bb6a, #43a047); }
-        .action-icon.phone { background: linear-gradient(135deg, #ff7043, #f4511e); }
         .action-icon.normal { background: linear-gradient(135deg, #9c27b0, #673ab7); }
         .action-icon.future { background: linear-gradient(135deg, #667eea, #764ba2); }
 
@@ -832,7 +831,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             </div>
 
             <div class="action-grid">
-                <a href="../customer/booking.php" class="action-card">
+                <a href="../customer/termine.php" class="action-card">
                     <div class="action-icon booking">📅</div>
                     <div class="action-content">
                         <h3>Termine buchen</h3>
@@ -855,14 +854,6 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                         <p>Fragen und Nachrichten senden</p>
                     </div>
                 </div>
-
-                <a href="tel:+4312345678" class="action-card">
-                    <div class="action-icon phone">📞</div>
-                    <div class="action-content">
-                        <h3>Anrufen</h3>
-                        <p>Direkt mit Anna Braun sprechen</p>
-                    </div>
-                </a>
 
                 <a href="../customer/index.php?force_normal=1" class="action-card beta-link">
                     <div class="action-icon normal">🏠</div>

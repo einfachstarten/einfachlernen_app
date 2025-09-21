@@ -33,11 +33,15 @@ try {
         last_name VARCHAR(50),
         phone VARCHAR(30),
         status VARCHAR(20) DEFAULT 'active',
+        avatar_style VARCHAR(50) DEFAULT 'avataaars',
+        avatar_seed VARCHAR(100) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
     try { $pdo->exec("ALTER TABLE customers ADD COLUMN pin VARCHAR(255) NULL"); } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE customers ADD COLUMN pin_expires DATETIME NULL"); } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE customers ADD COLUMN last_login DATETIME NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE customers ADD COLUMN avatar_style VARCHAR(50) DEFAULT 'avataaars'"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE customers ADD COLUMN avatar_seed VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS customer_sessions (
         id INT AUTO_INCREMENT PRIMARY KEY,

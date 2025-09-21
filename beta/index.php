@@ -68,6 +68,19 @@ if (empty($customer['beta_access'])) {
     exit;
 }
 
+$availableAvatarStyles = ['avataaars', 'pixel-art', 'lorelei', 'adventurer', 'bottts', 'identicon'];
+$avatar_style = $customer['avatar_style'] ?? '';
+if (!in_array($avatar_style, $availableAvatarStyles, true)) {
+    $avatar_style = 'avataaars';
+}
+
+$avatar_seed = $customer['avatar_seed'] ?? ($customer['email'] ?? 'beta-user');
+if ($avatar_seed === null || $avatar_seed === '') {
+    $avatar_seed = $customer['email'] ?? 'beta-user';
+}
+
+$avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/svg?seed=' . rawurlencode($avatar_seed);
+
 if (!empty($_POST['respond'])) {
     header('Content-Type: application/json');
     $messageId = (int)($_POST['message_id'] ?? 0); $choice = $_POST['response'] ?? '';
@@ -203,14 +216,21 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         .user-avatar {
             width: 60px;
             height: 60px;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.25);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.8rem;
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.35);
             position: relative;
+            overflow: hidden;
+        }
+
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
         }
 
         .user-avatar.clickable {
@@ -492,16 +512,118 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         }
 
         .profile-avatar {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            border: 3px solid rgba(82, 179, 164, 0.25);
+            background: white;
+            overflow: hidden;
+        }
+
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+
+        .avatar-selection {
+            margin-top: 2rem;
+            padding: 1.25rem;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+
+        .avatar-selection h4 {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            color: var(--gray-dark);
+        }
+
+        .avatar-hint {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-bottom: 1rem;
+        }
+
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .avatar-option {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 0.75rem 0.5rem;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.75rem;
+            color: var(--gray-dark);
+            font-weight: 600;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .avatar-option:hover {
+            border-color: var(--secondary);
+            box-shadow: 0 6px 16px rgba(82, 179, 164, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .avatar-option.selected {
+            border-color: var(--secondary);
+            background: #ecfdf5;
+            box-shadow: 0 8px 20px rgba(82, 179, 164, 0.3);
+        }
+
+        .avatar-option img {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+        }
+
+        .avatar-option span {
+            text-align: center;
+            text-transform: capitalize;
+            line-height: 1.2;
+        }
+
+        .avatar-option:focus-visible {
+            outline: 3px solid var(--secondary);
+            outline-offset: 2px;
+        }
+
+        .avatar-generate-btn {
+            margin-top: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--secondary);
             color: white;
-            font-size: 1.5rem;
-            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            padding: 0.6rem 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .avatar-generate-btn:hover {
+            background: #3d9b91;
+        }
+
+        .avatar-generate-btn:focus-visible {
+            outline: 3px solid rgba(82, 179, 164, 0.6);
+            outline-offset: 2px;
         }
 
         .profile-info h4 {
@@ -808,8 +930,8 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
     <div class="app-container">
         <div class="app-header">
             <div class="header-content">
-                <div class="user-avatar clickable" onclick="toggleSmartPanel()" data-unread="<?= (int) $initialUnreadCount ?>">
-                    <?= strtoupper(substr($customer['first_name'], 0, 1)) ?>
+                <div class="user-avatar clickable" onclick="toggleSmartPanel()" data-unread="<?= (int) $initialUnreadCount ?>" data-avatar-style="<?= htmlspecialchars($avatar_style, ENT_QUOTES, 'UTF-8') ?>" data-avatar-seed="<?= htmlspecialchars($avatar_seed, ENT_QUOTES, 'UTF-8') ?>">
+                    <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>" alt="Avatar von <?= htmlspecialchars($customer['first_name'] ?? 'Kunde', ENT_QUOTES, 'UTF-8') ?>">
                     <div class="notification-badge" id="notificationBadge" style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
                         <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
                     </div>
@@ -893,10 +1015,10 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             <div class="profile-section">
                 <div class="profile-header">
                     <div class="profile-avatar">
-                        <?= strtoupper(substr($customer['first_name'], 0, 1)) ?>
+                        <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>" alt="Avatar">
                     </div>
                     <div class="profile-info">
-                        <h4><?= htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name']) ?></h4>
+                        <h4><?= htmlspecialchars(trim(($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))) ?></h4>
                         <p><?= htmlspecialchars($customer['email']) ?></p>
                     </div>
                 </div>
@@ -932,6 +1054,24 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                             <span class="status-badge beta">🧪 Beta-Tester</span>
                         </div>
                     </div>
+                </div>
+
+                <div class="avatar-selection">
+                    <h4>🎭 Avatar auswählen</h4>
+                    <p class="avatar-hint">Wähle deinen Lieblingsstil oder würfle einen neuen Avatar aus.</p>
+                    <div class="avatar-grid">
+                        <?php foreach ($availableAvatarStyles as $style):
+                            $isSelected = $style === $avatar_style;
+                            $styleLabel = ucfirst(str_replace('-', ' ', $style));
+                            $styleUrl = 'https://api.dicebear.com/9.x/' . rawurlencode($style) . '/svg?seed=' . rawurlencode($avatar_seed);
+                        ?>
+                            <button type="button" class="avatar-option <?= $isSelected ? 'selected' : '' ?>" data-style="<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>" onclick="selectAvatar(<?= json_encode($style) ?>)">
+                                <img src="<?= htmlspecialchars($styleUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?>">
+                                <span><?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" class="avatar-generate-btn" onclick="generateNewSeed()">🎲 Neuen Avatar generieren</button>
                 </div>
             </div>
         </div>
@@ -992,6 +1132,9 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         const messageFilterButtons = document.querySelectorAll('.message-tabs button');
         const panelTitle = document.getElementById('panelTitle');
         const userAvatar = document.querySelector('.user-avatar.clickable');
+        const dicebearBaseUrl = 'https://api.dicebear.com/9.x';
+        let currentAvatarStyle = <?= json_encode($avatar_style) ?>;
+        let currentAvatarSeed = <?= json_encode($avatar_seed) ?>;
 
         let currentPanelTab = 'profile';
         let currentMessageTab = 'new';
@@ -1180,6 +1323,91 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             if (userAvatar) {
                 userAvatar.dataset.unread = parsed;
             }
+        }
+
+        function selectAvatar(style) {
+            if (!style || style === currentAvatarStyle) {
+                return;
+            }
+
+            updateAvatar(style, currentAvatarSeed);
+        }
+
+        function generateNewSeed() {
+            const newSeed = Math.random().toString(36).substring(2, 15);
+            updateAvatar(currentAvatarStyle, newSeed);
+        }
+
+        async function updateAvatar(style, seed) {
+            if (!style) {
+                return;
+            }
+
+            const payload = {
+                style,
+                seed: seed && String(seed).trim() ? seed : currentAvatarSeed,
+            };
+
+            try {
+                const response = await fetch('../api/update-avatar.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload),
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result?.success) {
+                    const nextStyle = result.style || payload.style;
+                    const nextSeed = result.seed || payload.seed;
+                    updateAvatarDisplay(nextStyle, nextSeed);
+                    showNotification('✅ Avatar erfolgreich aktualisiert! 🎉', 'success');
+                } else {
+                    showNotification(`❌ ${result?.error || 'Avatar konnte nicht gespeichert werden.'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error updating avatar:', error);
+                showNotification('❌ Fehler beim Speichern des Avatars', 'error');
+            }
+        }
+
+        function updateAvatarDisplay(style, seed) {
+            currentAvatarStyle = style;
+            currentAvatarSeed = seed;
+
+            const avatarUrl = buildAvatarUrl(style, seed);
+
+            if (userAvatar) {
+                userAvatar.dataset.avatarStyle = style;
+                userAvatar.dataset.avatarSeed = seed;
+                const headerImg = userAvatar.querySelector('img');
+                if (headerImg) {
+                    headerImg.src = avatarUrl;
+                    headerImg.alt = 'Avatar';
+                }
+            }
+
+            const profileAvatarImg = document.querySelector('.profile-avatar img');
+            if (profileAvatarImg) {
+                profileAvatarImg.src = avatarUrl;
+            }
+
+            document.querySelectorAll('.avatar-option').forEach((option) => {
+                const optionStyle = option?.dataset?.style;
+                option.classList.toggle('selected', optionStyle === style);
+
+                const optionImg = option.querySelector('img');
+                if (optionImg && optionStyle) {
+                    optionImg.src = buildAvatarUrl(optionStyle, seed);
+                }
+            });
+        }
+
+        function buildAvatarUrl(style, seed) {
+            const safeStyle = encodeURIComponent(style || 'avataaars');
+            const safeSeed = encodeURIComponent(seed || 'beta-user');
+            return `${dicebearBaseUrl}/${safeStyle}/svg?seed=${safeSeed}`;
         }
 
         function openContactModal() {

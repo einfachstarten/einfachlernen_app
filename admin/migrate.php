@@ -17,7 +17,7 @@ function getPDO() {
 }
 
 echo "<h1>Database Migration</h1>";
-echo "<p>Adding missing columns for PIN system...</p>";
+echo "<p>Adding missing columns for PIN system & avatars...</p>";
 
 try {
     $pdo = getPDO();
@@ -40,7 +40,9 @@ try {
     $migrations = [
         'pin' => "ALTER TABLE customers ADD COLUMN pin VARCHAR(255) NULL",
         'pin_expires' => "ALTER TABLE customers ADD COLUMN pin_expires DATETIME NULL",
-        'last_login' => "ALTER TABLE customers ADD COLUMN last_login DATETIME NULL"
+        'last_login' => "ALTER TABLE customers ADD COLUMN last_login DATETIME NULL",
+        'avatar_style' => "ALTER TABLE customers ADD COLUMN avatar_style VARCHAR(50) DEFAULT 'avataaars'",
+        'avatar_seed' => "ALTER TABLE customers ADD COLUMN avatar_seed VARCHAR(100) DEFAULT NULL"
     ];
     
     echo "<h3>Migration Results:</h3>";
@@ -188,7 +190,7 @@ try {
         $final_columns[] = $row['Field'];
     }
     
-    $required_columns = ['id', 'email', 'first_name', 'last_name', 'phone', 'status', 'created_at', 'pin', 'pin_expires', 'last_login', 'beta_access'];
+    $required_columns = ['id', 'email', 'first_name', 'last_name', 'phone', 'status', 'created_at', 'pin', 'pin_expires', 'last_login', 'beta_access', 'avatar_style', 'avatar_seed'];
     
     foreach ($required_columns as $req_col) {
         if (in_array($req_col, $final_columns)) {

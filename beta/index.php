@@ -262,6 +262,19 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             z-index: 10;
         }
 
+        .notification-toast {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+        }
+
+        .notification-toast.success {
+            background: linear-gradient(135deg, #28a745, #20c997) !important;
+        }
+
+        .notification-toast.error {
+            background: linear-gradient(135deg, #dc3545, #e74c3c) !important;
+        }
+
         .user-info h1 {
             font-size: 1.4rem;
             font-weight: 600;
@@ -931,7 +944,9 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
         <div class="app-header">
             <div class="header-content">
                 <div class="user-avatar clickable" onclick="toggleSmartPanel()" data-unread="<?= (int) $initialUnreadCount ?>" data-avatar-style="<?= htmlspecialchars($avatar_style, ENT_QUOTES, 'UTF-8') ?>" data-avatar-seed="<?= htmlspecialchars($avatar_seed, ENT_QUOTES, 'UTF-8') ?>">
-                    <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>" alt="Avatar von <?= htmlspecialchars($customer['first_name'] ?? 'Kunde', ENT_QUOTES, 'UTF-8') ?>">
+                    <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>"
+                         alt="Avatar"
+                         style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
                     <div class="notification-badge" id="notificationBadge" style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
                         <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
                     </div>
@@ -1340,6 +1355,7 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
 
         async function updateAvatar(style, seed) {
             if (!style) {
+                showNotification('❌ Ungültiger Avatar-Stil', 'error');
                 return;
             }
 
@@ -1351,24 +1367,50 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             try {
                 const response = await fetch('../api/update-avatar.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
                     credentials: 'same-origin',
                     body: JSON.stringify(payload),
                 });
 
-                const result = await response.json();
+                let result = null;
 
-                if (response.ok && result?.success) {
+                try {
+                    result = await response.json();
+                } catch (parseError) {
+                    console.error('Failed to parse avatar response:', parseError);
+                }
+
+                if (!response.ok) {
+                    const message = result?.error
+                        ? `HTTP ${response.status}: ${result.error}`
+                        : `HTTP ${response.status}: ${response.statusText}`;
+                    throw new Error(message);
+                }
+
+                if (result?.success) {
                     const nextStyle = result.style || payload.style;
                     const nextSeed = result.seed || payload.seed;
                     updateAvatarDisplay(nextStyle, nextSeed);
                     showNotification('✅ Avatar erfolgreich aktualisiert! 🎉', 'success');
                 } else {
-                    showNotification(`❌ ${result?.error || 'Avatar konnte nicht gespeichert werden.'}`, 'error');
+                    throw new Error(result?.error || 'Avatar konnte nicht gespeichert werden');
                 }
             } catch (error) {
-                console.error('Error updating avatar:', error);
-                showNotification('❌ Fehler beim Speichern des Avatars', 'error');
+                console.error('Avatar update error:', error);
+
+                let errorMessage = '❌ Fehler beim Speichern des Avatars';
+                if (error.message.includes('HTTP 404')) {
+                    errorMessage = '❌ Avatar-API nicht gefunden';
+                } else if (error.message.includes('HTTP 500')) {
+                    errorMessage = '❌ Server-Fehler beim Speichern';
+                } else if (error.message.includes('Invalid avatar style')) {
+                    errorMessage = '❌ Ungültiger Avatar-Stil gewählt';
+                }
+
+                showNotification(errorMessage, 'error');
             }
         }
 
@@ -1445,36 +1487,53 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
             }
         }
 
-        function showNotification(message, type) {
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: ${type === 'success' ? '#d4edda' : '#f8d7da'};
-                color: ${type === 'success' ? '#155724' : '#721c24'};
-                padding: 1rem 1.25rem;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                z-index: 3000;
-                transform: translateX(100%);
-                transition: transform 0.3s ease;
-            `;
+        function showNotification(message, type = 'info') {
+            const existing = document.querySelector('.notification-toast');
+            if (existing) {
+                existing.remove();
+            }
 
-            document.body.appendChild(notification);
+            const toast = document.createElement('div');
+            toast.className = `notification-toast ${type}`;
+            toast.textContent = message;
+
+            Object.assign(toast.style, {
+                position: 'fixed',
+                bottom: '2rem',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '0.9rem',
+                zIndex: '9999',
+                opacity: '0',
+                transition: 'all 0.3s ease',
+                maxWidth: '90%',
+                textAlign: 'center',
+            });
+
+            if (type === 'success') {
+                toast.style.background = 'var(--success, #28a745)';
+                toast.style.color = '#fff';
+            } else if (type === 'error') {
+                toast.style.background = '#dc3545';
+                toast.style.color = '#fff';
+            } else {
+                toast.style.background = 'var(--primary, #4a90b8)';
+                toast.style.color = '#fff';
+            }
+
+            document.body.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.style.opacity = '1';
+            });
 
             setTimeout(() => {
-                notification.style.transform = 'translateX(0)';
-            }, 100);
-
-            setTimeout(() => {
-                notification.style.transform = 'translateX(100%)';
-                setTimeout(() => {
-                    notification.remove();
-                }, 300);
-            }, 3000);
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
         }
 
         setInterval(() => {

@@ -15,6 +15,14 @@ function ensureProductionMessagingTables(PDO $pdo): void
         INDEX idx_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
+    try {
+        $pdo->exec("ALTER TABLE customer_messages ADD COLUMN expects_response TINYINT(1) DEFAULT 0");
+    } catch (PDOException $e) {
+        if ($e->getCode() !== '42S21') {
+            throw $e;
+        }
+    }
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS customer_message_responses (
         id INT AUTO_INCREMENT PRIMARY KEY,
         message_id INT NOT NULL UNIQUE,

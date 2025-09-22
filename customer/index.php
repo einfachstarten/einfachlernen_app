@@ -101,18 +101,13 @@ if (!empty($_GET['ajax'])) {
             $messageType = 'info';
         }
 
-        $responseValue = null;
-        if ($row['response'] === 'yes' || $row['response'] === 'no') {
-            $responseValue = $row['response'];
-        }
-
         $messages[] = [
             'id' => (int) $row['id'],
-            'message_text' => $row['message_text'] ?? '',
-            'message_type' => $messageType,
+            'message_text' => htmlspecialchars($row['message_text'] ?? '', ENT_QUOTES, 'UTF-8'),
+            'message_type' => htmlspecialchars($messageType, ENT_QUOTES, 'UTF-8'),
             'created_at' => $row['created_at'],
             'expects_response' => !empty($row['expects_response']),
-            'user_response' => $responseValue,
+            'user_response' => $row['response'] ? htmlspecialchars($row['response'], ENT_QUOTES, 'UTF-8') : null,
         ];
     }
 
@@ -163,6 +158,35 @@ if(!empty($_SESSION['customer'])) {
         ]);
     }
 }
+
+$availableAvatarStyles = [
+    'avataaars',
+    'adventurer-neutral',
+    'fun-emoji',
+    'lorelei',
+    'pixel-art',
+    'thumbs',
+];
+
+$avatar_style = $customer['avatar_style'] ?? '';
+if (!in_array($avatar_style, $availableAvatarStyles, true)) {
+    $avatar_style = 'avataaars';
+
+    try {
+        $pdo->prepare('UPDATE customers SET avatar_style = ? WHERE id = ?')
+            ->execute(['avataaars', $customer['id']]);
+        $_SESSION['customer']['avatar_style'] = 'avataaars';
+    } catch (Exception $e) {
+        error_log('Failed to update default avatar style: ' . $e->getMessage());
+    }
+}
+
+$avatar_seed = $customer['avatar_seed'] ?? ($customer['email'] ?? 'customer-user');
+if ($avatar_seed === null || $avatar_seed === '') {
+    $avatar_seed = $customer['email'] ?? 'customer-user';
+}
+
+$avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/svg?seed=' . rawurlencode($avatar_seed);
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -243,32 +267,219 @@ if(!empty($_SESSION['customer'])) {
             z-index: 1;
         }
 
+        .user-avatar-wrapper {
+            position: relative;
+            margin-right: 1rem;
+        }
+
         .user-avatar {
             width: 60px;
             height: 60px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            transition: transform 0.3s ease;
+            display: block;
+            object-fit: cover;
+        }
+
+        .user-avatar:hover {
+            transform: scale(1.05);
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: linear-gradient(135deg, #ff4757, #ff3742);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .message-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .message-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .message-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100%;
+            background: white;
+            z-index: 1000;
+            transition: right 0.3s ease;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-panel.active {
+            right: 0;
+        }
+
+        .message-panel-header {
+            padding: 1.5rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            position: relative;
+        }
+
+        .message-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .message-tab {
             background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .message-tab.active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.8rem;
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: background 0.2s;
         }
 
-        .user-avatar.clickable {
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .message-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .message-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+
+        .message-item:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-header {
+            padding: 1rem;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message-body {
+            padding: 1rem;
+        }
+
+        .message-actions {
+            padding: 1rem;
+            background: #f8fafc;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .response-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .response-btn.yes {
+            background: #10b981;
+            color: white;
+        }
+
+        .response-btn.no {
+            background: #ef4444;
+            color: white;
+        }
+
+        .response-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .mark-read-btn {
+            background: #6b7280;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 2000;
             transition: all 0.3s ease;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .user-avatar.clickable:hover {
-            transform: scale(1.05);
-            border-color: rgba(255, 255, 255, 0.6);
-            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
-        }
-
-        .user-avatar.clickable:active {
-            transform: scale(0.98);
         }
 
         .user-info h1 {
@@ -517,175 +728,6 @@ if(!empty($_SESSION['customer'])) {
             margin: 0.25rem 0 0 0;
             font-size: 0.85rem;
             color: var(--gray-medium);
-        }
-
-        .unread-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 24px;
-            padding: 0.15rem 0.5rem;
-            background: #ef4444;
-            color: white;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
-        }
-
-        .unread-badge.hidden {
-            display: none;
-        }
-
-        .message-section {
-            margin-top: 2.5rem;
-            background: white;
-            border-radius: 16px;
-            padding: 1.75rem;
-            box-shadow: 0 4px 20px var(--shadow);
-            border: 1px solid #f0f0f0;
-        }
-
-        .message-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .message-header h2 {
-            margin: 0;
-            font-size: 1.1rem;
-            color: var(--gray-dark);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .message-tabs {
-            display: inline-flex;
-            background: #f3f4f6;
-            border-radius: 999px;
-            padding: 0.25rem;
-            gap: 0.25rem;
-        }
-
-        .message-tabs button {
-            border: none;
-            background: transparent;
-            color: #6b7280;
-            font-weight: 600;
-            padding: 0.4rem 0.9rem;
-            border-radius: 999px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-        }
-
-        .message-tabs button.active {
-            background: white;
-            color: var(--primary);
-            box-shadow: 0 2px 12px rgba(74, 144, 184, 0.2);
-        }
-
-        .messages-container {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .message-card {
-            background: #f9fafb;
-            border-radius: 12px;
-            padding: 1.25rem;
-            border-left: 4px solid var(--primary);
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-        }
-
-        .message-card.success { border-left-color: #10b981; }
-        .message-card.warning { border-left-color: #f59e0b; }
-        .message-card.question { border-left-color: #6366f1; }
-
-        .message-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.75rem;
-            font-size: 0.85rem;
-            color: #6b7280;
-        }
-
-        .message-text {
-            color: var(--gray-dark);
-            line-height: 1.6;
-            font-size: 0.95rem;
-            margin-bottom: 0.75rem;
-            white-space: pre-line;
-        }
-
-        .message-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-            align-items: center;
-        }
-
-        .message-actions button {
-            border: none;
-            border-radius: 999px;
-            padding: 0.5rem 1rem;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .message-actions .mark-read {
-            background: white;
-            border: 1px solid #d1d5db;
-            color: #4b5563;
-        }
-
-        .message-actions .mark-read:hover {
-            background: #f3f4f6;
-        }
-
-        .message-actions .response-yes {
-            background: #10b981;
-            color: white;
-        }
-
-        .message-actions .response-no {
-            background: #ef4444;
-            color: white;
-        }
-
-        .message-actions .response-yes:hover {
-            background: #0ea472;
-        }
-
-        .message-actions .response-no:hover {
-            background: #dc2626;
-        }
-
-        .message-response-status {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .message-empty {
-            text-align: center;
-            padding: 2rem 1rem;
-            color: #6b7280;
-            border: 2px dashed #e5e7eb;
-            border-radius: 12px;
-            background: #f9fafb;
         }
 
 
@@ -1103,13 +1145,25 @@ if(!empty($_SESSION['customer'])) {
     <div class="app-container">
         <header class="app-header">
             <div class="header-content">
-                <div class="user-avatar clickable" onclick="toggleUserModal()">👤</div>
-                <div class="user-info">
-                    <h1>Willkommen, <?= htmlspecialchars($customer['first_name']) ?>!</h1>
-                    <p>Dein persönlicher Lernbereich</p>
+                <div class="user-avatar-wrapper">
+                    <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>"
+                         alt="Avatar"
+                         class="user-avatar"
+                         onclick="openMessagePanel()"
+                         style="cursor: pointer;"
+                         title="Nachrichten anzeigen">
+                    <div class="notification-badge"
+                         id="messageNotificationBadge"
+                         style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
+                        <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
+                    </div>
+                </div>
+                <div class="user-info" onclick="openUserModal()" style="cursor: pointer;" title="Profil anzeigen">
+                    <h1>Mein Bereich: <?= htmlspecialchars($customer['first_name'], ENT_QUOTES, 'UTF-8'); ?></h1>
+                    <p>Willkommen bei Anna Braun Lerncoaching</p>
                 </div>
                 <a href="?logout=1" class="logout-btn" onclick="return confirm('Möchtest du dich wirklich abmelden?')">
-                    <span>🚪</span> Abmelden
+                    🚪 Abmelden
                 </a>
             </div>
         </header>
@@ -1144,12 +1198,11 @@ if(!empty($_SESSION['customer'])) {
                     </a>
 
                     <!-- 3. Mitteilungen -->
-                    <a href="#messageCenter" class="action-card" onclick="openMessageSection(event)">
+                    <a href="#" class="action-card" onclick="openMessagePanel(); return false;">
                         <div class="action-icon">📨</div>
                         <div class="action-content">
                             <h3>Mitteilungen</h3>
                             <p>Neuigkeiten vom Coaching-Team</p>
-                            <span class="unread-badge hidden" id="messageBadge"></span>
                         </div>
                     </a>
 
@@ -1164,24 +1217,27 @@ if(!empty($_SESSION['customer'])) {
                 </div>
             </section>
 
-            <section class="message-section" id="messageCenter">
-                <div class="message-header">
-                    <h2>💬 Nachrichten vom Team</h2>
-                    <div class="message-tabs" role="tablist">
-                        <button type="button" class="active" data-tab="unread" id="tabUnread" role="tab" aria-selected="true">
-                            Ungelesen
-                        </button>
-                        <button type="button" data-tab="read" id="tabRead" role="tab" aria-selected="false">
-                            Gelesen
-                        </button>
-                    </div>
-                </div>
-                <div class="messages-container" id="messagesContainer">
-                    <div class="message-empty">Nachrichten werden geladen...</div>
-                </div>
-            </section>
-
         </main>
+
+        <!-- Message Panel -->
+        <div id="messageOverlay" class="message-overlay" onclick="closeMessagePanel()"></div>
+        <div id="messagePanel" class="message-panel">
+            <div class="message-panel-header">
+                <h3>📨 Nachrichten</h3>
+                <div class="message-tabs">
+                    <button class="message-tab active" onclick="switchMessageTab('unread')" id="unreadTab">
+                        Ungelesen (<span id="unreadCount"><?= $initialUnreadCount ?></span>)
+                    </button>
+                    <button class="message-tab" onclick="switchMessageTab('read')" id="readTab">
+                        Gelesen
+                    </button>
+                </div>
+                <button class="close-btn" onclick="closeMessagePanel()">✕</button>
+            </div>
+            <div class="message-content" id="messageContent">
+                <div class="loading">Nachrichten werden geladen...</div>
+            </div>
+        </div>
 
         <footer class="app-footer">
             <p>&copy; <?= date('Y') ?> Anna Braun Lerncoaching - Dein Partner für ganzheitliche Lernunterstützung</p>
@@ -1320,256 +1376,253 @@ if(!empty($_SESSION['customer'])) {
     </div>
 
     <script>
-        const messageState = {
-            currentTab: 'unread',
-            unreadCount: <?= (int) $initialUnreadCount ?>,
-            loading: false,
-        };
+        let panelOpen = false;
+        let currentPanelTab = 'messages';
+        let currentMessageTab = 'unread';
 
-        const messageElements = {
-            container: document.getElementById('messagesContainer'),
-            badge: document.getElementById('messageBadge'),
-            tabButtons: document.querySelectorAll('.message-tabs button'),
-            section: document.getElementById('messageCenter'),
-            unreadButton: document.getElementById('tabUnread'),
-        };
+        function openMessagePanel() {
+            const overlay = document.getElementById('messageOverlay');
+            const panel = document.getElementById('messagePanel');
 
-        function escapeHtml(value) {
-            return String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+            if (overlay) {
+                overlay.classList.add('active');
+            }
+
+            if (panel) {
+                panel.classList.add('active');
+            }
+
+            panelOpen = true;
+            currentPanelTab = 'messages';
+
+            loadMessages(currentMessageTab);
         }
 
-        function formatDate(value) {
-            if (!value) {
-                return '';
+        function closeMessagePanel() {
+            const overlay = document.getElementById('messageOverlay');
+            const panel = document.getElementById('messagePanel');
+
+            if (overlay) {
+                overlay.classList.remove('active');
             }
 
-            const date = new Date(value);
-            if (Number.isNaN(date.getTime())) {
-                return value;
+            if (panel) {
+                panel.classList.remove('active');
             }
 
-            return date.toLocaleString('de-DE', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
+            panelOpen = false;
+        }
+
+        function switchMessageTab(tab) {
+            currentMessageTab = tab === 'read' ? 'read' : 'unread';
+
+            document.querySelectorAll('.message-tab').forEach((button) => {
+                button.classList.remove('active');
             });
-        }
 
-        function updateUnreadBadge(count) {
-            messageState.unreadCount = Math.max(0, Number(count) || 0);
-
-            if (messageElements.badge) {
-                if (messageState.unreadCount > 0) {
-                    messageElements.badge.textContent = messageState.unreadCount;
-                    messageElements.badge.classList.remove('hidden');
-                } else {
-                    messageElements.badge.textContent = '';
-                    messageElements.badge.classList.add('hidden');
-                }
+            const activeTab = document.getElementById(`${currentMessageTab}Tab`);
+            if (activeTab) {
+                activeTab.classList.add('active');
             }
 
-            if (messageElements.unreadButton) {
-                messageElements.unreadButton.textContent = messageState.unreadCount > 0
-                    ? `Ungelesen (${messageState.unreadCount})`
-                    : 'Ungelesen';
-            }
+            loadMessages(currentMessageTab);
         }
 
-        function setActiveTab(tab) {
-            messageState.currentTab = tab === 'read' ? 'read' : 'unread';
-
-            messageElements.tabButtons.forEach((button) => {
-                const isActive = button.dataset.tab === messageState.currentTab;
-                button.classList.toggle('active', isActive);
-                button.setAttribute('aria-selected', isActive ? 'true' : 'false');
-            });
+        function getCurrentMessageTab() {
+            return currentMessageTab;
         }
 
-        function openMessageSection(event) {
-            if (event) {
-                event.preventDefault();
-            }
-
-            if (messageElements.section) {
-                messageElements.section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-
-            fetchMessages('unread');
-        }
-
-        async function fetchMessages(tab) {
-            const nextTab = tab === 'read' ? 'read' : 'unread';
-
-            if (messageState.loading) {
+        function loadMessages(tab = 'unread') {
+            const safeTab = tab === 'read' ? 'read' : 'unread';
+            const content = document.getElementById('messageContent');
+            if (!content) {
                 return;
             }
 
-            messageState.loading = true;
-            setActiveTab(nextTab);
+            content.innerHTML = '<div class="loading">Nachrichten werden geladen...</div>';
 
-            if (messageElements.container) {
-                messageElements.container.innerHTML = '<div class="message-empty">Nachrichten werden geladen...</div>';
-            }
+            fetch(`index.php?ajax=1&tab=${encodeURIComponent(safeTab)}`)
+                .then((response) => response.json())
+                .then((data) => {
+                    updateUnreadCount(typeof data.unread_count === 'number' ? data.unread_count : 0);
 
-            try {
-                const response = await fetch(`index.php?ajax=1&tab=${encodeURIComponent(nextTab)}`);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (typeof data.unread_count === 'number') {
-                    updateUnreadBadge(data.unread_count);
-                }
-
-                renderMessages(Array.isArray(data.messages) ? data.messages : []);
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                if (messageElements.container) {
-                    messageElements.container.innerHTML = '<div class="message-empty">Fehler beim Laden der Nachrichten.</div>';
-                }
-            } finally {
-                messageState.loading = false;
-            }
-        }
-
-        function renderMessages(messages) {
-            if (!messageElements.container) {
-                return;
-            }
-
-            if (!messages.length) {
-                const emptyText = messageState.currentTab === 'read'
-                    ? 'Keine gelesenen Nachrichten vorhanden.'
-                    : 'Keine neuen Nachrichten verfügbar.';
-                messageElements.container.innerHTML = `<div class="message-empty">${emptyText}</div>`;
-                return;
-            }
-
-            const iconMap = {
-                info: 'ℹ️',
-                success: '✅',
-                warning: '⚠️',
-                question: '❓',
-            };
-
-            const html = messages.map((msg) => {
-                const type = iconMap[msg.message_type] ? msg.message_type : 'info';
-                const icon = iconMap[type];
-                const messageText = escapeHtml(msg.message_text).replace(/\n/g, '<br>');
-                const createdAt = escapeHtml(formatDate(msg.created_at));
-
-                let responseSection = '';
-                let responseActions = '';
-
-                if (msg.expects_response) {
-                    if (msg.user_response === 'yes') {
-                        responseSection = '<div class="message-response-status" style="color:#10b981;">✅ Antwort: Ja</div>';
-                    } else if (msg.user_response === 'no') {
-                        responseSection = '<div class="message-response-status" style="color:#ef4444;">❌ Antwort: Nein</div>';
-                    } else {
-                        responseSection = '<div class="message-response-status" style="color:#6b7280;">⏳ Antwort ausstehend</div>';
-                        responseActions = `
-                            <button type="button" class="response-yes" onclick="sendMessageResponse(${msg.id}, 'yes')">Ja</button>
-                            <button type="button" class="response-no" onclick="sendMessageResponse(${msg.id}, 'no')">Nein</button>
-                        `;
+                    if (!Array.isArray(data.messages) || data.messages.length === 0) {
+                        content.innerHTML = `<div style="text-align: center; color: #6b7280; padding: 2rem;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                            <p>Keine ${safeTab === 'unread' ? 'ungelesenen' : 'gelesenen'} Nachrichten</p>
+                        </div>`;
+                        return;
                     }
-                }
 
-                let markReadButton = '';
-                if (messageState.currentTab === 'unread') {
-                    markReadButton = `<button type="button" class="mark-read" onclick="markAsRead(${msg.id})">Als gelesen markieren</button>`;
-                }
+                    content.innerHTML = data.messages.map((msg) => {
+                        const typeIcons = {
+                            info: 'ℹ️',
+                            success: '✅',
+                            warning: '⚠️',
+                            question: '❓',
+                        };
 
-                const actionsHtml = (responseActions || markReadButton)
-                    ? `<div class="message-actions">${responseActions}${markReadButton}</div>`
-                    : '';
+                        const typeColors = {
+                            info: '#3b82f6',
+                            success: '#10b981',
+                            warning: '#f59e0b',
+                            question: '#8b5cf6',
+                        };
 
-                return `
-                    <div class="message-card ${type}">
-                        <div class="message-meta">
-                            <span>${icon} ${type.charAt(0).toUpperCase() + type.slice(1)}</span>
-                            <span>${createdAt}</span>
-                        </div>
-                        <div class="message-text">${messageText}</div>
-                        ${responseSection ? `<div>${responseSection}</div>` : ''}
-                        ${actionsHtml}
-                    </div>
-                `;
-            }).join('');
+                        const icon = typeIcons[msg.message_type] || 'ℹ️';
+                        const color = typeColors[msg.message_type] || '#3b82f6';
+                        const isRead = safeTab === 'read';
 
-            messageElements.container.innerHTML = html;
-        }
+                        let actions = '';
+                        if (msg.expects_response && !msg.user_response && !isRead) {
+                            actions = `
+                                <div class="message-actions">
+                                    <button class="response-btn yes" onclick="respondToMessage(${msg.id}, 'yes')">
+                                        👍 Ja
+                                    </button>
+                                    <button class="response-btn no" onclick="respondToMessage(${msg.id}, 'no')">
+                                        👎 Nein
+                                    </button>
+                                </div>
+                            `;
+                        } else if (!isRead) {
+                            actions = `
+                                <div class="message-actions">
+                                    <button class="mark-read-btn" onclick="markAsRead(${msg.id})">
+                                        ✓ Als gelesen markieren
+                                    </button>
+                                </div>
+                            `;
+                        }
 
-        async function markAsRead(messageId) {
-            if (!messageId) {
-                return;
-            }
+                        if (msg.user_response) {
+                            actions = `
+                                <div class="message-actions">
+                                    <div style="padding: 0.5rem; background: #e5e7eb; border-radius: 6px; color: #374151;">
+                                        Deine Antwort: <strong>${msg.user_response === 'yes' ? '👍 Ja' : '👎 Nein'}</strong>
+                                    </div>
+                                </div>
+                            `;
+                        }
 
-            try {
-                const response = await fetch('index.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    },
-                    body: `mark_read=1&message_id=${encodeURIComponent(messageId)}`,
+                        return `
+                            <div class="message-item">
+                                <div class="message-header">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span style="font-size: 1.2rem;">${icon}</span>
+                                        <span style="color: ${color}; font-weight: 500; text-transform: capitalize;">
+                                            ${msg.message_type}
+                                        </span>
+                                    </div>
+                                    <small style="color: #6b7280;">
+                                        ${new Date(msg.created_at).toLocaleDateString('de-DE', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        })}
+                                    </small>
+                                </div>
+                                <div class="message-body">
+                                    <p style="line-height: 1.6; margin: 0; white-space: pre-wrap;">${msg.message_text}</p>
+                                </div>
+                                ${actions}
+                            </div>
+                        `;
+                    }).join('');
+                })
+                .catch((error) => {
+                    console.error('Error loading messages:', error);
+                    content.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 2rem;">Fehler beim Laden der Nachrichten</div>';
                 });
-
-                const result = await response.json();
-
-                if (result && result.success) {
-                    await fetchMessages(messageState.currentTab);
-                }
-            } catch (error) {
-                console.error('Error marking message as read:', error);
-            }
         }
 
-        async function sendMessageResponse(messageId, responseValue) {
-            if (!messageId || (responseValue !== 'yes' && responseValue !== 'no')) {
-                return;
-            }
-
-            try {
-                const response = await fetch('index.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    },
-                    body: `respond=1&message_id=${encodeURIComponent(messageId)}&response=${encodeURIComponent(responseValue)}`,
-                });
-
-                const result = await response.json();
-
-                if (result && result.success) {
-                    await fetchMessages(messageState.currentTab);
+        function respondToMessage(messageId, response) {
+            fetch('index.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `respond=1&message_id=${encodeURIComponent(messageId)}&response=${encodeURIComponent(response)}`
+            })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success) {
+                    showToast(`Antwort "${response === 'yes' ? 'Ja' : 'Nein'}" gesendet!`);
+                    loadMessages(getCurrentMessageTab());
                 }
-            } catch (error) {
-                console.error('Error sending response:', error);
-            }
-        }
-
-        messageElements.tabButtons.forEach((button) => {
-            button.addEventListener('click', () => {
-                fetchMessages(button.dataset.tab);
             });
+        }
+
+        function markAsRead(messageId) {
+            fetch('index.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `mark_read=1&message_id=${encodeURIComponent(messageId)}`
+            })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success) {
+                    showToast('Als gelesen markiert!');
+                    loadMessages(getCurrentMessageTab());
+                }
+            });
+        }
+
+        function updateUnreadCount(count) {
+            const badge = document.getElementById('messageNotificationBadge');
+            const unreadSpan = document.getElementById('unreadCount');
+
+            if (unreadSpan) {
+                unreadSpan.textContent = count;
+            }
+
+            if (badge) {
+                if (count > 0) {
+                    badge.style.display = 'flex';
+                    badge.textContent = count > 99 ? '99+' : count;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateX(-50%) translateY(-5px)';
+            }, 100);
+
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(0)';
+            }, 200);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(-50%) translateY(10px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const notificationBadge = document.getElementById('messageNotificationBadge');
+            if (notificationBadge && notificationBadge.style.display !== 'none') {
+                notificationBadge.style.visibility = 'visible';
+                notificationBadge.style.opacity = '1';
+            }
         });
 
-        window.openMessageSection = openMessageSection;
-        window.markAsRead = markAsRead;
-        window.sendMessageResponse = sendMessageResponse;
+        setInterval(() => {
+            if (panelOpen && currentPanelTab === 'messages') {
+                loadMessages(getCurrentMessageTab());
+            }
+        }, 5000);
 
-        updateUnreadBadge(messageState.unreadCount);
-        fetchMessages(messageState.currentTab);
+        updateUnreadCount(<?= (int) $initialUnreadCount ?>);
 
         // Modal Control Functions
         function toggleUserModal() {

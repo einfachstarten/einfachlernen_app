@@ -192,6 +192,13 @@ if ($avatar_seed === null || $avatar_seed === '') {
 }
 
 $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/svg?seed=' . rawurlencode($avatar_seed);
+
+if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
+    error_log('ERROR: avatar_url not set for customer ' . $customer['id'] . ' - using fallback avatar');
+
+    $fallbackSeed = $customer['email'] ?? ('customer-' . ($customer['id'] ?? 'user'));
+    $avatar_url = 'https://api.dicebear.com/9.x/avataaars/svg?seed=' . rawurlencode($fallbackSeed);
+}
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -815,6 +822,15 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
             justify-content: center;
             font-size: 1.5rem;
             border: 2px solid rgba(255, 255, 255, 0.3);
+            overflow: hidden;
+        }
+
+        .modal-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
         }
 
         .modal-title h2 {
@@ -1273,7 +1289,9 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
         <div class="modal-container">
             <div class="modal-header">
                 <div class="modal-title">
-                    <div class="modal-avatar">👤</div>
+                    <div class="modal-avatar">
+                        <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>" alt="Avatar">
+                    </div>
                     <div>
                         <h2>Deine Kontoinformationen</h2>
                         <p>Persönliche Daten und Status-Übersicht</p>

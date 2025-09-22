@@ -101,13 +101,18 @@ if (!empty($_GET['ajax'])) {
             $messageType = 'info';
         }
 
+        $responseValue = null;
+        if ($row['response'] === 'yes' || $row['response'] === 'no') {
+            $responseValue = $row['response'];
+        }
+
         $messages[] = [
             'id' => (int) $row['id'],
-            'message_text' => htmlspecialchars($row['message_text'] ?? '', ENT_QUOTES, 'UTF-8'),
-            'message_type' => htmlspecialchars($messageType, ENT_QUOTES, 'UTF-8'),
+            'message_text' => $row['message_text'] ?? '',
+            'message_type' => $messageType,
             'created_at' => $row['created_at'],
             'expects_response' => !empty($row['expects_response']),
-            'user_response' => $row['response'] ? htmlspecialchars($row['response'], ENT_QUOTES, 'UTF-8') : null,
+            'user_response' => $responseValue,
         ];
     }
 
@@ -441,6 +446,7 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
             border-radius: 6px;
             cursor: pointer;
             font-size: 0.9rem;
+            font-weight: 500;
             transition: all 0.2s;
         }
 
@@ -456,6 +462,7 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
 
         .response-btn:hover {
             transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
 
         .mark-read-btn {
@@ -466,7 +473,14 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
             border-radius: 6px;
             cursor: pointer;
             font-size: 0.9rem;
+            font-weight: 500;
             transition: all 0.2s;
+        }
+
+        .mark-read-btn:hover {
+            background: #4b5563;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
 
         .toast {
@@ -480,6 +494,8 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             z-index: 2000;
             transition: all 0.3s ease;
+            border-left: 4px solid #10b981;
+            font-weight: 500;
         }
 
         .user-info h1 {
@@ -496,13 +512,13 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
         .logout-btn {
             margin-left: auto;
             background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
             color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
+            padding: 0.75rem 1.5rem;
+            border-radius: 25px;
             text-decoration: none;
-            font-size: 0.85rem;
+            font-weight: 500;
             transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
             display: flex;
             align-items: center;
             gap: 0.5rem;
@@ -510,6 +526,7 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
 
         .logout-btn:hover {
             background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
             color: white;
             text-decoration: none;
         }
@@ -1441,7 +1458,7 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
 
             content.innerHTML = '<div class="loading">Nachrichten werden geladen...</div>';
 
-            fetch(`index.php?ajax=1&tab=${encodeURIComponent(safeTab)}`)
+            fetch(`?ajax=1&tab=${encodeURIComponent(safeTab)}`)
                 .then((response) => response.json())
                 .then((data) => {
                     updateUnreadCount(typeof data.unread_count === 'number' ? data.unread_count : 0);
@@ -1525,7 +1542,7 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
                                     </small>
                                 </div>
                                 <div class="message-body">
-                                    <p style="line-height: 1.6; margin: 0; white-space: pre-wrap;">${msg.message_text}</p>
+                                    <p style="line-height: 1.6; margin: 0; white-space: pre-wrap;">${escapeHtml(msg.message_text)}</p>
                                 </div>
                                 ${actions}
                             </div>
@@ -1535,11 +1552,12 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
                 .catch((error) => {
                     console.error('Error loading messages:', error);
                     content.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 2rem;">Fehler beim Laden der Nachrichten</div>';
+                    showToast('Fehler beim Laden der Nachrichten', 'error');
                 });
         }
 
         function respondToMessage(messageId, response) {
-            fetch('index.php', {
+            fetch('', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `respond=1&message_id=${encodeURIComponent(messageId)}&response=${encodeURIComponent(response)}`
@@ -1549,12 +1567,18 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
                 if (data.success) {
                     showToast(`Antwort "${response === 'yes' ? 'Ja' : 'Nein'}" gesendet!`);
                     loadMessages(getCurrentMessageTab());
+                } else {
+                    showToast('Fehler beim Senden der Antwort', 'error');
                 }
+            })
+            .catch((error) => {
+                console.error('Error responding to message:', error);
+                showToast('Fehler beim Senden der Antwort', 'error');
             });
         }
 
         function markAsRead(messageId) {
-            fetch('index.php', {
+            fetch('', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `mark_read=1&message_id=${encodeURIComponent(messageId)}`
@@ -1564,7 +1588,13 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
                 if (data.success) {
                     showToast('Als gelesen markiert!');
                     loadMessages(getCurrentMessageTab());
+                } else {
+                    showToast('Fehler beim Markieren', 'error');
                 }
+            })
+            .catch((error) => {
+                console.error('Error marking as read:', error);
+                showToast('Fehler beim Markieren', 'error');
             });
         }
 
@@ -1586,9 +1616,12 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
             }
         }
 
-        function showToast(message) {
+        function showToast(message, type = 'success') {
             const toast = document.createElement('div');
             toast.className = 'toast';
+            if (type === 'error') {
+                toast.style.borderLeftColor = '#ef4444';
+            }
             toast.textContent = message;
             document.body.appendChild(toast);
 
@@ -1608,12 +1641,20 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
             }, 3000);
         }
 
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text ?? '';
+            return div.innerHTML;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const notificationBadge = document.getElementById('messageNotificationBadge');
             if (notificationBadge && notificationBadge.style.display !== 'none') {
                 notificationBadge.style.visibility = 'visible';
                 notificationBadge.style.opacity = '1';
             }
+
+            updateUnreadCount(<?= (int) $initialUnreadCount ?>);
         });
 
         setInterval(() => {
@@ -1622,7 +1663,11 @@ $avatar_url = 'https://api.dicebear.com/9.x/' . rawurlencode($avatar_style) . '/
             }
         }, 5000);
 
-        updateUnreadCount(<?= (int) $initialUnreadCount ?>);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && panelOpen) {
+                closeMessagePanel();
+            }
+        });
 
         // Modal Control Functions
         function toggleUserModal() {

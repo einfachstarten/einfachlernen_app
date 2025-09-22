@@ -673,6 +673,8 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             display: flex;
             gap: 0.5rem;
             margin-bottom: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
         }
 
         .message-tab-btn {
@@ -689,6 +691,26 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             background: var(--primary);
             color: white;
             border-color: var(--primary);
+        }
+
+        .manual-refresh-btn {
+            background: var(--secondary);
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            margin-left: auto;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .manual-refresh-btn:hover {
+            background: #3d9b91;
+            transform: translateY(-1px);
         }
 
         .messages-content {
@@ -929,9 +951,10 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             font-weight: 500;
             transition: all 0.3s ease;
             border: 1px solid rgba(255, 255, 255, 0.3);
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 0.5rem;
+            white-space: nowrap;
         }
 
         .logout-btn:hover {
@@ -939,6 +962,11 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             transform: translateY(-2px);
             color: white;
             text-decoration: none;
+        }
+
+        .logout-icon,
+        .logout-text {
+            display: inline;
         }
 
         .app-content {
@@ -1358,54 +1386,64 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             .app-container {
                 box-shadow: none;
             }
-            
+
             .app-header {
                 padding: 1rem;
             }
-            
+
             .header-content {
-                gap: 0.75rem;
+                flex-wrap: nowrap;
+                gap: 0.5rem;
             }
-            
+
             .user-avatar {
                 width: 50px;
                 height: 50px;
                 font-size: 1.5rem;
             }
-            
-            .user-info h1 {
-                font-size: 1.2rem;
+
+            .user-info {
+                flex-shrink: 1;
+                min-width: 0;
             }
-            
+
+            .user-info h1 {
+                font-size: 1rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .user-info p {
+                font-size: 0.8rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
             .app-content {
                 padding: 1rem;
             }
+
             .logout-btn {
-                padding: 0.4rem 0.8rem;
-                font-size: 0.8rem;
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+                gap: 0.25rem;
+                white-space: nowrap;
+                flex-shrink: 0;
             }
         }
 
         @media (max-width: 480px) {
             .header-content {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
+                flex-wrap: nowrap;
+                align-items: center;
             }
-            
-            .logout-btn {
-                align-self: stretch;
-                justify-content: center;
-            }
-            
-            .welcome-section {
-                padding: 1rem;
-            }
-            
+
             .info-card {
                 padding: 1rem;
             }
-            
+
             .action-card {
                 padding: 1rem;
                 gap: 0.75rem;
@@ -1600,17 +1638,12 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                     <p>Willkommen bei Anna Braun Lerncoaching</p>
                 </div>
                 <a href="?logout=1" class="logout-btn" onclick="return confirm('Möchtest du dich wirklich abmelden?')">
-                    🚪 Abmelden
+                    <span class="logout-icon">🚪</span><span class="logout-text">Abmelden</span>
                 </a>
             </div>
         </header>
 
         <main class="app-content">
-            <section class="welcome-section">
-                <h2>🎯 Herzlich willkommen in deinem Lernbereich</h2>
-                <p>Hier findest du alle wichtigen Funktionen für dein Lerncoaching bei Anna Braun.</p>
-            </section>
-
             <section class="quick-actions">
                 <h2 class="section-title">
                     <span>⚡</span> Schnellzugriff
@@ -1639,7 +1672,7 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                         <div class="action-icon">📨</div>
                         <div class="action-content">
                             <h3>Mitteilungen</h3>
-                            <p>Neuigkeiten vom Coaching-Team</p>
+                            <p>Neuigkeiten von Anna</p>
                         </div>
                     </a>
 
@@ -1648,7 +1681,7 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                         <div class="action-icon">💬</div>
                         <div class="action-content">
                             <h3>Nachricht senden</h3>
-                            <p>Kontaktformular für Ihr Anliegen</p>
+                            <p>Kontaktformular für deine Anliegen</p>
                         </div>
                     </div>
                 </div>
@@ -1887,6 +1920,27 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             panelOpen = false;
         }
 
+        function addManualRefreshButton() {
+            const messagesSection = document.querySelector('.messages-section');
+            if (!messagesSection) {
+                return;
+            }
+
+            const tabs = messagesSection.querySelector('.message-tabs');
+            if (!tabs || document.getElementById('manualRefreshBtn')) {
+                return;
+            }
+
+            const refreshBtn = document.createElement('button');
+            refreshBtn.id = 'manualRefreshBtn';
+            refreshBtn.type = 'button';
+            refreshBtn.className = 'manual-refresh-btn';
+            refreshBtn.innerHTML = '🔄 Aktualisieren';
+            refreshBtn.addEventListener('click', () => loadMessages(getCurrentMessageTab()));
+
+            tabs.appendChild(refreshBtn);
+        }
+
         function switchTab(tab) {
             currentPanelTab = tab === 'messages' ? 'messages' : 'profile';
 
@@ -1903,6 +1957,7 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             }
 
             if (currentPanelTab === 'messages') {
+                addManualRefreshButton();
                 loadMessages(getCurrentMessageTab());
             }
         }
@@ -2417,7 +2472,7 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                 });
             }, observerOptions);
 
-            document.querySelectorAll('.welcome-section, .quick-actions, .action-card').forEach((element) => {
+            document.querySelectorAll('.quick-actions, .action-card').forEach((element) => {
                 element.style.opacity = '0';
                 element.style.transform = 'translateY(20px)';
                 element.style.transition = 'all 0.6s ease-out';
@@ -2450,11 +2505,6 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             }
         });
 
-        setInterval(() => {
-            if (panelOpen && currentPanelTab === 'messages') {
-                loadMessages(getCurrentMessageTab());
-            }
-        }, 5000);
     </script>
 
     <script>

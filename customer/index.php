@@ -1,5 +1,6 @@
 <?php
 require __DIR__.'/auth.php';
+require_once __DIR__ . '/messaging_init.php';
 
 // Customer session timeout: 4 hours
 if(isset($_SESSION['customer_last_activity']) && (time() - $_SESSION['customer_last_activity'] > 14400)){
@@ -40,6 +41,90 @@ $customer = require_customer_login();
 // Log dashboard access
 require_once __DIR__ . '/../admin/ActivityLogger.php';
 $pdo = getPDO();
+ensureProductionMessagingTables($pdo);
+
+if (!empty($_POST['respond'])) {
+    header('Content-Type: application/json');
+    $messageId = (int)($_POST['message_id'] ?? 0);
+    $choice = $_POST['response'] ?? '';
+
+    if ($messageId && in_array($choice, ['yes', 'no'], true)) {
+        $check = $pdo->prepare('SELECT expects_response FROM customer_messages WHERE id = ? AND to_customer_email = ?');
+        $check->execute([$messageId, $customer['email']]);
+        $message = $check->fetch(PDO::FETCH_ASSOC);
+
+        if ($message && !empty($message['expects_response'])) {
+            $pdo->prepare('INSERT INTO customer_message_responses (message_id, response) VALUES (?, ?) ON DUPLICATE KEY UPDATE response = VALUES(response), created_at = CURRENT_TIMESTAMP')
+                ->execute([$messageId, $choice]);
+            $pdo->prepare('UPDATE customer_messages SET is_read = 1 WHERE id = ? AND to_customer_email = ?')
+                ->execute([$messageId, $customer['email']]);
+
+            $_SESSION['customer_last_activity'] = time();
+            echo json_encode(['success' => true]);
+            exit;
+        }
+    }
+
+    $_SESSION['customer_last_activity'] = time();
+    echo json_encode(['success' => false]);
+    exit;
+}
+
+if (!empty($_POST['mark_read'])) {
+    $messageId = isset($_POST['message_id']) ? (int) $_POST['message_id'] : 0;
+
+    if ($messageId > 0) {
+        $stmt = $pdo->prepare('UPDATE customer_messages SET is_read = 1 WHERE id = ? AND to_customer_email = ?');
+        $stmt->execute([$messageId, $customer['email']]);
+    }
+
+    $_SESSION['customer_last_activity'] = time();
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+if (!empty($_GET['ajax'])) {
+    $tab = ($_GET['tab'] ?? '') === 'read' ? 1 : 0;
+
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM customer_messages WHERE to_customer_email = ? AND is_read = 0');
+    $stmt->execute([$customer['email']]);
+    $unreadCount = (int) $stmt->fetchColumn();
+
+    $stmt = $pdo->prepare('SELECT m.id, m.message_text, m.message_type, m.created_at, m.expects_response, r.response FROM customer_messages m LEFT JOIN customer_message_responses r ON r.message_id = m.id WHERE m.to_customer_email = ? AND m.is_read = ? ORDER BY m.created_at DESC LIMIT 15');
+    $stmt->execute([$customer['email'], $tab]);
+
+    $messages = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $messageType = $row['message_type'] ?? 'info';
+        if (!in_array($messageType, ['info', 'success', 'warning', 'question'], true)) {
+            $messageType = 'info';
+        }
+
+        $responseValue = null;
+        if ($row['response'] === 'yes' || $row['response'] === 'no') {
+            $responseValue = $row['response'];
+        }
+
+        $messages[] = [
+            'id' => (int) $row['id'],
+            'message_text' => $row['message_text'] ?? '',
+            'message_type' => $messageType,
+            'created_at' => $row['created_at'],
+            'expects_response' => !empty($row['expects_response']),
+            'user_response' => $responseValue,
+        ];
+    }
+
+    $_SESSION['customer_last_activity'] = time();
+    header('Content-Type: application/json');
+    echo json_encode([
+        'unread_count' => $unreadCount,
+        'messages' => $messages,
+    ]);
+    exit;
+}
+
 $logger = new ActivityLogger($pdo);
 $logger->logActivity($customer['id'], 'dashboard_accessed', [
     'access_method' => 'direct_navigation',
@@ -55,6 +140,10 @@ logPageView($customer['id'], 'dashboard', [
 
 // Update session activity
 $_SESSION['customer_last_activity'] = time();
+
+$unreadStmt = $pdo->prepare('SELECT COUNT(*) FROM customer_messages WHERE to_customer_email = ? AND is_read = 0');
+$unreadStmt->execute([$customer['email']]);
+$initialUnreadCount = (int) $unreadStmt->fetchColumn();
 
 if(!empty($_SESSION['customer'])) {
     // Refresh customer data from database
@@ -418,10 +507,185 @@ if(!empty($_SESSION['customer'])) {
             color: var(--gray-dark);
         }
 
+        .action-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
         .action-content p {
             margin: 0.25rem 0 0 0;
             font-size: 0.85rem;
             color: var(--gray-medium);
+        }
+
+        .unread-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 24px;
+            padding: 0.15rem 0.5rem;
+            background: #ef4444;
+            color: white;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+        }
+
+        .unread-badge.hidden {
+            display: none;
+        }
+
+        .message-section {
+            margin-top: 2.5rem;
+            background: white;
+            border-radius: 16px;
+            padding: 1.75rem;
+            box-shadow: 0 4px 20px var(--shadow);
+            border: 1px solid #f0f0f0;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .message-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--gray-dark);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .message-tabs {
+            display: inline-flex;
+            background: #f3f4f6;
+            border-radius: 999px;
+            padding: 0.25rem;
+            gap: 0.25rem;
+        }
+
+        .message-tabs button {
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            font-weight: 600;
+            padding: 0.4rem 0.9rem;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .message-tabs button.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: 0 2px 12px rgba(74, 144, 184, 0.2);
+        }
+
+        .messages-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message-card {
+            background: #f9fafb;
+            border-radius: 12px;
+            padding: 1.25rem;
+            border-left: 4px solid var(--primary);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .message-card.success { border-left-color: #10b981; }
+        .message-card.warning { border-left-color: #f59e0b; }
+        .message-card.question { border-left-color: #6366f1; }
+
+        .message-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .message-text {
+            color: var(--gray-dark);
+            line-height: 1.6;
+            font-size: 0.95rem;
+            margin-bottom: 0.75rem;
+            white-space: pre-line;
+        }
+
+        .message-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .message-actions button {
+            border: none;
+            border-radius: 999px;
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .message-actions .mark-read {
+            background: white;
+            border: 1px solid #d1d5db;
+            color: #4b5563;
+        }
+
+        .message-actions .mark-read:hover {
+            background: #f3f4f6;
+        }
+
+        .message-actions .response-yes {
+            background: #10b981;
+            color: white;
+        }
+
+        .message-actions .response-no {
+            background: #ef4444;
+            color: white;
+        }
+
+        .message-actions .response-yes:hover {
+            background: #0ea472;
+        }
+
+        .message-actions .response-no:hover {
+            background: #dc2626;
+        }
+
+        .message-response-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .message-empty {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #6b7280;
+            border: 2px dashed #e5e7eb;
+            border-radius: 12px;
+            background: #f9fafb;
         }
 
 
@@ -879,7 +1143,17 @@ if(!empty($_SESSION['customer'])) {
                         </div>
                     </a>
 
-                    <!-- 3. Nachricht senden -->
+                    <!-- 3. Mitteilungen -->
+                    <a href="#messageCenter" class="action-card" onclick="openMessageSection(event)">
+                        <div class="action-icon">📨</div>
+                        <div class="action-content">
+                            <h3>Mitteilungen</h3>
+                            <p>Neuigkeiten vom Coaching-Team</p>
+                            <span class="unread-badge hidden" id="messageBadge"></span>
+                        </div>
+                    </a>
+
+                    <!-- 4. Nachricht senden -->
                     <div class="action-card" onclick="openContactModal()">
                         <div class="action-icon">💬</div>
                         <div class="action-content">
@@ -887,6 +1161,23 @@ if(!empty($_SESSION['customer'])) {
                             <p>Kontaktformular für Ihr Anliegen</p>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <section class="message-section" id="messageCenter">
+                <div class="message-header">
+                    <h2>💬 Nachrichten vom Team</h2>
+                    <div class="message-tabs" role="tablist">
+                        <button type="button" class="active" data-tab="unread" id="tabUnread" role="tab" aria-selected="true">
+                            Ungelesen
+                        </button>
+                        <button type="button" data-tab="read" id="tabRead" role="tab" aria-selected="false">
+                            Gelesen
+                        </button>
+                    </div>
+                </div>
+                <div class="messages-container" id="messagesContainer">
+                    <div class="message-empty">Nachrichten werden geladen...</div>
                 </div>
             </section>
 
@@ -1029,6 +1320,257 @@ if(!empty($_SESSION['customer'])) {
     </div>
 
     <script>
+        const messageState = {
+            currentTab: 'unread',
+            unreadCount: <?= (int) $initialUnreadCount ?>,
+            loading: false,
+        };
+
+        const messageElements = {
+            container: document.getElementById('messagesContainer'),
+            badge: document.getElementById('messageBadge'),
+            tabButtons: document.querySelectorAll('.message-tabs button'),
+            section: document.getElementById('messageCenter'),
+            unreadButton: document.getElementById('tabUnread'),
+        };
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatDate(value) {
+            if (!value) {
+                return '';
+            }
+
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+
+            return date.toLocaleString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        }
+
+        function updateUnreadBadge(count) {
+            messageState.unreadCount = Math.max(0, Number(count) || 0);
+
+            if (messageElements.badge) {
+                if (messageState.unreadCount > 0) {
+                    messageElements.badge.textContent = messageState.unreadCount;
+                    messageElements.badge.classList.remove('hidden');
+                } else {
+                    messageElements.badge.textContent = '';
+                    messageElements.badge.classList.add('hidden');
+                }
+            }
+
+            if (messageElements.unreadButton) {
+                messageElements.unreadButton.textContent = messageState.unreadCount > 0
+                    ? `Ungelesen (${messageState.unreadCount})`
+                    : 'Ungelesen';
+            }
+        }
+
+        function setActiveTab(tab) {
+            messageState.currentTab = tab === 'read' ? 'read' : 'unread';
+
+            messageElements.tabButtons.forEach((button) => {
+                const isActive = button.dataset.tab === messageState.currentTab;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+        }
+
+        function openMessageSection(event) {
+            if (event) {
+                event.preventDefault();
+            }
+
+            if (messageElements.section) {
+                messageElements.section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            fetchMessages('unread');
+        }
+
+        async function fetchMessages(tab) {
+            const nextTab = tab === 'read' ? 'read' : 'unread';
+
+            if (messageState.loading) {
+                return;
+            }
+
+            messageState.loading = true;
+            setActiveTab(nextTab);
+
+            if (messageElements.container) {
+                messageElements.container.innerHTML = '<div class="message-empty">Nachrichten werden geladen...</div>';
+            }
+
+            try {
+                const response = await fetch(`index.php?ajax=1&tab=${encodeURIComponent(nextTab)}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (typeof data.unread_count === 'number') {
+                    updateUnreadBadge(data.unread_count);
+                }
+
+                renderMessages(Array.isArray(data.messages) ? data.messages : []);
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                if (messageElements.container) {
+                    messageElements.container.innerHTML = '<div class="message-empty">Fehler beim Laden der Nachrichten.</div>';
+                }
+            } finally {
+                messageState.loading = false;
+            }
+        }
+
+        function renderMessages(messages) {
+            if (!messageElements.container) {
+                return;
+            }
+
+            if (!messages.length) {
+                const emptyText = messageState.currentTab === 'read'
+                    ? 'Keine gelesenen Nachrichten vorhanden.'
+                    : 'Keine neuen Nachrichten verfügbar.';
+                messageElements.container.innerHTML = `<div class="message-empty">${emptyText}</div>`;
+                return;
+            }
+
+            const iconMap = {
+                info: 'ℹ️',
+                success: '✅',
+                warning: '⚠️',
+                question: '❓',
+            };
+
+            const html = messages.map((msg) => {
+                const type = iconMap[msg.message_type] ? msg.message_type : 'info';
+                const icon = iconMap[type];
+                const messageText = escapeHtml(msg.message_text).replace(/\n/g, '<br>');
+                const createdAt = escapeHtml(formatDate(msg.created_at));
+
+                let responseSection = '';
+                let responseActions = '';
+
+                if (msg.expects_response) {
+                    if (msg.user_response === 'yes') {
+                        responseSection = '<div class="message-response-status" style="color:#10b981;">✅ Antwort: Ja</div>';
+                    } else if (msg.user_response === 'no') {
+                        responseSection = '<div class="message-response-status" style="color:#ef4444;">❌ Antwort: Nein</div>';
+                    } else {
+                        responseSection = '<div class="message-response-status" style="color:#6b7280;">⏳ Antwort ausstehend</div>';
+                        responseActions = `
+                            <button type="button" class="response-yes" onclick="sendMessageResponse(${msg.id}, 'yes')">Ja</button>
+                            <button type="button" class="response-no" onclick="sendMessageResponse(${msg.id}, 'no')">Nein</button>
+                        `;
+                    }
+                }
+
+                let markReadButton = '';
+                if (messageState.currentTab === 'unread') {
+                    markReadButton = `<button type="button" class="mark-read" onclick="markAsRead(${msg.id})">Als gelesen markieren</button>`;
+                }
+
+                const actionsHtml = (responseActions || markReadButton)
+                    ? `<div class="message-actions">${responseActions}${markReadButton}</div>`
+                    : '';
+
+                return `
+                    <div class="message-card ${type}">
+                        <div class="message-meta">
+                            <span>${icon} ${type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                            <span>${createdAt}</span>
+                        </div>
+                        <div class="message-text">${messageText}</div>
+                        ${responseSection ? `<div>${responseSection}</div>` : ''}
+                        ${actionsHtml}
+                    </div>
+                `;
+            }).join('');
+
+            messageElements.container.innerHTML = html;
+        }
+
+        async function markAsRead(messageId) {
+            if (!messageId) {
+                return;
+            }
+
+            try {
+                const response = await fetch('index.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    },
+                    body: `mark_read=1&message_id=${encodeURIComponent(messageId)}`,
+                });
+
+                const result = await response.json();
+
+                if (result && result.success) {
+                    await fetchMessages(messageState.currentTab);
+                }
+            } catch (error) {
+                console.error('Error marking message as read:', error);
+            }
+        }
+
+        async function sendMessageResponse(messageId, responseValue) {
+            if (!messageId || (responseValue !== 'yes' && responseValue !== 'no')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('index.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    },
+                    body: `respond=1&message_id=${encodeURIComponent(messageId)}&response=${encodeURIComponent(responseValue)}`,
+                });
+
+                const result = await response.json();
+
+                if (result && result.success) {
+                    await fetchMessages(messageState.currentTab);
+                }
+            } catch (error) {
+                console.error('Error sending response:', error);
+            }
+        }
+
+        messageElements.tabButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                fetchMessages(button.dataset.tab);
+            });
+        });
+
+        window.openMessageSection = openMessageSection;
+        window.markAsRead = markAsRead;
+        window.sendMessageResponse = sendMessageResponse;
+
+        updateUnreadBadge(messageState.unreadCount);
+        fetchMessages(messageState.currentTab);
+
         // Modal Control Functions
         function toggleUserModal() {
             const modal = document.getElementById('userModal');

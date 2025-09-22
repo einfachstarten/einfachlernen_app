@@ -19,40 +19,8 @@ function getPDO(): PDO
 
 $pdo = getPDO();
 
-// Ensure beta messaging tables exist
-$pdo->exec("
-    CREATE TABLE IF NOT EXISTS beta_messages (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        from_admin BOOLEAN DEFAULT TRUE,
-        to_customer_email VARCHAR(100) NOT NULL,
-        message_text TEXT NOT NULL,
-        message_type ENUM('info', 'success', 'warning', 'question') DEFAULT 'info',
-        expects_response TINYINT(1) DEFAULT 0,
-        is_read BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_customer_email (to_customer_email),
-        INDEX idx_unread (is_read, to_customer_email),
-        INDEX idx_created (created_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-");
-
-try {
-    $pdo->exec("ALTER TABLE beta_messages ADD COLUMN expects_response TINYINT(1) DEFAULT 0");
-} catch (PDOException $e) {
-    if ($e->getCode() !== '42S21') {
-        throw $e;
-    }
-}
-
-$pdo->exec("
-    CREATE TABLE IF NOT EXISTS beta_responses (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        message_id INT NOT NULL UNIQUE,
-        response ENUM('yes', 'no') NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (message_id) REFERENCES beta_messages(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-");
+require_once __DIR__ . '/../customer/messaging_init.php';
+ensureProductionMessagingTables($pdo);
 
 $success_msg = '';
 $error_msg = '';
@@ -77,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['send_message'])) {
 
             if ($customers) {
                 $stmt = $pdo->prepare('
-                    INSERT INTO beta_messages (to_customer_email, message_text, message_type, expects_response)
+                    INSERT INTO customer_messages (to_customer_email, message_text, message_type, expects_response)
                     VALUES (?, ?, ?, ?)
                 ');
 
@@ -96,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['send_message'])) {
             }
         } else {
             $stmt = $pdo->prepare('
-                INSERT INTO beta_messages (to_customer_email, message_text, message_type, expects_response)
+                INSERT INTO customer_messages (to_customer_email, message_text, message_type, expects_response)
                 VALUES (?, ?, ?, ?)
             ');
             $stmt->execute([
@@ -117,7 +85,7 @@ $statsStmt = $pdo->query('
         COUNT(*) AS total_messages,
         SUM(is_read = 1) AS read_messages,
         SUM(is_read = 0) AS unread_messages
-    FROM beta_messages
+    FROM customer_messages
 ');
 $stats = $statsStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
@@ -133,7 +101,7 @@ $customerQuery = $pdo->query('
         SUM(m.is_read = 0) AS unread_messages,
         MAX(m.created_at) AS last_message
     FROM customers c
-    LEFT JOIN beta_messages m ON m.to_customer_email = c.email
+    LEFT JOIN customer_messages m ON m.to_customer_email = c.email
     WHERE c.status = "active"
     GROUP BY c.id
     ORDER BY unread_messages DESC, c.last_name ASC
@@ -670,7 +638,7 @@ $selected_customer = $_GET['customer'] ?? null;
                     <h3>Nachrichtenverlauf: <?= htmlspecialchars($selected_customer, ENT_QUOTES, 'UTF-8') ?></h3>
                     <span style="color:#6b7280;font-size:0.9rem;">
                         <?php
-                        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM beta_messages WHERE to_customer_email = ?');
+                        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM customer_messages WHERE to_customer_email = ?');
                         $countStmt->execute([$selected_customer]);
                         echo (int)$countStmt->fetchColumn() . ' Nachrichten';
                         ?>
@@ -679,9 +647,9 @@ $selected_customer = $_GET['customer'] ?? null;
 
                 <?php
                 $historyStmt = $pdo->prepare('
-                    SELECT m.*,
-                           (SELECT response FROM beta_responses WHERE message_id = m.id) AS user_response
-                    FROM beta_messages m
+                    SELECT m.*, 
+                           (SELECT response FROM customer_message_responses WHERE message_id = m.id) AS user_response
+                    FROM customer_messages m
                     WHERE to_customer_email = ?
                     ORDER BY created_at DESC
                     LIMIT 20

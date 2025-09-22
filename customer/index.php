@@ -322,6 +322,409 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             50% { transform: scale(1.1); }
         }
 
+        /* Smart Panel System */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 998;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .smart-panel {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100vh;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            transition: right 0.3s ease;
+            overflow: hidden;
+        }
+
+        .smart-panel.active {
+            right: 0;
+        }
+
+        .smart-panel-header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+        }
+
+        .smart-panel-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .close-panel {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .close-panel:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .panel-tabs {
+            display: flex;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6b7280;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            background: white;
+            border-bottom: 2px solid var(--primary);
+        }
+
+        .tab-badge {
+            background: #ef4444;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            margin-left: 0.5rem;
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Profile Section */
+        .profile-section {
+            padding: 1.5rem;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+
+        .profile-avatar {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid rgba(82, 179, 164, 0.25);
+            background: white;
+            overflow: hidden;
+        }
+
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+
+        .profile-info h4 {
+            margin: 0 0 0.25rem 0;
+            color: var(--gray-dark);
+            font-size: 1.1rem;
+        }
+
+        .profile-info p {
+            margin: 0;
+            color: var(--gray-medium);
+            font-size: 0.9rem;
+        }
+
+        .avatar-change-link {
+            background: linear-gradient(135deg, var(--secondary), var(--accent-teal));
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .avatar-change-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(82, 179, 164, 0.3);
+        }
+
+        .detail-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .detail-label {
+            font-size: 0.85rem;
+            color: var(--gray-medium);
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            font-size: 0.95rem;
+            color: var(--gray-dark);
+            font-weight: 500;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-badge.active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-badge.beta {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        /* Avatar Selection */
+        .avatar-selection {
+            margin-top: 2rem;
+            padding: 1.25rem;
+            background: #f8fafc;
+            border-radius: 12px;
+            display: none;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+        }
+
+        .avatar-selection.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .avatar-selection h4 {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            color: var(--gray-dark);
+        }
+
+        .avatar-hint {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-bottom: 1rem;
+        }
+
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .avatar-option {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 0.75rem;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--gray-dark);
+            font-weight: 600;
+            font-family: inherit;
+            outline: none;
+            min-height: 90px;
+            position: relative;
+        }
+
+        .avatar-option:hover {
+            border-color: var(--secondary);
+            box-shadow: 0 6px 16px rgba(82, 179, 164, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .avatar-option.selected {
+            border-color: var(--secondary);
+            background: #ecfdf5;
+            box-shadow: 0 8px 20px rgba(82, 179, 164, 0.3);
+        }
+
+        .avatar-option.selected::after {
+            content: '✓';
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background: var(--secondary);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .avatar-option img {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .avatar-option img.updating {
+            opacity: 0.7;
+            transform: scale(0.9);
+        }
+
+        .avatar-generate-btn {
+            margin-top: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--secondary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 0.7rem 1.4rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .avatar-generate-btn:hover {
+            background: #3d9b91;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(82, 179, 164, 0.3);
+        }
+
+        /* Messages Section */
+        .messages-section {
+            padding: 1rem;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .message-tab-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #e5e7eb;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .message-tab-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .messages-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .loading {
+            text-align: center;
+            color: #6b7280;
+            padding: 2rem;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .smart-panel {
+                width: 100%;
+                right: -100%;
+            }
+
+            .avatar-grid {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                gap: 0.5rem;
+            }
+
+            .avatar-option {
+                padding: 0.5rem;
+                min-height: 80px;
+            }
+
+            .avatar-option img {
+                width: 48px;
+                height: 48px;
+            }
+        }
+
         .message-overlay {
             position: fixed;
             top: 0;
@@ -1181,17 +1584,18 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                 <div class="user-avatar-wrapper">
                     <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>"
                          alt="Avatar"
-                         class="user-avatar"
-                         onclick="openMessagePanel()"
+                         class="user-avatar clickable"
+                         onclick="toggleSmartPanel()"
                          style="cursor: pointer;"
-                         title="Nachrichten anzeigen">
+                         data-unread="<?= $initialUnreadCount ?>"
+                         title="Profil & Nachrichten">
                     <div class="notification-badge"
                          id="messageNotificationBadge"
                          style="display: <?= $initialUnreadCount > 0 ? 'flex' : 'none' ?>;">
                         <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
                     </div>
                 </div>
-                <div class="user-info" onclick="openUserModal()" style="cursor: pointer;" title="Profil anzeigen">
+                <div class="user-info">
                     <h1>Mein Bereich: <?= htmlspecialchars($customer['first_name'], ENT_QUOTES, 'UTF-8'); ?></h1>
                     <p>Willkommen bei Anna Braun Lerncoaching</p>
                 </div>
@@ -1231,7 +1635,7 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                     </a>
 
                     <!-- 3. Mitteilungen -->
-                    <a href="#" class="action-card" onclick="openMessagePanel(); return false;">
+                    <a href="#" class="action-card" onclick="openMessagesTabFromAction(); return false;">
                         <div class="action-icon">📨</div>
                         <div class="action-content">
                             <h3>Mitteilungen</h3>
@@ -1252,23 +1656,118 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
 
         </main>
 
-        <!-- Message Panel -->
-        <div id="messageOverlay" class="message-overlay" onclick="closeMessagePanel()"></div>
-        <div id="messagePanel" class="message-panel">
-            <div class="message-panel-header">
-                <h3>📨 Nachrichten</h3>
-                <div class="message-tabs">
-                    <button class="message-tab active" onclick="switchMessageTab('unread')" id="unreadTab">
-                        Ungelesen (<span id="unreadCount"><?= $initialUnreadCount ?></span>)
-                    </button>
-                    <button class="message-tab" onclick="switchMessageTab('read')" id="readTab">
-                        Gelesen
-                    </button>
-                </div>
-                <button class="close-btn" onclick="closeMessagePanel()">✕</button>
+        <!-- Smart Panel System (Profile & Messages) -->
+        <div class="overlay" id="overlay" onclick="closeSmartPanel()"></div>
+        <div class="smart-panel" id="smartPanel">
+            <div class="smart-panel-header">
+                <h3 id="panelTitle">👤 Mein Profil</h3>
+                <button class="close-panel" type="button" onclick="closeSmartPanel()">×</button>
             </div>
-            <div class="message-content" id="messageContent">
-                <div class="loading">Nachrichten werden geladen...</div>
+
+            <div class="panel-tabs">
+                <button type="button" class="tab-btn active" data-tab="profile" onclick="switchTab('profile')">👤 Profil</button>
+                <button type="button" class="tab-btn" data-tab="messages" onclick="switchTab('messages')" id="messagesTab">
+                    📨 Nachrichten <span class="tab-badge" id="tabBadge" style="display: <?= $initialUnreadCount > 0 ? 'inline' : 'none' ?>;">
+                        <?= $initialUnreadCount > 99 ? '99+' : $initialUnreadCount; ?>
+                    </span>
+                </button>
+            </div>
+
+            <div class="tab-content active" id="profileContent">
+                <div class="profile-section">
+                    <div class="profile-header">
+                        <div class="profile-avatar">
+                            <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>" alt="Avatar">
+                        </div>
+                        <div class="profile-info">
+                            <h4><?= htmlspecialchars(trim(($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))) ?></h4>
+                            <p><?= htmlspecialchars($customer['email']) ?></p>
+                            <button type="button"
+                                    class="avatar-change-link"
+                                    onclick="toggleAvatarSelection()"
+                                    id="avatarChangeBtn"
+                                    title="Avatar-Auswahl öffnen">
+                                🎭 Avatar ändern
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="profile-details">
+                        <div class="detail-group">
+                            <div class="detail-label">Telefon</div>
+                            <div class="detail-value"><?= htmlspecialchars($customer['phone'] ?: 'Nicht hinterlegt') ?></div>
+                        </div>
+
+                        <div class="detail-group">
+                            <div class="detail-label">Account-Status</div>
+                            <div class="detail-value">
+                                <span class="status-badge active">✅ <?= ucfirst(htmlspecialchars($customer['status'])) ?></span>
+                            </div>
+                        </div>
+
+                        <div class="detail-group">
+                            <div class="detail-label">Kunde seit</div>
+                            <div class="detail-value"><?= date('d.m.Y', strtotime($customer['created_at'])) ?></div>
+                        </div>
+
+                        <?php if(!empty($customer['last_login'])): ?>
+                        <div class="detail-group">
+                            <div class="detail-label">Letzter Login</div>
+                            <div class="detail-value"><?= date('d.m.Y, H:i', strtotime($customer['last_login'])) ?> Uhr</div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="avatar-selection">
+                        <h4>🎭 Avatar auswählen</h4>
+                        <p class="avatar-hint">Wähle deinen Style oder würfle ein neues Set von Avataren!</p>
+                        <?php
+                            $styleLabelMap = [
+                                'avataaars' => 'Avataaars',
+                                'adventurer-neutral' => 'Adventurer',
+                                'fun-emoji' => 'Fun Emoji',
+                                'lorelei' => 'Lorelei',
+                                'pixel-art' => 'Pixel Art',
+                                'thumbs' => 'Thumbs',
+                            ];
+                        ?>
+                        <div class="avatar-grid">
+                            <?php foreach ($availableAvatarStyles as $style):
+                                $isSelected = $style === $avatar_style;
+                                $styleLabel = $styleLabelMap[$style] ?? ucfirst(str_replace('-', ' ', $style));
+                                $styleUrl = 'https://api.dicebear.com/9.x/' . rawurlencode($style) . '/svg?seed=' . rawurlencode($avatar_seed);
+                            ?>
+                                <button type="button"
+                                        class="avatar-option <?= $isSelected ? 'selected' : '' ?>"
+                                        data-style="<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>"
+                                        onclick="selectAvatar('<?= htmlspecialchars($style, ENT_QUOTES, 'UTF-8') ?>', this)"
+                                        title="<?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?>">
+                                    <img src="<?= htmlspecialchars($styleUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                         alt="<?= htmlspecialchars($styleLabel, ENT_QUOTES, 'UTF-8') ?>">
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                        <button type="button" class="avatar-generate-btn" onclick="generateNewAvatarSet()">
+                            🎲 Neues Set würfeln
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="messagesContent">
+                <div class="messages-section">
+                    <div class="message-tabs">
+                        <button class="message-tab-btn active" data-tab="unread" onclick="switchMessageTab('unread')">
+                            Ungelesen (<span id="unreadCount"><?= $initialUnreadCount ?></span>)
+                        </button>
+                        <button class="message-tab-btn" data-tab="read" onclick="switchMessageTab('read')">
+                            Gelesen
+                        </button>
+                    </div>
+                    <div class="messages-content" id="messagesContentArea">
+                        <div class="loading">Nachrichten werden geladen...</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1282,82 +1781,6 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                 </span>
             </p>
         </footer>
-    </div>
-
-    <!-- User Info Modal -->
-    <div class="modal-overlay" id="userModal">
-        <div class="modal-container">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <div class="modal-avatar">
-                        <img src="<?= htmlspecialchars($avatar_url, ENT_QUOTES, 'UTF-8') ?>" alt="Avatar">
-                    </div>
-                    <div>
-                        <h2>Deine Kontoinformationen</h2>
-                        <p>Persönliche Daten und Status-Übersicht</p>
-                    </div>
-                </div>
-                <button class="modal-close" onclick="closeUserModal()">
-                    <span>✕</span>
-                </button>
-            </div>
-
-            <div class="modal-content">
-                <section class="modal-info-grid">
-                    <div class="info-card">
-                        <div class="card-header">
-                            <div class="card-icon profile">👤</div>
-                            <h3 class="card-title">Persönliche Daten</h3>
-                        </div>
-                        <div class="card-content">
-                            <div class="label">Name</div>
-                            <div class="value"><?= htmlspecialchars(trim($customer['first_name'] . ' ' . $customer['last_name'])) ?></div>
-
-                            <div class="label" style="margin-top: 0.75rem;">E-Mail</div>
-                            <div class="value"><?= htmlspecialchars($customer['email']) ?></div>
-                        </div>
-                    </div>
-
-                    <div class="info-card">
-                        <div class="card-header">
-                            <div class="card-icon contact">📞</div>
-                            <h3 class="card-title">Kontaktdaten</h3>
-                        </div>
-                        <div class="card-content">
-                            <div class="label">Telefon</div>
-                            <div class="value"><?= htmlspecialchars($customer['phone'] ?: 'Nicht hinterlegt') ?></div>
-
-                            <div class="label" style="margin-top: 0.75rem;">Kunde seit</div>
-                            <div class="value"><?= date('d.m.Y', strtotime($customer['created_at'])) ?></div>
-                        </div>
-                    </div>
-
-                    <div class="info-card">
-                        <div class="card-header">
-                            <div class="card-icon status">⚡</div>
-                            <h3 class="card-title">Status</h3>
-                        </div>
-                        <div class="card-content">
-                            <div class="label">Account-Status</div>
-                            <div class="status-badge active">
-                                <span>✅</span> <?= ucfirst(htmlspecialchars($customer['status'])) ?>
-                            </div>
-
-                            <?php if(!empty($customer['last_login'])): ?>
-                            <div class="label" style="margin-top: 0.75rem;">Letzter Login</div>
-                            <div class="value"><?= date('d.m.Y, H:i', strtotime($customer['last_login'])) ?> Uhr</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </section>
-            </div>
-
-            <div class="modal-footer">
-                <button class="modal-footer-btn" onclick="closeUserModal()">
-                    Schließen
-                </button>
-            </div>
-    </div>
     </div>
 
     <!-- Contact Modal -->
@@ -1411,72 +1834,249 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
     </div>
 
     <script>
+        const smartPanel = document.getElementById('smartPanel');
+        const overlay = document.getElementById('overlay');
+        const panelTitle = document.getElementById('panelTitle');
+        const panelTabButtons = document.querySelectorAll('.tab-btn');
+        const userAvatar = document.querySelector('.user-avatar.clickable');
+        const avatarSelectionElement = document.querySelector('.avatar-selection');
+        const avatarChangeBtn = document.getElementById('avatarChangeBtn');
+        const avatarGridElement = document.querySelector('.avatar-grid');
+        const tabBadge = document.getElementById('tabBadge');
+        const availableAvatarStyles = <?= json_encode($availableAvatarStyles) ?>;
+
+        let avatarSelectionVisible = false;
+        let currentAvatarStyle = <?= json_encode($avatar_style) ?>;
+        let currentAvatarSeed = <?= json_encode($avatar_seed) ?>;
         let panelOpen = false;
-        let currentPanelTab = 'messages';
+        let currentPanelTab = 'profile';
         let currentMessageTab = 'unread';
 
-        function openMessagePanel() {
-            const overlay = document.getElementById('messageOverlay');
-            const panel = document.getElementById('messagePanel');
-
-            if (overlay) {
-                overlay.classList.add('active');
+        function toggleSmartPanel(tabOverride = null) {
+            if (!smartPanel || !overlay) {
+                return;
             }
 
-            if (panel) {
-                panel.classList.add('active');
+            if (!panelOpen) {
+                const unreadCount = parseInt(userAvatar?.dataset.unread || '0', 10);
+                const targetTab = tabOverride || (unreadCount > 0 ? 'messages' : 'profile');
+                openSmartPanel(targetTab);
+            } else {
+                closeSmartPanel();
             }
-
-            panelOpen = true;
-            currentPanelTab = 'messages';
-
-            loadMessages(currentMessageTab);
         }
 
-        function closeMessagePanel() {
-            const overlay = document.getElementById('messageOverlay');
-            const panel = document.getElementById('messagePanel');
-
-            if (overlay) {
-                overlay.classList.remove('active');
+        function openSmartPanel(tab = 'profile') {
+            if (!smartPanel || !overlay) {
+                return;
             }
 
-            if (panel) {
-                panel.classList.remove('active');
+            switchTab(tab);
+            smartPanel.classList.add('active');
+            overlay.classList.add('active');
+            panelOpen = true;
+        }
+
+        function closeSmartPanel() {
+            if (!smartPanel || !overlay) {
+                return;
             }
 
+            smartPanel.classList.remove('active');
+            overlay.classList.remove('active');
             panelOpen = false;
         }
 
-        function switchMessageTab(tab) {
-            currentMessageTab = tab === 'read' ? 'read' : 'unread';
+        function switchTab(tab) {
+            currentPanelTab = tab === 'messages' ? 'messages' : 'profile';
 
-            document.querySelectorAll('.message-tab').forEach((button) => {
-                button.classList.remove('active');
+            panelTabButtons.forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.tab === currentPanelTab);
             });
 
-            const activeTab = document.getElementById(`${currentMessageTab}Tab`);
-            if (activeTab) {
-                activeTab.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach((content) => {
+                content.classList.toggle('active', content.id === `${currentPanelTab}Content`);
+            });
+
+            if (panelTitle) {
+                panelTitle.innerHTML = currentPanelTab === 'profile' ? '👤 Mein Profil' : '📨 Nachrichten';
             }
 
-            loadMessages(currentMessageTab);
+            if (currentPanelTab === 'messages') {
+                loadMessages(getCurrentMessageTab());
+            }
+        }
+
+        function switchMessageTab(tab) {
+            const safeTab = tab === 'read' ? 'read' : 'unread';
+            currentMessageTab = safeTab;
+
+            document.querySelectorAll('.message-tab-btn').forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.tab === safeTab);
+            });
+
+            loadMessages(safeTab);
         }
 
         function getCurrentMessageTab() {
             return currentMessageTab;
         }
 
+        function openMessagesTabFromAction() {
+            if (panelOpen) {
+                switchTab('messages');
+            } else {
+                openSmartPanel('messages');
+            }
+        }
+
+        function toggleAvatarSelection() {
+            if (!avatarSelectionElement || !avatarChangeBtn) {
+                return;
+            }
+
+            avatarSelectionVisible = !avatarSelectionVisible;
+
+            if (avatarSelectionVisible) {
+                avatarSelectionElement.style.display = 'block';
+                requestAnimationFrame(() => {
+                    avatarSelectionElement.classList.add('show');
+                });
+                avatarChangeBtn.textContent = '✖ Auswahl schließen';
+                avatarChangeBtn.setAttribute('aria-expanded', 'true');
+            } else {
+                avatarSelectionElement.classList.remove('show');
+                avatarSelectionElement.classList.add('hiding');
+                setTimeout(() => {
+                    avatarSelectionElement.style.display = 'none';
+                    avatarSelectionElement.classList.remove('hiding');
+                }, 300);
+                avatarChangeBtn.textContent = '🎭 Avatar ändern';
+                avatarChangeBtn.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        function selectAvatar(style, element) {
+            if (!element || !style) {
+                return;
+            }
+
+            document.querySelectorAll('.avatar-option').forEach((opt) => opt.classList.remove('selected'));
+            element.classList.add('selected');
+
+            updateAvatarAPI(style, currentAvatarSeed)
+                .then((result) => {
+                    if (result.success) {
+                        currentAvatarStyle = style;
+                        updateAllAvatarImages(result.avatar_url);
+                        showToast('Avatar erfolgreich geändert!');
+                    } else {
+                        element.classList.remove('selected');
+                        refreshAvatarGrid(currentAvatarSeed);
+                        showToast('Fehler beim Ändern des Avatars', 'error');
+                    }
+                })
+                .catch((error) => {
+                    element.classList.remove('selected');
+                    refreshAvatarGrid(currentAvatarSeed);
+                    showToast('Verbindungsfehler beim Avatar-Update', 'error');
+                    console.error('Avatar update failed:', error);
+                });
+        }
+
+        function generateNewAvatarSet() {
+            const button = document.querySelector('.avatar-generate-btn');
+            if (!button) {
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = '🎲 Generiere...';
+
+            const newSeed = 'set-' + Math.random().toString(36).substr(2, 9);
+
+            updateAvatarAPI(currentAvatarStyle, newSeed)
+                .then((result) => {
+                    if (result.success) {
+                        currentAvatarSeed = newSeed;
+                        refreshAvatarGrid(newSeed);
+                        updateAllAvatarImages(result.avatar_url);
+                        showToast('Neues Avatar-Set generiert!');
+                    } else {
+                        showToast('Fehler beim Generieren neuer Avatare', 'error');
+                    }
+                })
+                .catch((error) => {
+                    showToast('Verbindungsfehler beim Generieren', 'error');
+                    console.error('Avatar generation failed:', error);
+                })
+                .finally(() => {
+                    button.disabled = false;
+                    button.textContent = '🎲 Neues Set würfeln';
+                });
+        }
+
+        async function updateAvatarAPI(style, seed) {
+            const response = await fetch('../api/update-avatar.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    style: style,
+                    seed: seed
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('HTTP error! status: ' + response.status);
+            }
+
+            return await response.json();
+        }
+
+        function updateAllAvatarImages(avatarUrl) {
+            const headerAvatar = document.querySelector('.user-avatar');
+            if (headerAvatar) {
+                headerAvatar.src = avatarUrl;
+            }
+
+            const profileAvatar = document.querySelector('.profile-avatar img');
+            if (profileAvatar) {
+                profileAvatar.src = avatarUrl;
+            }
+        }
+
+        function refreshAvatarGrid(newSeed) {
+            if (!avatarGridElement) {
+                return;
+            }
+
+            availableAvatarStyles.forEach((style) => {
+                const option = avatarGridElement.querySelector(`.avatar-option[data-style="${style}"]`);
+                if (option) {
+                    option.classList.toggle('selected', style === currentAvatarStyle);
+                    const img = option.querySelector('img');
+                    if (img) {
+                        const newUrl = `https://api.dicebear.com/9.x/${encodeURIComponent(style)}/svg?seed=${encodeURIComponent(newSeed)}`;
+                        img.src = newUrl;
+                    }
+                }
+            });
+        }
+
         function loadMessages(tab = 'unread') {
             const safeTab = tab === 'read' ? 'read' : 'unread';
-            const content = document.getElementById('messageContent');
+            const content = document.getElementById('messagesContentArea');
             if (!content) {
                 return;
             }
 
             content.innerHTML = '<div class="loading">Nachrichten werden geladen...</div>';
 
-            fetch(`?ajax=1&tab=${encodeURIComponent(safeTab)}`)
+            const queryTab = safeTab === 'read' ? 'read' : 'unread';
+
+            fetch(`?ajax=1&tab=${encodeURIComponent(queryTab)}`)
                 .then((response) => response.json())
                 .then((data) => {
                     updateUnreadCount(typeof data.unread_count === 'number' ? data.unread_count : 0);
@@ -1484,7 +2084,7 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                     if (!Array.isArray(data.messages) || data.messages.length === 0) {
                         content.innerHTML = `<div style="text-align: center; color: #6b7280; padding: 2rem;">
                             <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
-                            <p>Keine ${safeTab === 'unread' ? 'ungelesenen' : 'gelesenen'} Nachrichten</p>
+                            <p>Keine ${queryTab === 'unread' ? 'ungelesenen' : 'gelesenen'} Nachrichten</p>
                         </div>`;
                         return;
                     }
@@ -1506,7 +2106,7 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
 
                         const icon = typeIcons[msg.message_type] || 'ℹ️';
                         const color = typeColors[msg.message_type] || '#3b82f6';
-                        const isRead = safeTab === 'read';
+                        const isRead = queryTab === 'read';
 
                         let actions = '';
                         if (msg.expects_response && !msg.user_response && !isRead) {
@@ -1624,6 +2224,19 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                 unreadSpan.textContent = count;
             }
 
+            if (userAvatar) {
+                userAvatar.dataset.unread = count;
+            }
+
+            if (tabBadge) {
+                if (count > 0) {
+                    tabBadge.style.display = 'inline';
+                    tabBadge.textContent = count > 99 ? '99+' : count;
+                } else {
+                    tabBadge.style.display = 'none';
+                }
+            }
+
             if (badge) {
                 if (count > 0) {
                     badge.style.display = 'flex';
@@ -1665,7 +2278,51 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             return div.innerHTML;
         }
 
+        function openContactModal() {
+            const modal = document.getElementById('contactModal');
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            const category = document.getElementById('contactCategory');
+            if (category) {
+                category.focus();
+            }
+        }
+
+        function closeContactModal() {
+            const modal = document.getElementById('contactModal');
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+
+            const form = document.getElementById('contactForm');
+            if (form) {
+                form.reset();
+            }
+
+            const counter = document.getElementById('charCount');
+            if (counter) {
+                counter.textContent = '0';
+                counter.style.color = 'var(--gray-medium)';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
+            if (avatarSelectionElement) {
+                avatarSelectionElement.classList.remove('show', 'hiding');
+                avatarSelectionElement.style.display = 'none';
+            }
+
+            if (avatarChangeBtn) {
+                avatarChangeBtn.setAttribute('aria-expanded', 'false');
+            }
+
             const notificationBadge = document.getElementById('messageNotificationBadge');
             if (notificationBadge && notificationBadge.style.display !== 'none') {
                 notificationBadge.style.visibility = 'visible';
@@ -1673,116 +2330,79 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
             }
 
             updateUnreadCount(<?= (int) $initialUnreadCount ?>);
-        });
 
-        setInterval(() => {
-            if (panelOpen && currentPanelTab === 'messages') {
-                loadMessages(getCurrentMessageTab());
-            }
-        }, 5000);
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && panelOpen) {
-                closeMessagePanel();
-            }
-        });
-
-        // Modal Control Functions
-        function toggleUserModal() {
-            const modal = document.getElementById('userModal');
-            if (modal.classList.contains('active')) {
-                closeUserModal();
-            } else {
-                openUserModal();
-            }
-        }
-
-        function openUserModal() {
-            const modal = document.getElementById('userModal');
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeUserModal() {
-            const modal = document.getElementById('userModal');
-            modal.classList.remove('active');
-            document.body.style.overflow = '';
-        }
-
-        function openContactModal() {
-            const modal = document.getElementById('contactModal');
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
-            document.getElementById('contactCategory').focus();
-        }
-
-        function closeContactModal() {
-            const modal = document.getElementById('contactModal');
-            modal.classList.remove('active');
-            document.body.style.overflow = '';
-            document.getElementById('contactForm').reset();
-            document.getElementById('charCount').textContent = '0';
-        }
-
-        // Zeichen-Counter
-        document.getElementById('contactMessage').addEventListener('input', function() {
-            const count = this.value.length;
-            document.getElementById('charCount').textContent = count;
-            
-            if (count > 1800) {
-                document.getElementById('charCount').style.color = '#ff6b6b';
-            } else {
-                document.getElementById('charCount').style.color = 'var(--gray-medium)';
-            }
-        });
-
-        // Form-Submission
-        document.getElementById('contactForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const btnText = document.getElementById('sendBtnText');
-            const btnLoader = document.getElementById('sendBtnLoader');
-            
-            // Loading State
-            submitBtn.disabled = true;
-            btnText.style.display = 'none';
-            btnLoader.style.display = 'inline';
-            
-            const formData = new FormData(this);
-            
-            try {
-                const response = await fetch('contact_form.php', {
-                    method: 'POST',
-                    body: formData
+            const contactMessage = document.getElementById('contactMessage');
+            if (contactMessage) {
+                contactMessage.addEventListener('input', function() {
+                    const count = this.value.length;
+                    const counter = document.getElementById('charCount');
+                    if (counter) {
+                        counter.textContent = count;
+                        counter.style.color = count > 1800 ? '#ff6b6b' : 'var(--gray-medium)';
+                    }
                 });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert('✅ ' + result.message);
-                    closeContactModal();
-                } else {
-                    alert('❌ ' + result.message);
-                }
-            } catch (error) {
-                alert('❌ Verbindungsfehler. Bitte versuchen Sie es später erneut.');
-            } finally {
-                // Reset Loading State
-                submitBtn.disabled = false;
-                btnText.style.display = 'inline';
-                btnLoader.style.display = 'none';
             }
-        });
 
-        // Modal außerhalb schließen
-        document.getElementById('contactModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeContactModal();
+            const contactForm = document.getElementById('contactForm');
+            if (contactForm) {
+                contactForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    const btnText = document.getElementById('sendBtnText');
+                    const btnLoader = document.getElementById('sendBtnLoader');
+
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                    }
+                    if (btnText) {
+                        btnText.style.display = 'none';
+                    }
+                    if (btnLoader) {
+                        btnLoader.style.display = 'inline';
+                    }
+
+                    const formData = new FormData(this);
+
+                    try {
+                        const response = await fetch('contact_form.php', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const result = await response.json();
+
+                        if (result.success) {
+                            alert('✅ ' + result.message);
+                            closeContactModal();
+                        } else {
+                            alert('❌ ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('❌ Verbindungsfehler. Bitte versuchen Sie es später erneut.');
+                    } finally {
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                        }
+                        if (btnText) {
+                            btnText.style.display = 'inline';
+                        }
+                        if (btnLoader) {
+                            btnLoader.style.display = 'none';
+                        }
+                    }
+                });
             }
-        });
 
-        document.addEventListener('DOMContentLoaded', function() {
+            const contactModal = document.getElementById('contactModal');
+            if (contactModal) {
+                contactModal.addEventListener('click', function(e) {
+                    if (e.target === contactModal) {
+                        closeContactModal();
+                    }
+                });
+            }
+
             const observerOptions = {
                 threshold: 0.1,
                 rootMargin: '0px 0px -50px 0px'
@@ -1797,34 +2417,11 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                 });
             }, observerOptions);
 
-            document.querySelectorAll('.action-card').forEach(card => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                observer.observe(card);
-            });
-
-            document.querySelectorAll('.action-card').forEach(card => {
-                card.addEventListener('click', function(e) {
-                    this.style.transform = 'scale(0.98)';
-                    setTimeout(() => {
-                        this.style.transform = '';
-                    }, 150);
-                });
-            });
-
-            const modal = document.getElementById('userModal');
-
-            modal.addEventListener('click', function(e) {
-                if (e.target === modal) {
-                    closeUserModal();
-                }
-            });
-
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape' && modal.classList.contains('active')) {
-                    closeUserModal();
-                }
+            document.querySelectorAll('.welcome-section, .quick-actions, .action-card').forEach((element) => {
+                element.style.opacity = '0';
+                element.style.transform = 'translateY(20px)';
+                element.style.transition = 'all 0.6s ease-out';
+                observer.observe(element);
             });
 
             let lastActivity = Date.now();
@@ -1840,6 +2437,24 @@ if (!isset($avatar_url) || !filter_var($avatar_url, FILTER_VALIDATE_URL)) {
                 }, { passive: true });
             });
         });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (panelOpen) {
+                    closeSmartPanel();
+                }
+                const contactModal = document.getElementById('contactModal');
+                if (contactModal && contactModal.classList.contains('active')) {
+                    closeContactModal();
+                }
+            }
+        });
+
+        setInterval(() => {
+            if (panelOpen && currentPanelTab === 'messages') {
+                loadMessages(getCurrentMessageTab());
+            }
+        }, 5000);
     </script>
 
     <script>

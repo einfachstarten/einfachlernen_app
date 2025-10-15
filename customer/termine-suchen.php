@@ -586,6 +586,7 @@ logPageView($customer['id'], 'termine_suchen', [
             }
         }
 
+
         function displaySlots(data, isInitialSearch = true, serviceSlug = selectedService) {
             const container = document.getElementById('slotsContainer');
             const resultsSection = document.getElementById('resultsSection');
@@ -598,10 +599,23 @@ logPageView($customer['id'], 'termine_suchen', [
 
             const foundCount = Number(data.found_count) || 0;
             const targetCount = Number(data.target_count) || 0;
+            const resolvedOriginalCount = Number(originalTargetCount) || Number(data.original_target_count) || targetCount || 1;
             const serviceSlugToUse = serviceSlug || selectedService;
+            const lastDateForContinuation = data.last_found_date || data.searched_until || null;
+
+            originalTargetCount = resolvedOriginalCount;
+            document.querySelector('.continue-search-section')?.remove();
 
             if (progressText) {
-                progressText.textContent = foundCount > 0 ? `${foundCount} Tage gefunden` : 'Keine Termine gefunden';
+                if (foundCount > 0) {
+                    progressText.textContent = isInitialSearch
+                        ? `${foundCount} Tage gefunden`
+                        : `Weitere ${foundCount} Tage gefunden`;
+                } else {
+                    progressText.textContent = isInitialSearch
+                        ? 'Keine Termine gefunden'
+                        : 'Keine weiteren Termine gefunden';
+                }
             }
 
             if (progressFill) {
@@ -640,14 +654,13 @@ logPageView($customer['id'], 'termine_suchen', [
                         ${slotsHTML}
                     `;
 
-                    continuationData = (foundCount > 0 && data.last_found_date) ? {
+                    continuationData = lastDateForContinuation ? {
                         service: serviceSlugToUse,
-                        lastDate: data.last_found_date,
-                        originalCount: originalTargetCount,
+                        lastDate: lastDateForContinuation,
+                        originalCount: resolvedOriginalCount,
                         currentTotal: foundCount
                     } : null;
                 } else {
-                    document.querySelector('.continue-search-section')?.remove();
                     container.insertAdjacentHTML('beforeend', `
                         <div class="search-continuation-separator">
                             <span>Weitere ${foundCount} Tage gefunden:</span>
@@ -656,43 +669,78 @@ logPageView($customer['id'], 'termine_suchen', [
                     `);
 
                     if (continuationData) {
-                        if (foundCount > 0 && data.last_found_date) {
-                            continuationData.lastDate = data.last_found_date;
-                            continuationData.currentTotal += foundCount;
+                        if (lastDateForContinuation) {
+                            continuationData.lastDate = lastDateForContinuation;
                         }
+                        continuationData.currentTotal += foundCount;
+                    } else if (lastDateForContinuation) {
+                        continuationData = {
+                            service: serviceSlugToUse,
+                            lastDate: lastDateForContinuation,
+                            originalCount: resolvedOriginalCount,
+                            currentTotal: foundCount
+                        };
                     }
                 }
+            } else {
+                if (isInitialSearch) {
+                    container.innerHTML = `
+                        <div class="no-slots-message">
+                            <h3>Keine freien Termine gefunden</h3>
+                            <p>Bitte versuche es später erneut oder wähle einen anderen Service.</p>
+                        </div>
+                    `;
 
-                if (data.can_search_more && continuationData && continuationData.lastDate) {
-                    document.querySelector('.continue-search-section')?.remove();
-
+                    continuationData = lastDateForContinuation ? {
+                        service: serviceSlugToUse,
+                        lastDate: lastDateForContinuation,
+                        originalCount: resolvedOriginalCount,
+                        currentTotal: 0
+                    } : null;
+                } else {
                     container.insertAdjacentHTML('beforeend', `
-                        <div class="continue-search-section">
-                            <button id="continueSearchBtn" class="continue-search-btn">
-                                🔍 Weitere ${continuationData.originalCount} Tage suchen
-                            </button>
-                            <p class="continue-hint">
-                                Bisher ${continuationData.currentTotal} Tage mit freien Terminen gefunden
-                            </p>
+                        <div class="no-slots-message" style="margin-top: 1rem;">
+                            <p>Keine weiteren Termine in diesem Zeitraum gefunden.</p>
                         </div>
                     `);
 
-                    const continueBtn = document.getElementById('continueSearchBtn');
-                    if (continueBtn) {
-                        continueBtn.addEventListener('click', continueSearch);
+                    if (continuationData) {
+                        if (lastDateForContinuation) {
+                            continuationData.lastDate = lastDateForContinuation;
+                        }
+                    } else if (lastDateForContinuation) {
+                        continuationData = {
+                            service: serviceSlugToUse,
+                            lastDate: lastDateForContinuation,
+                            originalCount: resolvedOriginalCount,
+                            currentTotal: 0
+                        };
                     }
-                } else {
-                    document.querySelector('.continue-search-section')?.remove();
                 }
-            } else if (isInitialSearch) {
-                container.innerHTML = `
-                    <div class="no-slots-message">
-                        <h3>Keine freien Termine gefunden</h3>
-                        <p>Bitte versuche es später erneut oder wähle einen anderen Service.</p>
+            }
+
+            const shouldShowContinue = Boolean(data.can_search_more && continuationData && continuationData.lastDate);
+
+            if (shouldShowContinue) {
+                const continueHint = continuationData.currentTotal > 0
+                    ? `Bisher ${continuationData.currentTotal} Tage mit freien Terminen gefunden`
+                    : 'Weiter in die Zukunft suchen';
+
+                container.insertAdjacentHTML('beforeend', `
+                    <div class="continue-search-section">
+                        <button id="continueSearchBtn" class="continue-search-btn">
+                            🔍 Weitere ${continuationData.originalCount} Tage suchen
+                        </button>
+                        <p class="continue-hint">
+                            ${continueHint}
+                        </p>
                     </div>
-                `;
-                continuationData = null;
-                document.querySelector('.continue-search-section')?.remove();
+                `);
+
+                const continueBtn = document.getElementById('continueSearchBtn');
+                if (continueBtn) {
+                    continueBtn.addEventListener('click', continueSearch);
+                }
             }
 
             resultsSection.style.display = 'block';

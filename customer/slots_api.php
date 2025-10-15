@@ -187,11 +187,17 @@ try {
     $api_calls = 0;
     $api_durations = [];
     $total_slots_returned = 0;
+    $last_searched_date = null;
     $referenceMidnightUtc = new DateTimeImmutable("tomorrow midnight", $utcTz);
 
     for ($week_offset = 0; $week_offset < $max_weeks && count($found_dates) < $target_count; $week_offset++) {
         $week_start = $search_base->modify("+$week_offset week");
         $week_end = $week_start->modify("+6 days 23 hours 59 minutes 59 seconds");
+
+        $current_searched_date = $week_end->setTimezone($viennaTz)->format('Y-m-d');
+        if ($last_searched_date === null || $current_searched_date > $last_searched_date) {
+            $last_searched_date = $current_searched_date;
+        }
 
         $url = "https://api.calendly.com/event_type_available_times"
              . "?event_type=" . urlencode($service["uri"])
@@ -252,6 +258,10 @@ try {
         }
     }
 
+    if ($last_searched_date === null) {
+        $last_searched_date = $search_base->setTimezone($viennaTz)->format('Y-m-d');
+    }
+
     if (!empty($slots_by_date)) {
         $total_day_slots = array_map('count', $slots_by_date);
         $logger->logActivity($customer['id'], 'slots_found', [
@@ -266,7 +276,8 @@ try {
             'start_from' => $start_from_date,
             'target_count' => $target_count,
             'original_target_count' => $original_target_count,
-            'total_slots_returned' => $total_slots_returned
+            'total_slots_returned' => $total_slots_returned,
+            'searched_until' => $last_searched_date
         ]);
     } else {
         $logger->logActivity($customer['id'], 'slots_not_found', [
@@ -279,7 +290,8 @@ try {
             'search_unsuccessful' => true,
             'start_from' => $start_from_date,
             'target_count' => $target_count,
-            'original_target_count' => $original_target_count
+            'original_target_count' => $original_target_count,
+            'searched_until' => $last_searched_date
         ]);
     }
 
@@ -300,7 +312,11 @@ try {
     }
 
     $last_found_date = !empty($found_dates) ? max($found_dates) : null;
-    $can_search_more = !empty($slots) && $last_found_date !== null;
+    if ($last_found_date === null && $last_searched_date !== null) {
+        $last_found_date = $last_searched_date;
+    }
+
+    $can_search_more = $last_found_date !== null;
 
     echo json_encode([
         "success" => true,
@@ -315,7 +331,8 @@ try {
         "last_found_date" => $last_found_date,
         "can_search_more" => $can_search_more,
         "search_type" => $search_type,
-        "total_slots_returned" => $total_slots_returned
+        "total_slots_returned" => $total_slots_returned,
+        "searched_until" => $last_searched_date
     ]);
 
 } catch (Throwable $e) {

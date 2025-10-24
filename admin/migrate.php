@@ -143,6 +143,40 @@ try {
         echo "<p style='color:red'>❌ beta_messages creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
     }
 
+    echo "<h3>Creating Last-Minute notification tables:</h3>";
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS last_minute_subscriptions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            customer_id INT NOT NULL,
+            service_slugs JSON NOT NULL,
+            is_active TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            last_notification_sent TIMESTAMP NULL,
+            notification_count_today INT DEFAULT 0,
+            UNIQUE KEY uniq_customer (customer_id),
+            INDEX idx_active_subscriptions (is_active, customer_id),
+            INDEX idx_notification_tracking (last_notification_sent, is_active),
+            CONSTRAINT fk_last_minute_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS last_minute_notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            customer_id INT NOT NULL,
+            slots_found INT NOT NULL,
+            services_checked JSON NOT NULL,
+            email_sent TINYINT(1) DEFAULT 0,
+            email_error TEXT NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_lm_sent_at (sent_at, email_sent),
+            CONSTRAINT fk_last_minute_notifications_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        echo "<p style='color:green'>✅ last_minute_subscriptions & notifications tables ready</p>";
+    } catch (PDOException $e) {
+        echo "<p style='color:red'>❌ Last-minute tables creation failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
+
     // Create analytics views
     echo "<h3>Creating analytics views:</h3>";
     try {

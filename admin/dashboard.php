@@ -482,7 +482,8 @@ $email_stats = getEmailDeliveryStats(7);
 <nav>
     <a href="add_customer.php">Kunde hinzufügen</a>
     <a href="test_mail.php">E-Mail testen</a>
-    <a href="analytics.php">Kunden-Analytics</a>
+    <a href="customer_analytics_enhanced.php">📊 Kunden-Analytics (Enhanced)</a>
+    <a href="booking_analytics.php">📅 Buchungs-Analytics</a>
     <a href="migrate.php">Datenbank-Migration</a>
     <a href="messaging.php">📨 Messaging Center</a>
     <a href="termin_alerts_management.php">📱 Termin-Alerts</a>

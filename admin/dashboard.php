@@ -485,6 +485,7 @@ $email_stats = getEmailDeliveryStats(7);
     <a href="analytics.php">Kunden-Analytics</a>
     <a href="migrate.php">Datenbank-Migration</a>
     <a href="messaging.php">📨 Messaging Center</a>
+    <a href="termin_alerts_management.php">📱 Termin-Alerts</a>
     <a href="?logout=1">Abmelden</a>
 </nav>
 <?php if(!empty($_GET['success'])): ?>

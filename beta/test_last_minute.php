@@ -28,20 +28,34 @@ $message = '';
 $messageType = '';
 
 if ($action === 'run_checker') {
-    $output = [];
-    $returnCode = 0;
+    // Use HTTP endpoint instead of CLI (CLI-PHP doesn't have PDO on shared hosting)
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $baseDir = dirname($_SERVER['PHP_SELF']);
+    $url = $protocol . '://' . $host . $baseDir . '/../admin/last_minute_checker_cron.php';
 
-    exec('cd ' . escapeshellarg(__DIR__ . '/..') . ' && php admin/last_minute_checker.php 2>&1', $output, $returnCode);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    $output = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
 
-    if ($returnCode === 0) {
+    if ($httpCode === 200 && $output !== false) {
         $message = '✅ Checker erfolgreich ausgeführt!';
         $messageType = 'success';
     } else {
-        $message = '❌ Checker ist fehlgeschlagen (Exit Code: ' . $returnCode . ')';
+        $message = '❌ Checker ist fehlgeschlagen (HTTP ' . $httpCode . ')';
+        if ($error) {
+            $message .= ' - ' . $error;
+        }
         $messageType = 'error';
     }
 
-    $output = implode("\n", $output);
+    $output = $output ?: 'Keine Ausgabe erhalten.';
 }
 
 $pdo = getPDO();

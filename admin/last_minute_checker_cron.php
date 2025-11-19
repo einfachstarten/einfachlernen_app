@@ -8,11 +8,14 @@
  * Usage: curl https://domain.de/admin/last_minute_checker_cron.php
  */
 
-// Security: Nur von localhost oder mit Secret-Key
-$isLocalhost = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1', 'localhost'], true);
-$hasValidSecret = !empty($_GET['secret']) && $_GET['secret'] === getenv('CRON_SECRET');
+// Security: Allow localhost, same server, or with secret key
+$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+$serverAddr = $_SERVER['SERVER_ADDR'] ?? '';
+$isLocalhost = in_array($remoteAddr, ['127.0.0.1', '::1', 'localhost'], true);
+$isSameServer = ($remoteAddr === $serverAddr); // Allow calls from same server
+$hasValidSecret = !empty($_GET['secret']) && getenv('CRON_SECRET') && $_GET['secret'] === getenv('CRON_SECRET');
 
-if (!$isLocalhost && !$hasValidSecret) {
+if (!$isLocalhost && !$isSameServer && !$hasValidSecret) {
     http_response_code(403);
     die('❌ Access denied. This endpoint is for cron jobs only.');
 }

@@ -293,7 +293,7 @@ try {
         }
 
         $result = sendLastMinuteEmail($config, $customerEmail, $customerName, $available);
-        $totalSlots = array_sum(array_map(static fn($item) => count($item['slots']), $available));
+        $totalSlots = array_sum(array_map(function($item) { return count($item['slots']); }, $available));
 
         $insert = $pdo->prepare(
             'INSERT INTO last_minute_notifications (customer_id, slots_found, services_checked, email_sent, email_error)

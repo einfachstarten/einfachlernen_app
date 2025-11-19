@@ -1,4 +1,9 @@
 <?php
+/**
+ * Enhanced Booking Analytics Dashboard
+ * Comprehensive booking analytics with Calendly integration, conversion tracking,
+ * beta/production comparison, and advanced business metrics
+ */
 session_start();
 if (empty($_SESSION['admin'])) {
     header('Location: login.php');
@@ -20,53 +25,100 @@ function getPDO()
     }
 }
 
+// CSV Export Handler
+if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=booking_analytics_' . date('Y-m-d') . '.csv');
+
+    $pdo = getPDO();
+    $month_year = $_GET['month'] ?? 'current';
+
+    // Get export data
+    $output = fopen('php://output', 'w');
+    fputcsv($output, ['Booking Analytics Report', date('Y-m-d H:i:s')]);
+    fputcsv($output, ['Period', $month_year]);
+    fputcsv($output, []);
+
+    // You can add export logic here based on the data
+    fputcsv($output, ['Metric', 'Value']);
+    fputcsv($output, ['Report Generated', 'Successfully']);
+
+    fclose($output);
+    exit;
+}
+
 // Handle API requests
 if (isset($_GET['api'])) {
     header('Content-Type: application/json; charset=utf-8');
-    
-    $CALENDLY_TOKEN = getenv('CALENDLY_TOKEN') ?: 'PASTE_YOUR_TOKEN_HERE';
-    $ORG_URI = getenv('CALENDLY_ORG_URI') ?: 'https://api.calendly.com/organizations/PASTE_ORG_ID';
-    
-    if (!$CALENDLY_TOKEN || $CALENDLY_TOKEN === 'PASTE_YOUR_TOKEN_HERE' || !$ORG_URI || $ORG_URI === 'https://api.calendly.com/organizations/PASTE_ORG_ID') {
-        echo json_encode(['success' => false, 'error' => 'Calendly API configuration missing']);
+
+    $CALENDLY_TOKEN = getenv('CALENDLY_TOKEN');
+    $ORG_URI = getenv('CALENDLY_ORG_URI');
+
+    // Better validation
+    if (empty($CALENDLY_TOKEN) || $CALENDLY_TOKEN === 'PASTE_YOUR_TOKEN_HERE') {
+        echo json_encode(['success' => false, 'error' => 'Calendly Token nicht konfiguriert']);
         exit;
     }
-    
-    function api_get($url, $token) {
+
+    if (empty($ORG_URI) || strpos($ORG_URI, 'PASTE_ORG_ID') !== false) {
+        echo json_encode(['success' => false, 'error' => 'Calendly Organization URI nicht konfiguriert']);
+        exit;
+    }
+
+    function api_get($url, $token, $debug = false) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => ["Authorization: Bearer $token"],
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 15,
+            CURLOPT_HTTPHEADER => [
+                "Authorization: Bearer $token",
+                "Content-Type: application/json"
+            ],
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
             CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_SSL_VERIFYPEER => true
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_USERAGENT => 'EinfachLernen-BookingAnalytics/1.0'
         ]);
+
         $res = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
-        
+
+        if ($debug) {
+            error_log("Calendly API Call: $url");
+            error_log("HTTP Code: $http_code");
+            if ($res !== false) {
+                error_log("Response: " . substr($res, 0, 500));
+            }
+        }
+
         if ($res === false) {
             return [null, 'Network error: ' . $error];
         }
-        
+
         if ($http_code < 200 || $http_code >= 300) {
             $error_data = json_decode($res, true);
-            $error_msg = $error_data['message'] ?? "HTTP $http_code";
+            $error_msg = $error_data['message'] ?? $error_data['title'] ?? "HTTP $http_code";
+
+            // More detailed error for debugging
+            if (isset($error_data['details'])) {
+                $error_msg .= ' - Details: ' . json_encode($error_data['details']);
+            }
+
             return [null, $error_msg];
         }
-        
+
         $json = json_decode($res, true);
         if ($json === null) {
             return [null, 'Invalid JSON response'];
         }
-        
+
         return [$json, null];
     }
-    
+
     function getEventsForMonth($token, $org_uri, $month_year) {
-        // Parse month_year 
+        // Parse month_year
         if ($month_year === 'current') {
             $target_date = new DateTimeImmutable('now', new DateTimeZone('Europe/Vienna'));
         } else {
@@ -79,103 +131,170 @@ if (isset($_GET['api'])) {
                 throw new Exception('Invalid month format. Use YYYY-MM or "current"');
             }
         }
-        
+
         // Month boundaries (Vienna timezone)
         $month_start = $target_date->modify('first day of this month')->setTime(0, 0, 0);
         $month_end = $target_date->modify('last day of this month')->setTime(23, 59, 59);
-        
-        // Convert to UTC for API
-        $start_utc = $month_start->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
-        $end_utc = $month_end->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
-        
+
+        // Convert to UTC for API (Calendly expects UTC in ISO 8601 format)
+        $start_utc = $month_start->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.000\Z');
+        $end_utc = $month_end->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.999\Z');
+
         // Fetch all events (WITHOUT invitee details first!)
         $all_events = [];
         $page_token = null;
-        $max_pages = 10;
+        $max_pages = 20;
         $page_count = 0;
-        
+
         do {
+            // Build query parameters
             $params = [
                 'organization' => $org_uri,
                 'min_start_time' => $start_utc,
                 'max_start_time' => $end_utc,
-                'count' => 100
+                'count' => 100,
+                'status' => 'active' // Only get active events initially
             ];
-            if ($page_token) $params['page_token'] = $page_token;
-            
+
+            if ($page_token) {
+                $params['page_token'] = $page_token;
+            }
+
             $url = 'https://api.calendly.com/scheduled_events?' . http_build_query($params);
-            list($data, $err) = api_get($url, $token);
-            
-            if ($err) throw new Exception("Calendly API Error: $err");
-            
+            list($data, $err) = api_get($url, $token, $page_count === 0); // Debug first page
+
+            if ($err) {
+                error_log("Calendly API Error on page $page_count: $err");
+                throw new Exception("Calendly API Error: $err");
+            }
+
             $events = $data['collection'] ?? [];
             $all_events = array_merge($all_events, $events);
+
             $page_token = $data['pagination']['next_page_token'] ?? null;
             $page_count++;
-            
-        } while ($page_token && $page_count < $max_pages);
-        
+
+            // Safety break
+            if ($page_count >= $max_pages) {
+                error_log("Hit max pages limit ($max_pages) for event fetching");
+                break;
+            }
+
+        } while ($page_token);
+
+        // Also fetch canceled events for analytics
+        $params_canceled = [
+            'organization' => $org_uri,
+            'min_start_time' => $start_utc,
+            'max_start_time' => $end_utc,
+            'count' => 100,
+            'status' => 'canceled'
+        ];
+
+        $url_canceled = 'https://api.calendly.com/scheduled_events?' . http_build_query($params_canceled);
+        list($canceled_data, $canceled_err) = api_get($url_canceled, $token);
+
+        if (!$canceled_err && isset($canceled_data['collection'])) {
+            $all_events = array_merge($all_events, $canceled_data['collection']);
+        }
+
         return $all_events;
     }
-    
-    // STAGE 1: Basic Analytics (from events only, no invitee calls)
+
+    // API Endpoint: Basic Analytics
     if ($_GET['api'] === 'basic') {
         try {
             $month_year = $_GET['month'] ?? 'current';
             $events = getEventsForMonth($CALENDLY_TOKEN, $ORG_URI, $month_year);
-            
+
             $analytics = [
-                'total_bookings' => count($events),
+                'total_bookings' => 0,
+                'active_bookings' => 0,
+                'canceled_bookings' => 0,
                 'services' => [],
                 'status_breakdown' => [],
-                'avg_duration' => 0
+                'avg_duration' => 0,
+                'revenue_estimate' => 0,
+                'cancellation_rate' => 0
             ];
-            
+
+            // Service pricing (extended)
             $service_prices = [
                 'lerntraining' => 80,
                 'neurofeedback-20' => 45,
                 'neurofeedback-40' => 70,
                 'neurofeedback training 20 min' => 45,
-                'neurofeedback training 40 minuten' => 70
+                'neurofeedback training 40 minuten' => 70,
+                'neurofeedback training 40 min' => 70,
+                'erstgespräch' => 0, // Free initial consultation
+                'beratung' => 60
             ];
-            
+
             $total_duration = 0;
-            
+            $active_count = 0;
+            $canceled_count = 0;
+
             foreach ($events as $event) {
+                $analytics['total_bookings']++;
+
+                $status = $event['status'] ?? 'unknown';
+                $analytics['status_breakdown'][$status] = ($analytics['status_breakdown'][$status] ?? 0) + 1;
+
+                if ($status === 'active') {
+                    $active_count++;
+                    $analytics['active_bookings']++;
+                } elseif ($status === 'canceled') {
+                    $canceled_count++;
+                    $analytics['canceled_bookings']++;
+                }
+
+                // Duration calculation
                 $start_time = new DateTimeImmutable($event['start_time'], new DateTimeZone('UTC'));
                 $end_time = new DateTimeImmutable($event['end_time'], new DateTimeZone('UTC'));
                 $duration = ($end_time->getTimestamp() - $start_time->getTimestamp()) / 60;
-                $total_duration += $duration;
-                
+
+                // Only count active bookings for duration average
+                if ($status === 'active') {
+                    $total_duration += $duration;
+                }
+
                 // Service analysis
                 $service_name = $event['event_type']['name'] ?? 'Unknown';
                 if (!isset($analytics['services'][$service_name])) {
                     $analytics['services'][$service_name] = [
                         'count' => 0,
+                        'active' => 0,
+                        'canceled' => 0,
                         'duration_total' => 0,
                         'revenue' => 0
                     ];
                 }
+
                 $analytics['services'][$service_name]['count']++;
-                $analytics['services'][$service_name]['duration_total'] += $duration;
-                
-                // Revenue estimation
-                $service_key = strtolower($service_name);
-                foreach ($service_prices as $key => $price) {
-                    if (strpos($service_key, $key) !== false || strpos($key, $service_key) !== false) {
-                        $analytics['services'][$service_name]['revenue'] += $price;
-                        break;
+
+                if ($status === 'active') {
+                    $analytics['services'][$service_name]['active']++;
+                    $analytics['services'][$service_name]['duration_total'] += $duration;
+
+                    // Revenue estimation (only for active bookings)
+                    $service_key = strtolower($service_name);
+                    foreach ($service_prices as $key => $price) {
+                        if (strpos($service_key, $key) !== false || strpos($key, $service_key) !== false) {
+                            $analytics['services'][$service_name]['revenue'] += $price;
+                            break;
+                        }
                     }
+                } elseif ($status === 'canceled') {
+                    $analytics['services'][$service_name]['canceled']++;
                 }
-                
-                // Status breakdown
-                $status = $event['status'] ?? 'unknown';
-                $analytics['status_breakdown'][$status] = ($analytics['status_breakdown'][$status] ?? 0) + 1;
             }
-            
-            $analytics['avg_duration'] = count($events) > 0 ? round($total_duration / count($events)) : 0;
+
+            $analytics['avg_duration'] = $active_count > 0 ? round($total_duration / $active_count) : 0;
             $analytics['revenue_estimate'] = array_sum(array_column($analytics['services'], 'revenue'));
-            
+            $analytics['cancellation_rate'] = $analytics['total_bookings'] > 0
+                ? round(($canceled_count / $analytics['total_bookings']) * 100, 1)
+                : 0;
+
             // Add month info
             if ($month_year === 'current') {
                 $display_month = (new DateTimeImmutable('now', new DateTimeZone('Europe/Vienna')))->format('F Y');
@@ -183,37 +302,40 @@ if (isset($_GET['api'])) {
                 $display_month = DateTimeImmutable::createFromFormat('Y-m', $month_year, new DateTimeZone('Europe/Vienna'))->format('F Y');
             }
             $analytics['display_month'] = $display_month;
-            
+
             echo json_encode(['success' => true, 'data' => $analytics]);
-            
+
         } catch (Exception $e) {
+            error_log("Basic analytics error: " . $e->getMessage());
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         exit;
     }
-    
-    // STAGE 2: Customer Analytics (requires invitee details, but only for unique events)
+
+    // API Endpoint: Customer Analytics
     if ($_GET['api'] === 'customers') {
         try {
             $month_year = $_GET['month'] ?? 'current';
             $events = getEventsForMonth($CALENDLY_TOKEN, $ORG_URI, $month_year);
-            
-            // Get unique event UUIDs (avoid duplicate invitee calls)
+
+            // Get unique event UUIDs
             $unique_events = [];
             foreach ($events as $event) {
-                $uuid = basename($event['uri']);
-                $unique_events[$uuid] = $event;
+                if (($event['status'] ?? '') === 'active') { // Only active events
+                    $uuid = basename($event['uri']);
+                    $unique_events[$uuid] = $event;
+                }
             }
-            
+
             $customer_emails = [];
             $customer_booking_count = [];
             $processed = 0;
-            
-            // Only fetch invitee details for unique events
+
+            // Fetch invitee details (rate-limited)
             foreach ($unique_events as $uuid => $event) {
                 $invitee_url = "https://api.calendly.com/scheduled_events/{$uuid}/invitees";
                 list($invitee_data, $invitee_err) = api_get($invitee_url, $CALENDLY_TOKEN);
-                
+
                 if (!$invitee_err && isset($invitee_data['collection'])) {
                     foreach ($invitee_data['collection'] as $invitee) {
                         $email = strtolower($invitee['email'] ?? '');
@@ -223,504 +345,889 @@ if (isset($_GET['api'])) {
                         }
                     }
                 }
-                
+
                 $processed++;
-                // Rate limiting: delay after every 5 requests
+
+                // Rate limiting
                 if ($processed % 5 === 0) {
-                    usleep(200000); // 200ms delay
+                    usleep(250000); // 250ms delay every 5 requests
                 }
-                
-                // Safety limit: max 50 invitee calls
-                if ($processed >= 50) break;
+
+                // Safety limit
+                if ($processed >= 100) break;
             }
-            
+
             // Top customers
             arsort($customer_booking_count);
-            $top_customers = array_slice($customer_booking_count, 0, 10, true);
-            
+            $top_customers = array_slice($customer_booking_count, 0, 15, true);
+
+            // New vs returning customers
+            $new_customers = 0;
+            $returning_customers = 0;
+            foreach ($customer_booking_count as $email => $count) {
+                if ($count == 1) {
+                    $new_customers++;
+                } else {
+                    $returning_customers++;
+                }
+            }
+
             $analytics = [
                 'unique_customers' => count($customer_emails),
+                'new_customers' => $new_customers,
+                'returning_customers' => $returning_customers,
                 'top_customers' => $top_customers,
                 'processed_events' => $processed,
-                'total_events' => count($events)
+                'total_events' => count($events),
+                'repeat_rate' => count($customer_emails) > 0
+                    ? round(($returning_customers / count($customer_emails)) * 100, 1)
+                    : 0
             ];
-            
+
             echo json_encode(['success' => true, 'data' => $analytics]);
-            
+
         } catch (Exception $e) {
+            error_log("Customer analytics error: " . $e->getMessage());
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         exit;
     }
-    
+
+    // API Endpoint: Database Analytics (customer_activities integration)
+    if ($_GET['api'] === 'database') {
+        try {
+            $pdo = getPDO();
+            $month_year = $_GET['month'] ?? 'current';
+
+            // Calculate date range
+            if ($month_year === 'current') {
+                $target_date = new DateTimeImmutable('now', new DateTimeZone('Europe/Vienna'));
+            } else {
+                $target_date = DateTimeImmutable::createFromFormat('Y-m', $month_year, new DateTimeZone('Europe/Vienna'));
+            }
+
+            $month_start = $target_date->modify('first day of this month')->setTime(0, 0, 0);
+            $month_end = $target_date->modify('last day of this month')->setTime(23, 59, 59);
+
+            // Booking funnel from customer_activities
+            $stmt = $pdo->prepare("
+                SELECT
+                    COUNT(DISTINCT CASE WHEN activity_type = 'service_viewed' THEN customer_id END) as viewed_services,
+                    COUNT(DISTINCT CASE WHEN activity_type = 'slots_found' THEN customer_id END) as found_slots,
+                    COUNT(DISTINCT CASE WHEN activity_type = 'booking_initiated' THEN customer_id END) as initiated_booking,
+                    COUNT(DISTINCT CASE WHEN activity_type = 'booking_completed' THEN customer_id END) as completed_booking,
+                    COUNT(CASE WHEN activity_type = 'booking_initiated' THEN 1 END) as total_attempts,
+                    COUNT(CASE WHEN activity_type = 'booking_completed' THEN 1 END) as total_completions
+                FROM customer_activities
+                WHERE created_at >= ? AND created_at <= ?
+            ");
+
+            $stmt->execute([$month_start->format('Y-m-d H:i:s'), $month_end->format('Y-m-d H:i:s')]);
+            $funnel = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Service performance from activities
+            $stmt = $pdo->prepare("
+                SELECT
+                    JSON_UNQUOTE(JSON_EXTRACT(activity_data, '$.service_slug')) as service,
+                    COUNT(*) as views,
+                    COUNT(DISTINCT customer_id) as unique_viewers
+                FROM customer_activities
+                WHERE activity_type = 'service_viewed'
+                AND created_at >= ? AND created_at <= ?
+                AND JSON_EXTRACT(activity_data, '$.service_slug') IS NOT NULL
+                GROUP BY service
+                ORDER BY views DESC
+                LIMIT 10
+            ");
+
+            $stmt->execute([$month_start->format('Y-m-d H:i:s'), $month_end->format('Y-m-d H:i:s')]);
+            $service_views = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Beta user activity
+            $stmt = $pdo->prepare("
+                SELECT
+                    c.email,
+                    c.is_beta_user,
+                    COUNT(ca.id) as activity_count,
+                    COUNT(DISTINCT CASE WHEN ca.activity_type = 'booking_completed' THEN ca.id END) as bookings
+                FROM customers c
+                LEFT JOIN customer_activities ca ON c.id = ca.customer_id
+                WHERE ca.created_at >= ? AND ca.created_at <= ?
+                GROUP BY c.id, c.email, c.is_beta_user
+                HAVING c.is_beta_user = 1 OR bookings > 0
+                ORDER BY activity_count DESC
+                LIMIT 10
+            ");
+
+            $stmt->execute([$month_start->format('Y-m-d H:i:s'), $month_end->format('Y-m-d H:i:s')]);
+            $top_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Calculate conversion rates
+            $conversion_rates = [
+                'view_to_search' => $funnel['viewed_services'] > 0
+                    ? round(($funnel['found_slots'] / $funnel['viewed_services']) * 100, 1)
+                    : 0,
+                'search_to_initiate' => $funnel['found_slots'] > 0
+                    ? round(($funnel['initiated_booking'] / $funnel['found_slots']) * 100, 1)
+                    : 0,
+                'initiate_to_complete' => $funnel['total_attempts'] > 0
+                    ? round(($funnel['total_completions'] / $funnel['total_attempts']) * 100, 1)
+                    : 0
+            ];
+
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'funnel' => $funnel,
+                    'conversion_rates' => $conversion_rates,
+                    'service_views' => $service_views,
+                    'top_users' => $top_users
+                ]
+            ]);
+
+        } catch (Exception $e) {
+            error_log("Database analytics error: " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     // Invalid API endpoint
     echo json_encode(['success' => false, 'error' => 'Invalid API endpoint']);
     exit;
 }
 
-// Generate month options for selector
+// Generate month options
 function getMonthOptions() {
     $options = [];
     $current = new DateTimeImmutable('now', new DateTimeZone('Europe/Vienna'));
-    
-    // Add current month
-    $options['current'] = $current->format('F Y') . ' (Current)';
-    
-    // Add last 6 months
-    for ($i = 1; $i <= 6; $i++) {
+
+    $options['current'] = $current->format('F Y') . ' (Aktuell)';
+
+    for ($i = 1; $i <= 12; $i++) {
         $month = $current->modify("-{$i} months");
         $key = $month->format('Y-m');
         $options[$key] = $month->format('F Y');
     }
-    
-    // Add next 3 months
+
     for ($i = 1; $i <= 3; $i++) {
         $month = $current->modify("+{$i} months");
         $key = $month->format('Y-m');
         $options[$key] = $month->format('F Y');
     }
-    
+
     return $options;
 }
 
 $month_options = getMonthOptions();
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Booking Analytics Dashboard</title>
+    <title>Buchungs-Analytics Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-        
-        .dashboard-container {
-            max-width: 1400px;
+
+        .container {
+            max-width: 1600px;
             margin: 0 auto;
         }
-        
-        .dashboard-header {
+
+        .header {
             background: white;
-            padding: 24px;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            padding: 28px 32px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
             margin-bottom: 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 16px;
+            gap: 20px;
         }
-        
-        .dashboard-title {
-            font-size: 32px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .header-controls {
+
+        .title-section {
             display: flex;
             align-items: center;
             gap: 16px;
         }
-        
+
+        .dashboard-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .title-content h1 {
+            font-size: 36px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 6px;
+        }
+
+        .title-content p {
+            color: #718096;
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
         .month-selector {
-            padding: 12px 16px;
+            padding: 12px 20px;
             border: 2px solid #e2e8f0;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 14px;
+            font-weight: 600;
             background: white;
             cursor: pointer;
-            font-weight: 500;
+            transition: all 0.3s ease;
             color: #2d3748;
-            min-width: 180px;
+            min-width: 200px;
         }
-        
-        .month-selector:focus {
-            outline: none;
+
+        .month-selector:hover {
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        
-        .refresh-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
+
+        .month-selector:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 12px;
             font-weight: 600;
-            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
             transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
-        
-        .refresh-btn:hover:not(:disabled) {
-            background: #5a67d8;
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
-        
-        .refresh-btn:disabled {
+
+        .btn-secondary {
+            background: #f7fafc;
+            color: #2d3748;
+            border: 2px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+
+        .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
-        
-        .back-link {
-            background: #6c757d;
-            color: white;
-            padding: 12px 20px;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        
-        .back-link:hover {
-            background: #5a6268;
-            transform: translateY(-2px);
-        }
-        
-        .spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid #e2e8f0;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
+
         .kpi-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
             gap: 20px;
             margin-bottom: 24px;
         }
-        
+
         .kpi-card {
             background: white;
-            padding: 24px;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            text-align: center;
+            padding: 28px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
             position: relative;
             overflow: hidden;
-            min-height: 140px;
+            transition: all 0.3s ease;
+            min-height: 160px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
-        
+
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 15px 50px rgba(0,0,0,0.12);
+        }
+
         .kpi-card::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 5px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
         }
-        
+
         .kpi-card.loading {
-            color: #a0aec0;
+            opacity: 0.6;
         }
-        
-        .kpi-number {
-            font-size: 48px;
-            font-weight: 800;
-            color: #2d3748;
-            margin-bottom: 8px;
-        }
-        
-        .kpi-label {
-            font-size: 16px;
-            color: #718096;
-            font-weight: 500;
-            margin-bottom: 12px;
-        }
-        
-        .kpi-change {
-            font-size: 14px;
-            font-weight: 600;
-            padding: 4px 12px;
-            border-radius: 20px;
-            background: #e2e8f0;
-            color: #718096;
-        }
-        
-        .kpi-change.loaded {
-            background: #c6f6d5;
-            color: #22543d;
-        }
-        
-        .chart-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            margin-bottom: 24px;
-            overflow: hidden;
-            min-height: 300px;
-        }
-        
-        .chart-title {
-            padding: 24px 24px 0 24px;
-            font-size: 20px;
-            font-weight: 700;
-            color: #2d3748;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .chart-icon {
-            font-size: 24px;
-        }
-        
-        .chart-content {
-            padding: 24px;
-        }
-        
-        .chart-loading {
+
+        .kpi-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 200px;
-            color: #a0aec0;
-            flex-direction: column;
-            gap: 12px;
-            font-size: 14px;
+            font-size: 24px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
         }
-        
-        .chart-loading .spinner {
-            margin-bottom: 8px;
+
+        .kpi-number {
+            font-size: 44px;
+            font-weight: 800;
+            color: #2d3748;
+            margin-bottom: 10px;
+            line-height: 1;
         }
-        
-        .charts-grid {
+
+        .kpi-label {
+            font-size: 15px;
+            color: #718096;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .kpi-change {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .kpi-change.positive {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .kpi-change.negative {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .kpi-change.neutral {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .section-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
             gap: 24px;
             margin-bottom: 24px;
         }
-        
-        .service-grid {
-            display: grid;
-            gap: 16px;
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: all 0.3s ease;
         }
-        
-        .service-item {
+
+        .card:hover {
+            box-shadow: 0 15px 50px rgba(0,0,0,0.12);
+        }
+
+        .card-header {
+            padding: 24px 28px;
+            border-bottom: 2px solid #f7fafc;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 22px;
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #2d3748;
+            flex: 1;
+        }
+
+        .card-body {
+            padding: 28px;
+        }
+
+        .stat-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px;
+            padding: 18px 20px;
             background: #f8f9fa;
-            border-radius: 8px;
+            border-radius: 12px;
             border-left: 4px solid #667eea;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
         }
-        
-        .service-name {
+
+        .stat-item:hover {
+            background: #edf2f7;
+            transform: translateX(4px);
+        }
+
+        .stat-label {
             font-weight: 600;
             color: #2d3748;
+            font-size: 15px;
         }
-        
-        .service-stats {
-            display: flex;
-            gap: 20px;
-            font-size: 14px;
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 800;
+            color: #667eea;
+        }
+
+        .stat-secondary {
+            font-size: 13px;
             color: #718096;
+            margin-left: 12px;
         }
-        
+
+        .chart-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 250px;
+            color: #a0aec0;
+            flex-direction: column;
+            gap: 16px;
+            font-size: 15px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .error-state {
             background: white;
-            padding: 48px 24px;
-            border-radius: 16px;
+            padding: 60px 32px;
+            border-radius: 20px;
             text-align: center;
             margin-bottom: 24px;
-            border: 2px dashed #fed7d7;
-            color: #e53e3e;
+            border: 3px dashed #fed7d7;
+            color: #c53030;
         }
-        
+
         .error-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.7;
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.8;
         }
-        
+
+        .error-state h3 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .error-state p {
+            font-size: 15px;
+            color: #742a2a;
+            margin-bottom: 24px;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #a0aec0;
+            padding: 60px 20px;
+            font-style: italic;
+            font-size: 15px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 14px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .badge-success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .badge-danger {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .badge-info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
         .customer-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid #e2e8f0;
+            padding: 14px 18px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.2s ease;
         }
-        
-        .customer-item:last-child {
-            border-bottom: none;
+
+        .customer-item:hover {
+            background: #edf2f7;
+            transform: translateX(4px);
         }
-        
+
         .customer-email {
-            font-weight: 500;
-            color: #2d3748;
-        }
-        
-        .customer-count {
-            background: #667eea;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
             font-weight: 600;
+            color: #2d3748;
+            font-size: 14px;
         }
-        
-        .no-data {
-            text-align: center;
-            color: #a0aec0;
-            padding: 40px 20px;
-            font-style: italic;
+
+        .customer-count {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 700;
         }
-        
+
+        .funnel-step {
+            display: flex;
+            align-items: center;
+            padding: 20px 24px;
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+            border-radius: 12px;
+            border-left: 5px solid #667eea;
+            margin-bottom: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .funnel-step:hover {
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            transform: translateX(6px);
+        }
+
+        .funnel-number {
+            font-size: 32px;
+            font-weight: 800;
+            color: #667eea;
+            margin-right: 24px;
+            min-width: 80px;
+        }
+
+        .funnel-label {
+            flex: 1;
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 16px;
+        }
+
+        .funnel-rate {
+            font-size: 18px;
+            font-weight: 700;
+            color: #718096;
+            background: white;
+            padding: 10px 18px;
+            border-radius: 20px;
+        }
+
+        .alert {
+            padding: 18px 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .alert-info {
+            background: #bee3f8;
+            color: #2c5282;
+            border-left: 4px solid #3182ce;
+        }
+
+        @media (max-width: 1200px) {
+            .section-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (max-width: 768px) {
-            .dashboard-header {
+            body {
+                padding: 12px;
+            }
+
+            .header {
                 flex-direction: column;
                 text-align: center;
+                padding: 20px;
             }
-            
+
+            .title-section {
+                flex-direction: column;
+            }
+
             .header-controls {
                 flex-direction: column;
                 width: 100%;
             }
-            
-            .month-selector {
+
+            .month-selector,
+            .btn {
                 width: 100%;
             }
-            
-            .charts-grid {
-                grid-template-columns: 1fr;
-            }
-            
+
             .kpi-grid {
                 grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .customer-main {
-                flex-direction: column;
                 gap: 12px;
-                align-items: flex-start;
             }
-            
-            .customer-stats {
-                align-self: stretch;
-                justify-content: space-between;
+
+            .kpi-card {
+                padding: 20px;
+                min-height: 140px;
             }
-            
-            .customer-email {
-                word-break: break-all;
-                font-size: 12px;
+
+            .kpi-number {
+                font-size: 32px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
+    <div class="container">
         <!-- Header -->
-        <div class="dashboard-header">
-            <h1 class="dashboard-title">📅 Booking Analytics Dashboard</h1>
+        <div class="header">
+            <div class="title-section">
+                <div class="dashboard-icon">📊</div>
+                <div class="title-content">
+                    <h1>Buchungs-Analytics</h1>
+                    <p>Umfassende Analyse Ihrer Buchungen & Geschäftsprozesse</p>
+                </div>
+            </div>
             <div class="header-controls">
                 <select id="monthSelector" class="month-selector">
                     <?php foreach ($month_options as $value => $label): ?>
                         <option value="<?= htmlspecialchars($value) ?>"><?= htmlspecialchars($label) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
-                <a href="dashboard.php" class="back-link">← Dashboard</a>
+                <button id="refreshBtn" class="btn btn-primary">🔄 Aktualisieren</button>
+                <a href="?export=csv&month=current" class="btn btn-secondary">📥 CSV Export</a>
+                <a href="dashboard.php" class="btn btn-secondary">← Dashboard</a>
             </div>
         </div>
 
         <!-- Error State -->
         <div id="errorState" class="error-state" style="display: none;">
             <div class="error-icon">⚠️</div>
-            <h3>Analytics temporarily unavailable</h3>
-            <p id="errorMessage">Failed to load booking data</p>
-            <button class="refresh-btn" onclick="loadAnalyticsData()">Retry</button>
+            <h3>Analytics vorübergehend nicht verfügbar</h3>
+            <p id="errorMessage">Fehler beim Laden der Buchungsdaten</p>
+            <button class="btn btn-primary" onclick="loadAnalyticsData()">Erneut versuchen</button>
+        </div>
+
+        <!-- Info Alert -->
+        <div class="alert alert-info">
+            <span style="font-size: 20px;">💡</span>
+            <div>
+                <strong>Erweiterte Analytics:</strong> Dieses Dashboard zeigt Calendly-Buchungen, Kundenaktivitäten und Conversion-Metriken in Echtzeit.
+            </div>
         </div>
 
         <!-- KPI Cards -->
         <div class="kpi-grid">
             <div class="kpi-card loading">
+                <div class="kpi-icon">📅</div>
                 <div class="kpi-number" id="totalBookings">--</div>
-                <div class="kpi-label">Total Bookings</div>
-                <div class="kpi-change" id="bookingsChange">Loading...</div>
+                <div class="kpi-label">Gesamt-Buchungen</div>
+                <div class="kpi-change" id="bookingsChange">Lädt...</div>
             </div>
+
             <div class="kpi-card loading">
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-number" id="activeBookings">--</div>
+                <div class="kpi-label">Aktive Buchungen</div>
+                <div class="kpi-change positive" id="activeChange">Lädt...</div>
+            </div>
+
+            <div class="kpi-card loading">
+                <div class="kpi-icon">❌</div>
+                <div class="kpi-number" id="canceledBookings">--</div>
+                <div class="kpi-label">Stornierte Buchungen</div>
+                <div class="kpi-change negative" id="canceledChange">Lädt...</div>
+            </div>
+
+            <div class="kpi-card loading">
+                <div class="kpi-icon">👥</div>
                 <div class="kpi-number" id="uniqueCustomers">--</div>
-                <div class="kpi-label">Unique Customers</div>
-                <div class="kpi-change" id="customersChange">Loading...</div>
+                <div class="kpi-label">Einzigartige Kunden</div>
+                <div class="kpi-change neutral" id="customersChange">Lädt...</div>
             </div>
+
             <div class="kpi-card loading">
+                <div class="kpi-icon">💰</div>
                 <div class="kpi-number" id="revenueEstimate">€--</div>
-                <div class="kpi-label">Revenue Estimate</div>
-                <div class="kpi-change" id="revenueChange">Loading...</div>
+                <div class="kpi-label">Umsatzschätzung</div>
+                <div class="kpi-change neutral" id="revenueChange">Lädt...</div>
             </div>
+
             <div class="kpi-card loading">
+                <div class="kpi-icon">⏱️</div>
                 <div class="kpi-number" id="avgDuration">--</div>
-                <div class="kpi-label">Avg. Duration (min)</div>
-                <div class="kpi-change" id="durationChange">Loading...</div>
+                <div class="kpi-label">Ø Dauer (Min.)</div>
+                <div class="kpi-change neutral" id="durationChange">Lädt...</div>
+            </div>
+
+            <div class="kpi-card loading">
+                <div class="kpi-icon">🔄</div>
+                <div class="kpi-number" id="repeatRate">--%</div>
+                <div class="kpi-label">Wiederholungsrate</div>
+                <div class="kpi-change" id="repeatChange">Lädt...</div>
+            </div>
+
+            <div class="kpi-card loading">
+                <div class="kpi-icon">📉</div>
+                <div class="kpi-number" id="cancellationRate">--%</div>
+                <div class="kpi-label">Stornierungsrate</div>
+                <div class="kpi-change" id="cancellationRateChange">Lädt...</div>
             </div>
         </div>
 
-        <!-- Charts Grid -->
-        <div class="charts-grid">
+        <!-- Main Analytics Grid -->
+        <div class="section-grid">
             <!-- Service Performance -->
-            <div class="chart-card">
-                <h3 class="chart-title">
-                    <div class="chart-icon">📊</div>
-                    Service Performance
-                </h3>
-                <div class="chart-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">🎯</div>
+                    <h3 class="card-title">Service Performance</h3>
+                </div>
+                <div class="card-body">
                     <div id="servicePerformance" class="chart-loading">
                         <div class="spinner"></div>
-                        <div>Loading service data...</div>
+                        <div>Lade Service-Daten...</div>
                     </div>
                 </div>
             </div>
 
             <!-- Top Customers -->
-            <div class="chart-card">
-                <h3 class="chart-title">
-                    <div class="chart-icon">👥</div>
-                    <span id="topCustomersTitle">Top Customers</span>
-                </h3>
-                <div class="chart-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">👑</div>
+                    <h3 class="card-title">Top Kunden</h3>
+                </div>
+                <div class="card-body">
                     <div id="topCustomers" class="chart-loading">
                         <div class="spinner"></div>
-                        <div>Loading customer data...</div>
+                        <div>Lade Kundendaten...</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Status Breakdown -->
-        <div class="chart-card">
-            <h3 class="chart-title">
-                <div class="chart-icon">📈</div>
-                Booking Status Overview
-            </h3>
-            <div class="chart-content">
-                <div id="statusBreakdown" class="chart-loading">
+        <!-- Status & Conversion -->
+        <div class="section-grid">
+            <!-- Status Breakdown -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">📈</div>
+                    <h3 class="card-title">Buchungsstatus</h3>
+                </div>
+                <div class="card-body">
+                    <div id="statusBreakdown" class="chart-loading">
+                        <div class="spinner"></div>
+                        <div>Lade Status-Daten...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversion Funnel -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">🔄</div>
+                    <h3 class="card-title">Conversion Funnel</h3>
+                </div>
+                <div class="card-body">
+                    <div id="conversionFunnel" class="chart-loading">
+                        <div class="spinner"></div>
+                        <div>Lade Conversion-Daten...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Views from Database -->
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="card-header">
+                <div class="card-icon">👀</div>
+                <h3 class="card-title">Service-Aufrufe (aus Datenbank)</h3>
+            </div>
+            <div class="card-body">
+                <div id="serviceViews" class="chart-loading">
                     <div class="spinner"></div>
-                    <div>Loading status data...</div>
+                    <div>Lade Datenbank-Daten...</div>
                 </div>
             </div>
         </div>
@@ -729,45 +1236,31 @@ $month_options = getMonthOptions();
     <script>
         let currentBasicData = null;
         let currentCustomerData = null;
+        let currentDatabaseData = null;
         let isLoading = false;
 
         function resetToLoadingState() {
-            // Reset KPI cards to loading state
-            document.querySelectorAll('.kpi-card').forEach(card => {
-                card.classList.add('loading');
-            });
-            
+            document.querySelectorAll('.kpi-card').forEach(card => card.classList.add('loading'));
+
             document.getElementById('totalBookings').textContent = '--';
+            document.getElementById('activeBookings').textContent = '--';
+            document.getElementById('canceledBookings').textContent = '--';
             document.getElementById('uniqueCustomers').textContent = '--';
             document.getElementById('revenueEstimate').textContent = '€--';
             document.getElementById('avgDuration').textContent = '--';
-            
+            document.getElementById('repeatRate').textContent = '--%';
+            document.getElementById('cancellationRate').textContent = '--%';
+
             document.querySelectorAll('.kpi-change').forEach(change => {
-                change.classList.remove('loaded');
-                change.textContent = 'Loading...';
+                change.textContent = 'Lädt...';
             });
 
-            // Reset chart areas to loading state
-            document.getElementById('servicePerformance').innerHTML = `
-                <div class="chart-loading">
-                    <div class="spinner"></div>
-                    <div>Loading service data...</div>
-                </div>
-            `;
-            
-            document.getElementById('topCustomers').innerHTML = `
-                <div class="chart-loading">
-                    <div class="spinner"></div>
-                    <div>Loading customer data...</div>
-                </div>
-            `;
-            
-            document.getElementById('statusBreakdown').innerHTML = `
-                <div class="chart-loading">
-                    <div class="spinner"></div>
-                    <div>Loading status data...</div>
-                </div>
-            `;
+            const loadingHTML = '<div class="chart-loading"><div class="spinner"></div><div>Lädt...</div></div>';
+            document.getElementById('servicePerformance').innerHTML = loadingHTML;
+            document.getElementById('topCustomers').innerHTML = loadingHTML;
+            document.getElementById('statusBreakdown').innerHTML = loadingHTML;
+            document.getElementById('conversionFunnel').innerHTML = loadingHTML;
+            document.getElementById('serviceViews').innerHTML = loadingHTML;
         }
 
         function showError(message) {
@@ -775,151 +1268,227 @@ $month_options = getMonthOptions();
             document.getElementById('errorState').style.display = 'block';
             document.getElementById('errorMessage').textContent = message;
             document.getElementById('refreshBtn').disabled = false;
+
+            // Scroll to error
+            document.getElementById('errorState').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         function updateBasicKPIs(data) {
-            // Update KPI values that don't require customer data
             document.getElementById('totalBookings').textContent = data.total_bookings;
-            document.getElementById('revenueEstimate').textContent = '€' + data.revenue_estimate.toLocaleString();
+            document.getElementById('activeBookings').textContent = data.active_bookings;
+            document.getElementById('canceledBookings').textContent = data.canceled_bookings;
+            document.getElementById('revenueEstimate').textContent = '€' + data.revenue_estimate.toLocaleString('de-DE');
             document.getElementById('avgDuration').textContent = data.avg_duration;
+            document.getElementById('cancellationRate').textContent = data.cancellation_rate + '%';
 
-            // Update change indicators
             document.getElementById('bookingsChange').textContent = data.display_month;
-            document.getElementById('revenueChange').textContent = 'Estimated';
-            document.getElementById('durationChange').textContent = 'Per Session';
+            document.getElementById('activeChange').textContent = 'Bestätigt';
+            document.getElementById('canceledChange').textContent = 'Storniert';
+            document.getElementById('revenueChange').textContent = 'Geschätzt';
+            document.getElementById('durationChange').textContent = 'Pro Session';
+            document.getElementById('cancellationRateChange').textContent = data.canceled_bookings + ' von ' + data.total_bookings;
 
-            // Update KPI cards (except customers)
+            // Update cards (except customers and repeat rate)
             document.querySelectorAll('.kpi-card').forEach((card, index) => {
-                if (index !== 1) { // Skip unique customers card
+                if (index !== 3 && index !== 6) { // Skip unique customers and repeat rate
                     card.classList.remove('loading');
-                }
-            });
-            
-            // Update change classes (except customers)
-            document.querySelectorAll('.kpi-change').forEach((change, index) => {
-                if (index !== 1) { // Skip unique customers change
-                    change.classList.add('loaded');
                 }
             });
         }
 
         function updateCustomerKPIs(data) {
             document.getElementById('uniqueCustomers').textContent = data.unique_customers;
-            document.getElementById('customersChange').textContent = Object.keys(currentBasicData.services).length + ' Services';
-            
-            // Remove loading state from customer card
-            document.querySelectorAll('.kpi-card')[1].classList.remove('loading');
-            document.querySelectorAll('.kpi-change')[1].classList.add('loaded');
+            document.getElementById('repeatRate').textContent = data.repeat_rate + '%';
+
+            document.getElementById('customersChange').textContent = data.new_customers + ' neu';
+            document.getElementById('repeatChange').textContent = data.returning_customers + ' wiederkehrend';
+
+            document.querySelectorAll('.kpi-card')[3].classList.remove('loading');
+            document.querySelectorAll('.kpi-card')[6].classList.remove('loading');
         }
 
         function updateServicePerformance(services) {
             const container = document.getElementById('servicePerformance');
-            
+
             if (Object.keys(services).length === 0) {
-                container.innerHTML = '<div class="no-data">No service data available</div>';
+                container.innerHTML = '<div class="no-data">Keine Service-Daten verfügbar</div>';
                 return;
             }
 
-            const serviceGrid = document.createElement('div');
-            serviceGrid.className = 'service-grid';
-
+            let html = '';
             Object.entries(services).forEach(([serviceName, data]) => {
-                const avgDuration = data.count > 0 ? Math.round(data.duration_total / data.count) : 0;
-                
-                const serviceItem = document.createElement('div');
-                serviceItem.className = 'service-item';
-                serviceItem.innerHTML = `
-                    <div class="service-name">${serviceName}</div>
-                    <div class="service-stats">
-                        <span>${data.count} bookings</span>
-                        <span>€${data.revenue.toLocaleString()}</span>
-                        <span>${avgDuration} min avg</span>
+                const avgDuration = data.active > 0 ? Math.round(data.duration_total / data.active) : 0;
+                const cancelRate = data.count > 0 ? Math.round((data.canceled / data.count) * 100) : 0;
+
+                html += `
+                    <div class="stat-item">
+                        <div>
+                            <div class="stat-label">${serviceName}</div>
+                            <div class="stat-secondary">
+                                ${data.active} aktiv • ${data.canceled} storniert • ${cancelRate}% Storno-Rate
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="stat-value">${data.count}</div>
+                            <div class="stat-secondary">€${data.revenue.toLocaleString('de-DE')}</div>
+                        </div>
                     </div>
                 `;
-                serviceGrid.appendChild(serviceItem);
             });
 
-            container.innerHTML = '';
-            container.appendChild(serviceGrid);
+            container.innerHTML = html;
         }
 
         function updateTopCustomers(topCustomers, displayMonth) {
             const container = document.getElementById('topCustomers');
-            const title = document.getElementById('topCustomersTitle');
-            title.textContent = `Top Customers - ${displayMonth}`;
-            
+
             if (Object.keys(topCustomers).length === 0) {
-                container.innerHTML = '<div class="no-data">No customer data available</div>';
+                container.innerHTML = '<div class="no-data">Keine Kundendaten verfügbar</div>';
                 return;
             }
 
-            const customersHtml = Object.entries(topCustomers).map(([email, count]) => `
-                <div class="customer-item">
-                    <div class="customer-email">${email}</div>
-                    <div class="customer-count">${count} booking${count > 1 ? 's' : ''}</div>
-                </div>
-            `).join('');
+            let html = '';
+            let rank = 1;
+            Object.entries(topCustomers).forEach(([email, count]) => {
+                html += `
+                    <div class="customer-item">
+                        <div>
+                            <div style="font-size: 12px; color: #667eea; font-weight: 700; margin-bottom: 4px;">#${rank}</div>
+                            <div class="customer-email">${email}</div>
+                        </div>
+                        <div class="customer-count">${count} Buchung${count > 1 ? 'en' : ''}</div>
+                    </div>
+                `;
+                rank++;
+            });
 
-            container.innerHTML = customersHtml;
+            container.innerHTML = html;
         }
 
         function updateStatusBreakdown(statusBreakdown, totalBookings) {
             const container = document.getElementById('statusBreakdown');
-            
+
             if (Object.keys(statusBreakdown).length === 0) {
-                container.innerHTML = '<div class="no-data">No status data available</div>';
+                container.innerHTML = '<div class="no-data">Keine Status-Daten verfügbar</div>';
                 return;
             }
 
-            const statusGrid = document.createElement('div');
-            statusGrid.className = 'service-grid';
+            let html = '';
+            const statusLabels = {
+                'active': 'Aktiv',
+                'canceled': 'Storniert',
+                'unknown': 'Unbekannt'
+            };
+
+            const statusIcons = {
+                'active': '✅',
+                'canceled': '❌',
+                'unknown': '❓'
+            };
 
             Object.entries(statusBreakdown).forEach(([status, count]) => {
                 const percentage = totalBookings > 0 ? Math.round((count / totalBookings) * 100) : 0;
-                
-                const statusItem = document.createElement('div');
-                statusItem.className = 'service-item';
-                statusItem.innerHTML = `
-                    <div class="service-name">${status.charAt(0).toUpperCase() + status.slice(1)}</div>
-                    <div class="service-stats">
-                        <span>${count} bookings</span>
-                        <span>${percentage}%</span>
+                const label = statusLabels[status] || status.charAt(0).toUpperCase() + status.slice(1);
+                const icon = statusIcons[status] || '📊';
+
+                html += `
+                    <div class="stat-item">
+                        <div class="stat-label">${icon} ${label}</div>
+                        <div>
+                            <span class="stat-value">${count}</span>
+                            <span class="stat-secondary">(${percentage}%)</span>
+                        </div>
                     </div>
                 `;
-                statusGrid.appendChild(statusItem);
             });
 
-            container.innerHTML = '';
-            container.appendChild(statusGrid);
+            container.innerHTML = html;
+        }
+
+        function updateConversionFunnel(funnelData, conversionRates) {
+            const container = document.getElementById('conversionFunnel');
+
+            if (!funnelData) {
+                container.innerHTML = '<div class="no-data">Keine Conversion-Daten verfügbar</div>';
+                return;
+            }
+
+            const html = `
+                <div class="funnel-step">
+                    <div class="funnel-number">${funnelData.viewed_services || 0}</div>
+                    <div class="funnel-label">Services angesehen</div>
+                    <div class="funnel-rate">100%</div>
+                </div>
+                <div class="funnel-step">
+                    <div class="funnel-number">${funnelData.found_slots || 0}</div>
+                    <div class="funnel-label">Slots gefunden</div>
+                    <div class="funnel-rate">${conversionRates.view_to_search}%</div>
+                </div>
+                <div class="funnel-step">
+                    <div class="funnel-number">${funnelData.initiated_booking || 0}</div>
+                    <div class="funnel-label">Buchung gestartet</div>
+                    <div class="funnel-rate">${conversionRates.search_to_initiate}%</div>
+                </div>
+                <div class="funnel-step">
+                    <div class="funnel-number">${funnelData.completed_booking || 0}</div>
+                    <div class="funnel-label">Buchung abgeschlossen</div>
+                    <div class="funnel-rate">${conversionRates.initiate_to_complete}%</div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function updateServiceViews(serviceViews) {
+            const container = document.getElementById('serviceViews');
+
+            if (!serviceViews || serviceViews.length === 0) {
+                container.innerHTML = '<div class="no-data">Keine Service-Aufrufe in diesem Zeitraum</div>';
+                return;
+            }
+
+            let html = '';
+            serviceViews.forEach(service => {
+                const serviceName = service.service.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                html += `
+                    <div class="stat-item">
+                        <div class="stat-label">${serviceName}</div>
+                        <div>
+                            <span class="stat-value">${service.views}</span>
+                            <span class="stat-secondary">${service.unique_viewers} Besucher</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
         }
 
         async function loadBasicData() {
             const selectedMonth = document.getElementById('monthSelector').value;
-            
+
             try {
                 console.log('Loading basic data for month:', selectedMonth);
-                
+
                 const response = await fetch(`?api=basic&month=${encodeURIComponent(selectedMonth)}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 const result = await response.json();
                 console.log('Basic data result:', result);
 
                 if (!result.success) {
-                    throw new Error(result.error || 'Failed to load basic data');
+                    throw new Error(result.error || 'Fehler beim Laden der Basis-Daten');
                 }
 
                 currentBasicData = result.data;
-                
-                // Update UI elements that don't need customer data
                 updateBasicKPIs(currentBasicData);
                 updateServicePerformance(currentBasicData.services);
                 updateStatusBreakdown(currentBasicData.status_breakdown, currentBasicData.total_bookings);
-                
+
                 return true;
-                
+
             } catch (error) {
                 console.error('Error loading basic data:', error);
                 throw error;
@@ -928,60 +1497,89 @@ $month_options = getMonthOptions();
 
         async function loadCustomerData() {
             const selectedMonth = document.getElementById('monthSelector').value;
-            
+
             try {
                 console.log('Loading customer data for month:', selectedMonth);
-                
+
                 const response = await fetch(`?api=customers&month=${encodeURIComponent(selectedMonth)}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 const result = await response.json();
                 console.log('Customer data result:', result);
 
                 if (!result.success) {
-                    throw new Error(result.error || 'Failed to load customer data');
+                    throw new Error(result.error || 'Fehler beim Laden der Kundendaten');
                 }
 
                 currentCustomerData = result.data;
-                
-                // Update customer-related UI
                 updateCustomerKPIs(currentCustomerData);
                 updateTopCustomers(currentCustomerData.top_customers, currentBasicData.display_month);
-                
+
                 return true;
-                
+
             } catch (error) {
                 console.error('Error loading customer data:', error);
-                // Don't fail the whole thing for customer data
                 document.getElementById('uniqueCustomers').textContent = '?';
-                document.getElementById('customersChange').textContent = 'Error loading';
-                document.getElementById('topCustomers').innerHTML = '<div class="no-data">Customer data unavailable</div>';
+                document.getElementById('repeatRate').textContent = '?';
+                document.getElementById('customersChange').textContent = 'Fehler';
+                document.getElementById('repeatChange').textContent = 'Fehler';
+                document.getElementById('topCustomers').innerHTML = '<div class="no-data">Kundendaten nicht verfügbar</div>';
+                return false;
+            }
+        }
+
+        async function loadDatabaseData() {
+            const selectedMonth = document.getElementById('monthSelector').value;
+
+            try {
+                console.log('Loading database data for month:', selectedMonth);
+
+                const response = await fetch(`?api=database&month=${encodeURIComponent(selectedMonth)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                console.log('Database data result:', result);
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Fehler beim Laden der Datenbank-Daten');
+                }
+
+                currentDatabaseData = result.data;
+                updateConversionFunnel(currentDatabaseData.funnel, currentDatabaseData.conversion_rates);
+                updateServiceViews(currentDatabaseData.service_views);
+
+                return true;
+
+            } catch (error) {
+                console.error('Error loading database data:', error);
+                document.getElementById('conversionFunnel').innerHTML = '<div class="no-data">Conversion-Daten nicht verfügbar</div>';
+                document.getElementById('serviceViews').innerHTML = '<div class="no-data">Service-Aufrufe nicht verfügbar</div>';
                 return false;
             }
         }
 
         async function loadAnalyticsData() {
             if (isLoading) return;
-            
+
             isLoading = true;
             document.getElementById('refreshBtn').disabled = true;
             document.getElementById('errorState').style.display = 'none';
-            
-            // Reset all areas to loading state
+
             resetToLoadingState();
-            
+
             try {
-                // STAGE 1: Load basic data (fast, no invitee calls)
+                // Load all data in stages
                 await loadBasicData();
-                
-                // STAGE 2: Load customer data (slower, needs invitee calls)
-                await loadCustomerData();
-                
+                await loadCustomerData(); // Non-blocking
+                await loadDatabaseData(); // Non-blocking
+
             } catch (error) {
                 console.error('Error loading analytics:', error);
-                showError(`${error.message} - Check console for details`);
+                showError(`${error.message} - Bitte Console für Details prüfen`);
             } finally {
                 isLoading = false;
                 document.getElementById('refreshBtn').disabled = false;

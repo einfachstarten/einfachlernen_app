@@ -443,20 +443,26 @@ if (isset($_GET['api'])) {
             $stmt->execute([$month_start->format('Y-m-d H:i:s'), $month_end->format('Y-m-d H:i:s')]);
             $service_views = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Beta user activity
+            // Top active users (most engaged customers)
             $stmt = $pdo->prepare("
                 SELECT
                     c.email,
-                    c.is_beta_user,
+                    c.first_name,
+                    c.last_name,
+                    c.status as customer_status,
                     COUNT(ca.id) as activity_count,
-                    COUNT(DISTINCT CASE WHEN ca.activity_type = 'booking_completed' THEN ca.id END) as bookings
+                    COUNT(DISTINCT CASE WHEN ca.activity_type = 'booking_completed' THEN ca.id END) as bookings,
+                    COUNT(DISTINCT CASE WHEN ca.activity_type = 'service_viewed' THEN ca.id END) as service_views,
+                    COUNT(DISTINCT CASE WHEN ca.activity_type = 'booking_initiated' THEN ca.id END) as booking_attempts,
+                    MIN(ca.created_at) as first_activity,
+                    MAX(ca.created_at) as last_activity
                 FROM customers c
-                LEFT JOIN customer_activities ca ON c.id = ca.customer_id
+                INNER JOIN customer_activities ca ON c.id = ca.customer_id
                 WHERE ca.created_at >= ? AND ca.created_at <= ?
-                GROUP BY c.id, c.email, c.is_beta_user
-                HAVING c.is_beta_user = 1 OR bookings > 0
-                ORDER BY activity_count DESC
-                LIMIT 10
+                GROUP BY c.id, c.email, c.first_name, c.last_name, c.status
+                HAVING activity_count > 0
+                ORDER BY bookings DESC, activity_count DESC
+                LIMIT 20
             ");
 
             $stmt->execute([$month_start->format('Y-m-d H:i:s'), $month_end->format('Y-m-d H:i:s')]);
@@ -472,7 +478,48 @@ if (isset($_GET['api'])) {
                     : 0,
                 'initiate_to_complete' => $funnel['total_attempts'] > 0
                     ? round(($funnel['total_completions'] / $funnel['total_attempts']) * 100, 1)
+                    : 0,
+                'overall_conversion' => $funnel['viewed_services'] > 0
+                    ? round(($funnel['completed_booking'] / $funnel['viewed_services']) * 100, 1)
                     : 0
+            ];
+
+            // Additional activity statistics
+            $stmt = $pdo->prepare("
+                SELECT
+                    activity_type,
+                    COUNT(*) as count,
+                    COUNT(DISTINCT customer_id) as unique_customers,
+                    DATE(created_at) as activity_date
+                FROM customer_activities
+                WHERE created_at >= ? AND created_at <= ?
+                GROUP BY activity_type
+                ORDER BY count DESC
+            ");
+            $stmt->execute([$month_start->format('Y-m-d H:i:s'), $month_end->format('Y-m-d H:i:s')]);
+            $activity_breakdown = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Customer engagement metrics
+            $stmt = $pdo->prepare("
+                SELECT
+                    COUNT(DISTINCT customer_id) as total_active_customers,
+                    AVG(activity_count) as avg_activities_per_customer,
+                    MAX(activity_count) as max_activities
+                FROM (
+                    SELECT customer_id, COUNT(*) as activity_count
+                    FROM customer_activities
+                    WHERE created_at >= ? AND created_at <= ?
+                    GROUP BY customer_id
+                ) as customer_stats
+            ");
+            $stmt->execute([$month_start->format('Y-m-d H:i:s'), $month_end->format('Y-m-d H:i:s')]);
+            $engagement_metrics = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Drop-off analysis
+            $drop_off_analysis = [
+                'after_view' => $funnel['viewed_services'] - $funnel['found_slots'],
+                'after_search' => $funnel['found_slots'] - $funnel['initiated_booking'],
+                'after_initiate' => $funnel['total_attempts'] - $funnel['total_completions']
             ];
 
             echo json_encode([
@@ -480,8 +527,11 @@ if (isset($_GET['api'])) {
                 'data' => [
                     'funnel' => $funnel,
                     'conversion_rates' => $conversion_rates,
+                    'drop_off_analysis' => $drop_off_analysis,
                     'service_views' => $service_views,
-                    'top_users' => $top_users
+                    'top_users' => $top_users,
+                    'activity_breakdown' => $activity_breakdown,
+                    'engagement_metrics' => $engagement_metrics
                 ]
             ]);
 
@@ -1231,6 +1281,51 @@ $month_options = getMonthOptions();
                 </div>
             </div>
         </div>
+
+        <!-- Extended Analytics Grid -->
+        <div class="section-grid">
+            <!-- Activity Breakdown -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">📊</div>
+                    <h3 class="card-title">Aktivitäts-Übersicht</h3>
+                </div>
+                <div class="card-body">
+                    <div id="activityBreakdown" class="chart-loading">
+                        <div class="spinner"></div>
+                        <div>Lade Aktivitätsdaten...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Engagement Metrics -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">💪</div>
+                    <h3 class="card-title">Engagement-Metriken</h3>
+                </div>
+                <div class="card-body">
+                    <div id="engagementMetrics" class="chart-loading">
+                        <div class="spinner"></div>
+                        <div>Lade Engagement-Daten...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Active Users -->
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="card-header">
+                <div class="card-icon">⭐</div>
+                <h3 class="card-title">Top Aktive Nutzer</h3>
+            </div>
+            <div class="card-body">
+                <div id="topActiveUsers" class="chart-loading">
+                    <div class="spinner"></div>
+                    <div>Lade Nutzerdaten...</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -1261,6 +1356,9 @@ $month_options = getMonthOptions();
             document.getElementById('statusBreakdown').innerHTML = loadingHTML;
             document.getElementById('conversionFunnel').innerHTML = loadingHTML;
             document.getElementById('serviceViews').innerHTML = loadingHTML;
+            document.getElementById('activityBreakdown').innerHTML = loadingHTML;
+            document.getElementById('engagementMetrics').innerHTML = loadingHTML;
+            document.getElementById('topActiveUsers').innerHTML = loadingHTML;
         }
 
         function showError(message) {
@@ -1405,7 +1503,7 @@ $month_options = getMonthOptions();
             container.innerHTML = html;
         }
 
-        function updateConversionFunnel(funnelData, conversionRates) {
+        function updateConversionFunnel(funnelData, conversionRates, dropOffAnalysis) {
             const container = document.getElementById('conversionFunnel');
 
             if (!funnelData) {
@@ -1413,22 +1511,34 @@ $month_options = getMonthOptions();
                 return;
             }
 
+            const dropOff1 = dropOffAnalysis?.after_view || 0;
+            const dropOff2 = dropOffAnalysis?.after_search || 0;
+            const dropOff3 = dropOffAnalysis?.after_initiate || 0;
+
             const html = `
+                <div style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)); border-radius: 12px;">
+                    <div style="font-size: 14px; color: #718096; margin-bottom: 8px; font-weight: 600;">Gesamt-Conversion Rate</div>
+                    <div style="font-size: 32px; font-weight: 800; color: #667eea;">${conversionRates.overall_conversion || 0}%</div>
+                    <div style="font-size: 13px; color: #718096; margin-top: 4px;">Von Service-Ansicht bis Buchung</div>
+                </div>
                 <div class="funnel-step">
                     <div class="funnel-number">${funnelData.viewed_services || 0}</div>
                     <div class="funnel-label">Services angesehen</div>
                     <div class="funnel-rate">100%</div>
                 </div>
+                <div style="text-align: center; color: #e53e3e; font-size: 13px; font-weight: 600; margin: 8px 0;">↓ ${dropOff1} Absprünge</div>
                 <div class="funnel-step">
                     <div class="funnel-number">${funnelData.found_slots || 0}</div>
                     <div class="funnel-label">Slots gefunden</div>
                     <div class="funnel-rate">${conversionRates.view_to_search}%</div>
                 </div>
+                <div style="text-align: center; color: #e53e3e; font-size: 13px; font-weight: 600; margin: 8px 0;">↓ ${dropOff2} Absprünge</div>
                 <div class="funnel-step">
                     <div class="funnel-number">${funnelData.initiated_booking || 0}</div>
                     <div class="funnel-label">Buchung gestartet</div>
                     <div class="funnel-rate">${conversionRates.search_to_initiate}%</div>
                 </div>
+                <div style="text-align: center; color: #e53e3e; font-size: 13px; font-weight: 600; margin: 8px 0;">↓ ${dropOff3} Absprünge</div>
                 <div class="funnel-step">
                     <div class="funnel-number">${funnelData.completed_booking || 0}</div>
                     <div class="funnel-label">Buchung abgeschlossen</div>
@@ -1460,6 +1570,116 @@ $month_options = getMonthOptions();
                     </div>
                 `;
             });
+
+            container.innerHTML = html;
+        }
+
+        function updateActivityBreakdown(activities) {
+            const container = document.getElementById('activityBreakdown');
+
+            if (!activities || activities.length === 0) {
+                container.innerHTML = '<div class="no-data">Keine Aktivitätsdaten verfügbar</div>';
+                return;
+            }
+
+            const activityLabels = {
+                'service_viewed': '👁️ Service angesehen',
+                'slots_found': '🔍 Slots gefunden',
+                'booking_initiated': '▶️ Buchung gestartet',
+                'booking_completed': '✅ Buchung abgeschlossen',
+                'profile_updated': '👤 Profil aktualisiert',
+                'login': '🔐 Login'
+            };
+
+            let html = '';
+            activities.forEach(activity => {
+                const label = activityLabels[activity.activity_type] || activity.activity_type;
+                html += `
+                    <div class="stat-item">
+                        <div class="stat-label">${label}</div>
+                        <div>
+                            <span class="stat-value">${activity.count}</span>
+                            <span class="stat-secondary">${activity.unique_customers} Kunden</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function updateEngagementMetrics(metrics) {
+            const container = document.getElementById('engagementMetrics');
+
+            if (!metrics) {
+                container.innerHTML = '<div class="no-data">Keine Engagement-Daten verfügbar</div>';
+                return;
+            }
+
+            const avgActivities = metrics.avg_activities_per_customer
+                ? parseFloat(metrics.avg_activities_per_customer).toFixed(1)
+                : 0;
+
+            const html = `
+                <div class="stat-item">
+                    <div class="stat-label">👥 Aktive Kunden gesamt</div>
+                    <div class="stat-value">${metrics.total_active_customers || 0}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">📊 Ø Aktivitäten pro Kunde</div>
+                    <div class="stat-value">${avgActivities}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">🏆 Maximale Aktivitäten (1 Kunde)</div>
+                    <div class="stat-value">${metrics.max_activities || 0}</div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function updateTopActiveUsers(users) {
+            const container = document.getElementById('topActiveUsers');
+
+            if (!users || users.length === 0) {
+                container.innerHTML = '<div class="no-data">Keine Nutzerdaten verfügbar</div>';
+                return;
+            }
+
+            let html = '<div style="display: grid; gap: 12px;">';
+            users.forEach((user, index) => {
+                const name = user.first_name && user.last_name
+                    ? `${user.first_name} ${user.last_name}`
+                    : user.email;
+                const isTopThree = index < 3;
+                const borderColor = isTopThree
+                    ? (index === 0 ? '#ffd700' : index === 1 ? '#c0c0c0' : '#cd7f32')
+                    : '#667eea';
+
+                html += `
+                    <div class="stat-item" style="border-left-color: ${borderColor};">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                                <span style="font-size: 18px;">${index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '⭐'}</span>
+                                <div class="stat-label">${name}</div>
+                            </div>
+                            <div style="font-size: 12px; color: #718096;">
+                                ${user.email}
+                            </div>
+                            <div style="font-size: 12px; color: #718096; margin-top: 4px;">
+                                📅 ${user.service_views} Ansichten •
+                                🎯 ${user.booking_attempts} Versuche •
+                                ✅ ${user.bookings} Buchungen
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="stat-value">${user.activity_count}</div>
+                            <div class="stat-secondary">Aktivitäten</div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
 
             container.innerHTML = html;
         }
@@ -1549,8 +1769,11 @@ $month_options = getMonthOptions();
                 }
 
                 currentDatabaseData = result.data;
-                updateConversionFunnel(currentDatabaseData.funnel, currentDatabaseData.conversion_rates);
+                updateConversionFunnel(currentDatabaseData.funnel, currentDatabaseData.conversion_rates, currentDatabaseData.drop_off_analysis);
                 updateServiceViews(currentDatabaseData.service_views);
+                updateActivityBreakdown(currentDatabaseData.activity_breakdown);
+                updateEngagementMetrics(currentDatabaseData.engagement_metrics);
+                updateTopActiveUsers(currentDatabaseData.top_users);
 
                 return true;
 
@@ -1558,6 +1781,9 @@ $month_options = getMonthOptions();
                 console.error('Error loading database data:', error);
                 document.getElementById('conversionFunnel').innerHTML = '<div class="no-data">Conversion-Daten nicht verfügbar</div>';
                 document.getElementById('serviceViews').innerHTML = '<div class="no-data">Service-Aufrufe nicht verfügbar</div>';
+                document.getElementById('activityBreakdown').innerHTML = '<div class="no-data">Aktivitätsdaten nicht verfügbar</div>';
+                document.getElementById('engagementMetrics').innerHTML = '<div class="no-data">Engagement-Daten nicht verfügbar</div>';
+                document.getElementById('topActiveUsers').innerHTML = '<div class="no-data">Nutzerdaten nicht verfügbar</div>';
                 return false;
             }
         }

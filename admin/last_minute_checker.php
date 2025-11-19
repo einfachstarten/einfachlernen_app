@@ -218,29 +218,110 @@ function buildEmailBody(string $name, array $slotsByService): string
         $slots = $data['slots'];
         $totalSlots += count($slots);
 
-        $servicesHtml .= sprintf('<h3>📚 %s</h3><ul>', htmlspecialchars($service['name'], ENT_QUOTES, 'UTF-8'));
+        $servicesHtml .= sprintf(
+            '<div style="background:#f8fafc;border-radius:12px;padding:20px;margin:16px 0;">
+                <h3 style="color:#4a90b8;margin:0 0 12px 0;font-size:18px;font-weight:600;">📚 %s</h3>
+                <div style="display:flex;flex-direction:column;gap:8px;">',
+            htmlspecialchars($service['name'], ENT_QUOTES, 'UTF-8')
+        );
+
         foreach ($slots as $slot) {
             $servicesHtml .= sprintf(
-                '<li><a href="%s" style="color:#2f855a;text-decoration:none;">%s → Jetzt buchen</a></li>',
-                htmlspecialchars($slot['booking_url'], ENT_QUOTES, 'UTF-8'),
-                htmlspecialchars($slot['formatted_time'], ENT_QUOTES, 'UTF-8')
+                '<div style="background:#fff;border-radius:8px;padding:12px 16px;border-left:4px solid #52b3a4;">
+                    <div style="font-weight:600;color:#2d3748;margin-bottom:4px;">%s</div>
+                    <a href="%s" style="display:inline-block;background:linear-gradient(135deg,#4a90b8,#52b3a4);color:#fff;text-decoration:none;padding:8px 16px;border-radius:6px;font-weight:600;font-size:14px;">
+                        → Jetzt buchen
+                    </a>
+                </div>',
+                htmlspecialchars($slot['formatted_time'], ENT_QUOTES, 'UTF-8'),
+                htmlspecialchars($slot['booking_url'], ENT_QUOTES, 'UTF-8')
             );
         }
-        $servicesHtml .= '</ul>';
+        $servicesHtml .= '</div></div>';
     }
 
     $greetingName = $name !== '' ? $name : 'Lerncoaching-Familie';
 
     return sprintf(
-        '<h1>🌳 Anna Braun Lerncoaching</h1>
-         <h2>Kurzfristig verfügbare Termine!</h2>
-         <p>Liebe/r %s,</p>
-         <p>wir haben <strong>%d kurzfristig verfügbare Termine</strong> in den nächsten 5 Tagen gefunden:</p>
-         %s
-         <p><strong>⚡ Schnell sein lohnt sich!</strong> Die Termine werden nach dem Prinzip "Wer zuerst kommt, mahlt zuerst" vergeben.</p>
-         <p>Herzliche Grüße,<br>Anna Braun</p>
-         <hr>
-         <p><small>📧 Du erhältst diese E-Mail, weil du Last-Minute Benachrichtigungen aktiviert hast.</small></p>',
+        '<!DOCTYPE html>
+        <html lang="de">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Last-Minute Termine verfügbar</title>
+            <!--[if mso]>
+            <noscript>
+                <xml>
+                    <o:OfficeDocumentSettings>
+                        <o:PixelsPerInch>96</o:PixelsPerInch>
+                    </o:OfficeDocumentSettings>
+                </xml>
+            </noscript>
+            <![endif]-->
+            <style>
+                @media only screen and (max-width: 600px) {
+                    .email-container { width: 100%% !important; }
+                    .email-content { padding: 20px 16px !important; }
+                    .service-block { margin: 12px 0 !important; padding: 16px !important; }
+                    .slot-item { padding: 10px 12px !important; }
+                    .book-btn { width: 100%% !important; text-align: center !important; }
+                }
+            </style>
+        </head>
+        <body style="margin:0;padding:0;background-color:#f7fafc;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,sans-serif;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%%" style="background-color:#f7fafc;">
+                <tr>
+                    <td align="center" style="padding:20px 0;">
+                        <table class="email-container" role="presentation" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;background-color:#ffffff;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,0.1);">
+                            <tr>
+                                <td class="email-content" style="padding:32px 40px;">
+                                    <!-- Header -->
+                                    <div style="text-align:center;margin-bottom:32px;">
+                                        <div style="background:linear-gradient(135deg,#4a90b8,#52b3a4);color:#fff;width:60px;height:60px;border-radius:50%%;display:inline-flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:16px;">🌳</div>
+                                        <h1 style="color:#4a90b8;margin:0;font-size:28px;font-weight:700;">Anna Braun Lerncoaching</h1>
+                                        <div style="width:60px;height:3px;background:linear-gradient(135deg,#4a90b8,#52b3a4);margin:12px auto;border-radius:2px;"></div>
+                                    </div>
+
+                                    <!-- Alert Header -->
+                                    <div style="background:linear-gradient(135deg,#4a90b8,#52b3a4);color:#fff;border-radius:12px;padding:20px;text-align:center;margin-bottom:24px;">
+                                        <h2 style="margin:0;font-size:22px;font-weight:600;">🚨 Kurzfristig verfügbare Termine!</h2>
+                                    </div>
+
+                                    <!-- Content -->
+                                    <p style="color:#2d3748;font-size:16px;line-height:1.6;margin:0 0 16px 0;">Liebe/r %s,</p>
+                                    <p style="color:#2d3748;font-size:16px;line-height:1.6;margin:0 0 24px 0;">
+                                        wir haben <strong style="color:#4a90b8;">%d kurzfristig verfügbare Termine</strong> in den nächsten 5 Tagen gefunden:
+                                    </p>
+
+                                    <!-- Services -->
+                                    <div style="margin:24px 0;">
+                                        %s
+                                    </div>
+
+                                    <!-- Call to Action -->
+                                    <div style="background:#fff8e1;border-left:4px solid #ffa726;border-radius:8px;padding:16px;margin:24px 0;">
+                                        <p style="color:#e65100;font-weight:600;margin:0;font-size:16px;">⚡ Schnell sein lohnt sich!</p>
+                                        <p style="color:#bf360c;margin:8px 0 0 0;font-size:14px;">Die Termine werden nach dem Prinzip "Wer zuerst kommt, mahlt zuerst" vergeben.</p>
+                                    </div>
+
+                                    <!-- Footer -->
+                                    <div style="margin-top:32px;padding-top:24px;border-top:2px solid #e2e8f0;">
+                                        <p style="color:#2d3748;font-size:16px;margin:0 0 8px 0;">Herzliche Grüße,</p>
+                                        <p style="color:#4a90b8;font-weight:600;font-size:18px;margin:0 0 16px 0;">Anna Braun</p>
+
+                                        <div style="background:#f8fafc;border-radius:8px;padding:12px;text-align:center;">
+                                            <p style="color:#718096;font-size:12px;margin:0;">📧 Du erhältst diese E-Mail, weil du Last-Minute Benachrichtigungen aktiviert hast.</p>
+                                            <p style="color:#718096;font-size:12px;margin:4px 0 0 0;">Du kannst diese in der App jederzeit deaktivieren.</p>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>',
         htmlspecialchars($greetingName, ENT_QUOTES, 'UTF-8'),
         $totalSlots,
         $servicesHtml

@@ -1284,10 +1284,10 @@ $initialUnreadCount = (int) $stmt->fetchColumn();
                 </div>
 
                 <a href="last_minute_settings.php" class="action-card">
-                    <div class="action-icon alerts">🚨</div>
+                    <div class="action-icon alerts">📱</div>
                     <div class="action-content">
-                        <h3>Last-Minute Slots</h3>
-                        <p>Automatische Benachrichtigungen für Kurzentschlossene</p>
+                        <h3>Termin-Alerts</h3>
+                        <p>Sofort informiert bei kurzfristigen Terminen</p>
                     </div>
                 </a>
 

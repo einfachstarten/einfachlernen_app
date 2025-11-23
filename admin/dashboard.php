@@ -431,17 +431,6 @@ $email_stats = getEmailDeliveryStats(7);
             100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
         }
 
-        .schedule-refresh-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 11px;
-            margin-left: 0.5rem;
-        }
-
         @media (max-width: 1200px) {
             .table-container {
                 overflow-x: auto;
@@ -653,27 +642,14 @@ $sw_path = __DIR__ . '/../sw.js';
     </div>
 
     <div style='margin-top:1rem;'>
-        <button onclick='testManualUpdate()' style='background:#52b3a4;color:white;padding:0.5rem 1rem;text-decoration:none;border:none;border-radius:4px;cursor:pointer;'>
-            🔧 Manuelles Update testen
-        </button>
+        <p style='margin:0;color:#6c757d;'>Automatische Updates aktiviert – keine manuellen Tests erforderlich.</p>
     </div>
 </div>
-
-<script>
-function testManualUpdate() {
-    const newWindow = window.open('/einfachlernen/customer/', '_blank');
-    setTimeout(() => {
-        if (newWindow) {
-            newWindow.postMessage({ type: 'TEST_MANUAL_UPDATE' }, '*');
-        }
-    }, 2000);
-}
-</script>
 
 <?php
 // Today's Schedule Widget - HINZUFÜGEN
 echo "<div style='background:#f8f9fa;padding:1rem;margin:1rem 0;border:1px solid #dee2e6;border-radius:5px;'>";
-echo "<h4 style='color:#495057;margin-bottom:1rem;'>📅 Heutiger Terminplan <button class='schedule-refresh-btn' onclick='refreshTodaysSchedule()'>⟳ Aktualisieren</button></h4>";
+echo "<h4 style='color:#495057;margin-bottom:1rem;'>📅 Heutiger Terminplan</h4>";
 echo "<div id='todaysSchedule'>Termine werden geladen...</div>";
 echo "</div>";
 ?>
@@ -1718,11 +1694,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(loadTodaysSchedule, 5 * 60 * 1000);
 });
 
-// Refresh button for manual update
-function refreshTodaysSchedule() {
-    document.getElementById('todaysSchedule').innerHTML = 'Termine werden aktualisiert...';
-    loadTodaysSchedule();
-}
+// Automatische Aktualisierung erfolgt im Hintergrund
 </script>
 <script>
 function confirmSendPin(email) {

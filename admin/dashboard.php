@@ -481,6 +481,7 @@ $email_stats = getEmailDeliveryStats(7);
 <header><h2>🛠️ Admin-Dashboard</h2></header>
 <nav>
     <a href="add_customer.php">Kunde hinzufügen</a>
+    <a href="customer_search.php">🔍 Kunden suchen</a>
     <a href="test_mail.php">E-Mail testen</a>
     <a href="customer_analytics_enhanced.php">📊 Kunden-Analytics (Enhanced)</a>
     <a href="booking_analytics.php">📅 Buchungs-Analytics</a>

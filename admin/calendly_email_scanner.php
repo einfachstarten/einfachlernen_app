@@ -88,9 +88,10 @@ class CalendlyEmailScanner {
         $page_token = null;
         $page_count = 0;
 
-        // Date range: -12 months to +6 months
-        $min_start = date('c', strtotime('-12 months'));
-        $max_start = date('c', strtotime('+6 months'));
+        // CRITICAL FIX: Zeit-Range korrekt setzen (UTC mit Z-Suffix)
+        $utc = new DateTimeZone('UTC');
+        $min_start = (new DateTimeImmutable('-12 months', $utc))->setTime(0, 0, 0)->format('Y-m-d\TH:i:s\Z');
+        $max_start = (new DateTimeImmutable('+6 months', $utc))->setTime(23, 59, 59)->format('Y-m-d\TH:i:s\Z');
 
         do {
             $page_count++;

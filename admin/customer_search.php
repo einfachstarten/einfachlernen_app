@@ -28,6 +28,31 @@ function getPDO() {
 
 $pdo = getPDO();
 
+// Handle Calendly Scan Request
+$scan_status = null;
+if (isset($_POST['calendly_scan'])) {
+    $TOKEN = getenv('CALENDLY_TOKEN');
+    $ORG_URI = getenv('CALENDLY_ORG_URI');
+
+    if (!$TOKEN || !$ORG_URI) {
+        $scan_status = 'error|Calendly API nicht konfiguriert';
+    } else {
+        require_once __DIR__ . '/calendly_email_scanner.php';
+        try {
+            $scanner = new CalendlyEmailScanner($TOKEN, $ORG_URI, $pdo);
+            $result = $scanner->scanAndSaveEmails();
+
+            if ($result['success']) {
+                $scan_status = "success|{$result['new_count']} neue, {$result['existing_count']} bekannt";
+            } else {
+                $scan_status = "error|Fehler: {$result['error']}";
+            }
+        } catch (Exception $e) {
+            $scan_status = "error|Fehler: " . $e->getMessage();
+        }
+    }
+}
+
 // Search logic
 $search_query = $_GET['q'] ?? '';
 $customers = [];
@@ -256,6 +281,80 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
             color: #475569;
         }
 
+        /* Scan Button */
+        .scan-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            margin-left: 1rem;
+        }
+
+        .scan-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .scan-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        /* Alert Messages */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .search-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .search-box-wrapper {
+            flex: 1;
+            min-width: 300px;
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
             body {
@@ -296,6 +395,17 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
                 width: 100%;
                 justify-content: center;
             }
+
+            .search-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .scan-btn {
+                margin-left: 0;
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 </head>
@@ -309,17 +419,35 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
 </nav>
 
 <div class="search-container">
-    <form method="GET" action="customer_search.php" class="search-box">
-        <input
-            type="text"
-            name="q"
-            id="searchInput"
-            value="<?= htmlspecialchars($search_query, ENT_QUOTES) ?>"
-            placeholder="Name, E-Mail oder Telefon suchen..."
-            autocomplete="off"
-            autofocus
-        >
-    </form>
+    <div class="search-header">
+        <div class="search-box-wrapper">
+            <form method="GET" action="customer_search.php" class="search-box">
+                <input
+                    type="text"
+                    name="q"
+                    id="searchInput"
+                    value="<?= htmlspecialchars($search_query, ENT_QUOTES) ?>"
+                    placeholder="Name, E-Mail oder Telefon suchen..."
+                    autocomplete="off"
+                    autofocus
+                >
+            </form>
+        </div>
+        <form method="POST" style="display:inline;">
+            <button type="submit" name="calendly_scan" class="scan-btn" id="scanBtn">
+                📡 Calendly Scan
+            </button>
+        </form>
+    </div>
+
+    <?php if ($scan_status):
+        list($type, $msg) = explode('|', $scan_status, 2);
+    ?>
+        <div class="alert alert-<?= $type ?>">
+            <?= $type === 'success' ? '✅' : '❌' ?> <?= htmlspecialchars($msg) ?>
+        </div>
+    <?php endif; ?>
+
     <div class="search-help">
         💡 Suche nach Vorname, Nachname, E-Mail oder Telefonnummer. Live-Suche mit 500ms Verzögerung.
     </div>
@@ -420,6 +548,15 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
 </style>
 
 <script>
+// Calendly Scan Button Loading State
+const scanBtn = document.getElementById('scanBtn');
+if (scanBtn) {
+    scanBtn.addEventListener('click', function(e) {
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner"></span> Scanne Calendly...';
+    });
+}
+
 // Live search with debounce
 let searchTimeout;
 const searchInput = document.getElementById('searchInput');

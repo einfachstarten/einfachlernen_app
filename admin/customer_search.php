@@ -31,26 +31,49 @@ $pdo = getPDO();
 // Handle Calendly Scan Request
 $scan_status = null;
 if (isset($_POST['calendly_scan'])) {
+    error_log("=== [customer_search.php] Calendly Scan Request gestartet ===");
+    error_log("[DEBUG] POST Data: " . print_r($_POST, true));
+    error_log("[DEBUG] Session ID: " . session_id());
+    error_log("[DEBUG] User: " . ($_SESSION['admin'] ?? 'not set'));
+
     $TOKEN = getenv('CALENDLY_TOKEN');
     $ORG_URI = getenv('CALENDLY_ORG_URI');
 
+    error_log("[DEBUG] Calendly Token vorhanden: " . ($TOKEN ? 'JA (länge: ' . strlen($TOKEN) . ')' : 'NEIN'));
+    error_log("[DEBUG] Calendly Org URI vorhanden: " . ($ORG_URI ? 'JA (' . $ORG_URI . ')' : 'NEIN'));
+
     if (!$TOKEN || !$ORG_URI) {
         $scan_status = 'error|Calendly API nicht konfiguriert';
+        error_log("[ERROR] Calendly API nicht konfiguriert - Token oder Org URI fehlt");
     } else {
+        error_log("[DEBUG] Lade calendly_email_scanner.php...");
         require_once __DIR__ . '/calendly_email_scanner.php';
+
         try {
+            error_log("[DEBUG] Erstelle CalendlyEmailScanner Instanz...");
             $scanner = new CalendlyEmailScanner($TOKEN, $ORG_URI, $pdo);
+
+            error_log("[DEBUG] Rufe scanAndSaveEmails() auf...");
             $result = $scanner->scanAndSaveEmails();
+
+            error_log("[DEBUG] Scanner Ergebnis: " . print_r($result, true));
 
             if ($result['success']) {
                 $scan_status = "success|{$result['new_count']} neue, {$result['existing_count']} bekannt";
+                error_log("[SUCCESS] Scan erfolgreich: {$result['new_count']} neue, {$result['existing_count']} bekannte Kunden");
             } else {
                 $scan_status = "error|Fehler: {$result['error']}";
+                error_log("[ERROR] Scan fehlgeschlagen: {$result['error']}");
             }
         } catch (Exception $e) {
             $scan_status = "error|Fehler: " . $e->getMessage();
+            error_log("[EXCEPTION] Exception gefangen: " . $e->getMessage());
+            error_log("[EXCEPTION] Stack Trace: " . $e->getTraceAsString());
         }
     }
+
+    error_log("=== [customer_search.php] Calendly Scan Request abgeschlossen ===");
+    error_log("[DEBUG] Final scan_status: $scan_status");
 }
 
 // Search logic
@@ -551,11 +574,42 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
 // Calendly Scan Button Loading State
 const scanBtn = document.getElementById('scanBtn');
 if (scanBtn) {
+    console.log('[DEBUG] Calendly Scan Button gefunden:', scanBtn);
+
+    // Debug: Check if form exists
+    const scanForm = scanBtn.closest('form');
+    console.log('[DEBUG] Scan Form gefunden:', scanForm);
+
+    if (scanForm) {
+        scanForm.addEventListener('submit', function(e) {
+            console.log('[DEBUG] Calendly Scan Form wird submitted');
+            console.log('[DEBUG] Form action:', this.action || 'default (same page)');
+            console.log('[DEBUG] Form method:', this.method);
+            console.log('[DEBUG] Form data:', new FormData(this));
+        });
+    }
+
     scanBtn.addEventListener('click', function(e) {
+        console.log('[DEBUG] Calendly Scan Button geklickt');
+        console.log('[DEBUG] Event:', e);
+        console.log('[DEBUG] Button disabled status vor Klick:', this.disabled);
+
         this.disabled = true;
         this.innerHTML = '<span class="spinner"></span> Scanne Calendly...';
+
+        console.log('[DEBUG] Button disabled status nach Klick:', this.disabled);
+        console.log('[DEBUG] Button HTML geändert zu:', this.innerHTML);
     });
 }
+
+// Debug: Check if we just came back from a POST request
+console.log('[DEBUG] Page loaded');
+console.log('[DEBUG] Current URL:', window.location.href);
+console.log('[DEBUG] Scan status from PHP:', '<?= $scan_status ?? "null" ?>');
+<?php if ($scan_status): ?>
+console.log('[DEBUG] ✅ POST Request wurde verarbeitet!');
+console.log('[DEBUG] Scan Status: <?= addslashes($scan_status) ?>');
+<?php endif; ?>
 
 // Live search with debounce
 let searchTimeout;

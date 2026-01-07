@@ -26,9 +26,16 @@ class CalendlyEmailScanner {
      * @param PDO $pdo Database connection
      */
     public function __construct($token, $org_uri, PDO $pdo) {
+        error_log("[CalendlyEmailScanner] Constructor aufgerufen");
+        error_log("[DEBUG] Token length: " . strlen($token));
+        error_log("[DEBUG] Org URI: $org_uri");
+        error_log("[DEBUG] PDO instance: " . get_class($pdo));
+
         $this->token = $token;
         $this->org_uri = $org_uri;
         $this->pdo = $pdo;
+
+        error_log("[CalendlyEmailScanner] Constructor abgeschlossen - Instanz bereit");
     }
 
     /**
@@ -84,6 +91,8 @@ class CalendlyEmailScanner {
      * @throws Exception on API errors
      */
     private function getAllScheduledEvents(): array {
+        error_log("[getAllScheduledEvents] Starting event retrieval");
+
         $all_events = [];
         $page_token = null;
         $page_count = 0;
@@ -93,10 +102,13 @@ class CalendlyEmailScanner {
         $min_start = (new DateTimeImmutable('-12 months', $utc))->setTime(0, 0, 0)->format('Y-m-d\TH:i:s\Z');
         $max_start = (new DateTimeImmutable('+6 months', $utc))->setTime(23, 59, 59)->format('Y-m-d\TH:i:s\Z');
 
+        error_log("[getAllScheduledEvents] Date range: $min_start to $max_start");
+        error_log("[getAllScheduledEvents] Organization URI: {$this->org_uri}");
+
         do {
             $page_count++;
             if ($page_count > $this->max_pages) {
-                error_log("Warning: Reached max pages limit ({$this->max_pages})");
+                error_log("[getAllScheduledEvents] Warning: Reached max pages limit ({$this->max_pages})");
                 break;
             }
 
@@ -112,29 +124,36 @@ class CalendlyEmailScanner {
 
             if ($page_token) {
                 $params['page_token'] = $page_token;
+                error_log("[getAllScheduledEvents] Using page_token for pagination");
             }
 
             $url .= '?' . http_build_query($params);
 
-            error_log("Fetching events page $page_count: $url");
+            error_log("[getAllScheduledEvents] Fetching events page $page_count");
 
             $response = $this->apiGet($url);
 
             if (isset($response['collection'])) {
                 $events = $response['collection'];
                 $all_events = array_merge($all_events, $events);
-                error_log("Page $page_count: Retrieved " . count($events) . " events");
+                error_log("[getAllScheduledEvents] Page $page_count: Retrieved " . count($events) . " events (total: " . count($all_events) . ")");
+            } else {
+                error_log("[getAllScheduledEvents] Page $page_count: No collection in response");
             }
 
             // Get next page token
             $page_token = $response['pagination']['next_page_token'] ?? null;
+            error_log("[getAllScheduledEvents] Next page token: " . ($page_token ? "present" : "null"));
 
             // Rate limiting between pagination requests
             if ($page_token) {
                 usleep($this->rate_limit_delay);
+                error_log("[getAllScheduledEvents] Applied rate limit delay before next page");
             }
 
         } while ($page_token !== null);
+
+        error_log("[getAllScheduledEvents] Completed: Retrieved " . count($all_events) . " total events from $page_count pages");
 
         return $all_events;
     }
@@ -148,6 +167,8 @@ class CalendlyEmailScanner {
      * @throws Exception on API errors
      */
     private function extractInviteeEmails(array $events): array {
+        error_log("[extractInviteeEmails] Starting extraction from " . count($events) . " events");
+
         $emails_map = []; // Use map to deduplicate by email
         $invitee_call_count = 0;
 
@@ -161,8 +182,11 @@ class CalendlyEmailScanner {
 
             $event_uri = $event['uri'] ?? null;
             if (!$event_uri) {
+                error_log("[extractInviteeEmails] Event #$invitee_call_count: No URI, skipping");
                 continue;
             }
+
+            error_log("[extractInviteeEmails] Event #$invitee_call_count: Processing $event_uri");
 
             // Get invitees for this event
             $invitees_url = $event_uri . '/invitees?count=100';
@@ -171,6 +195,9 @@ class CalendlyEmailScanner {
                 $invitees_response = $this->apiGet($invitees_url);
 
                 if (isset($invitees_response['collection'])) {
+                    $invitee_count = count($invitees_response['collection']);
+                    error_log("[extractInviteeEmails] Event #$invitee_call_count: Found $invitee_count invitees");
+
                     foreach ($invitees_response['collection'] as $invitee) {
                         $email = $invitee['email'] ?? null;
 
@@ -182,22 +209,32 @@ class CalendlyEmailScanner {
                                     'first_name' => $invitee['first_name'] ?? null,
                                     'last_name' => $invitee['last_name'] ?? null
                                 ];
+                                error_log("[extractInviteeEmails] New email added: $email");
+                            } else {
+                                error_log("[extractInviteeEmails] Duplicate email skipped: $email");
                             }
+                        } else {
+                            error_log("[extractInviteeEmails] Invalid email skipped: " . ($email ?? 'null'));
                         }
                     }
+                } else {
+                    error_log("[extractInviteeEmails] Event #$invitee_call_count: No collection in response");
                 }
 
             } catch (Exception $e) {
-                error_log("Error fetching invitees for event {$event_uri}: " . $e->getMessage());
+                error_log("[extractInviteeEmails] Error fetching invitees for event {$event_uri}: " . $e->getMessage());
+                error_log("[extractInviteeEmails] Exception stack: " . $e->getTraceAsString());
                 // Continue with other events
             }
 
             // Rate limiting: Apply delay every N requests
             if ($invitee_call_count % $this->rate_limit_batch === 0) {
                 usleep($this->rate_limit_delay);
-                error_log("Rate limit delay applied after $invitee_call_count calls");
+                error_log("[extractInviteeEmails] Rate limit delay applied after $invitee_call_count calls");
             }
         }
+
+        error_log("[extractInviteeEmails] Extraction complete: " . count($emails_map) . " unique emails found");
 
         return array_values($emails_map);
     }
@@ -272,6 +309,8 @@ class CalendlyEmailScanner {
      * @throws Exception on API errors
      */
     private function apiGet($url): array {
+        error_log("[apiGet] Request URL: $url");
+
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -283,28 +322,41 @@ class CalendlyEmailScanner {
             CURLOPT_TIMEOUT => 30,
         ]);
 
+        error_log("[apiGet] Executing cURL request...");
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curl_error = curl_error($ch);
+        $info = curl_getinfo($ch);
         curl_close($ch);
+
+        error_log("[apiGet] HTTP Code: $http_code");
+        error_log("[apiGet] Response length: " . strlen($response));
+        error_log("[apiGet] Total time: " . ($info['total_time'] ?? 'unknown') . "s");
 
         // Handle curl errors
         if ($curl_error) {
+            error_log("[apiGet] cURL Error: $curl_error");
             throw new Exception("cURL error: $curl_error");
         }
 
         // Handle HTTP errors
         if ($http_code < 200 || $http_code >= 300) {
+            error_log("[apiGet] HTTP Error Response: " . substr($response, 0, 500));
             $error_data = json_decode($response, true);
             $error_message = $error_data['message'] ?? "HTTP $http_code";
+            error_log("[apiGet] Error message: $error_message");
             throw new Exception("API error: $error_message (HTTP $http_code)");
         }
 
         $data = json_decode($response, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("[apiGet] JSON Decode Error: " . json_last_error_msg());
+            error_log("[apiGet] Raw Response (first 500 chars): " . substr($response, 0, 500));
             throw new Exception("JSON decode error: " . json_last_error_msg());
         }
+
+        error_log("[apiGet] Request successful - decoded " . count($data) . " top-level keys");
 
         return $data;
     }

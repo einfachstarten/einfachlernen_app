@@ -1,5 +1,6 @@
 <?php
 session_start();
+set_time_limit(300); // 5 minutes for Calendly Scan (instead of default 30s)
 if (empty($_SESSION['admin'])) {
     header('Location: login.php');
     exit;

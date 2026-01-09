@@ -379,6 +379,90 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
             min-width: 300px;
         }
 
+        /* Progress Container Styles */
+        .progress-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1rem 0;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .progress-bar {
+            height: 24px;
+            background: #f1f5f9;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a90b8, #52b3a4);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .progress-stats {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            color: #64748b;
+            flex-wrap: wrap;
+        }
+
+        .progress-stats span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .progress-logs {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8fafc;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        .progress-logs div {
+            padding: 0.25rem 0;
+            color: #475569;
+            line-height: 1.4;
+        }
+
+        .progress-logs::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .progress-logs::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        .progress-logs::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
             body {
@@ -457,11 +541,30 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
                 >
             </form>
         </div>
-        <form method="POST" style="display:inline;">
-            <button type="submit" name="calendly_scan" class="scan-btn" id="scanBtn">
-                📡 Calendly Scan
-            </button>
-        </form>
+        <button type="button" class="scan-btn" id="scanBtn">
+            📡 Calendly Scan
+        </button>
+    </div>
+
+    <!-- Progress Container (hidden by default) -->
+    <div id="scanProgress" style="display:none;">
+        <div class="progress-container">
+            <div class="progress-header">
+                <span id="progressText">Initialisierung...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-stats">
+                <span>📊 <strong id="eventsScanned">0</strong> Events</span>
+                <span>📧 <strong id="emailsFound">0</strong> Emails</span>
+                <span>⏱️ <strong id="duration">0</strong>s</span>
+            </div>
+            <div class="progress-logs" id="progressLogs">
+                <div>Warte auf Scan-Start...</div>
+            </div>
+        </div>
     </div>
 
     <?php if ($scan_status):
@@ -572,21 +675,169 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
 </style>
 
 <script>
-// Enhanced scan button feedback
-const scanBtn = document.getElementById('scanBtn');
-if (scanBtn) {
-    scanBtn.addEventListener('click', function(e) {
-        console.log('[INFO] Calendly Scan started...');
-        this.disabled = true;
-        this.innerHTML = '<span class="spinner"></span> Scanne Calendly... (bis zu 2 Minuten)';
+// ============================================================
+// ASYNC CALENDLY SCAN WITH LIVE PROGRESS
+// ============================================================
 
-        // Timeout warning after 30s
-        setTimeout(() => {
-            if (this.disabled) {
-                console.log('[INFO] Scan läuft noch... bitte warten');
+const scanBtn = document.getElementById('scanBtn');
+const scanProgress = document.getElementById('scanProgress');
+
+if (scanBtn) {
+    scanBtn.addEventListener('click', async function(e) {
+        e.preventDefault();
+
+        // Disable button and show progress container
+        this.disabled = true;
+        this.innerHTML = '🔄 Starte Scan...';
+        scanProgress.style.display = 'block';
+
+        // Reset progress UI
+        document.getElementById('progressFill').style.width = '0%';
+        document.getElementById('progressText').textContent = 'Initialisierung...';
+        document.getElementById('progressPercent').textContent = '0%';
+        document.getElementById('eventsScanned').textContent = '0';
+        document.getElementById('emailsFound').textContent = '0';
+        document.getElementById('duration').textContent = '0';
+        document.getElementById('progressLogs').innerHTML = '<div>⏳ Starte Scan...</div>';
+
+        try {
+            // Start scan via API
+            console.log('[Async Scan] Starting scan...');
+            const startRes = await fetch('calendly_scan_api.php?action=start', {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+
+            if (!startRes.ok) {
+                throw new Error(`HTTP ${startRes.status}: ${startRes.statusText}`);
             }
-        }, 30000);
+
+            const startData = await startRes.json();
+
+            if (!startData.success) {
+                throw new Error(startData.error || 'Scan konnte nicht gestartet werden');
+            }
+
+            const scanId = startData.scan_id;
+            console.log('[Async Scan] Scan started with ID:', scanId);
+
+            // Update button
+            this.innerHTML = '⏳ Scan läuft...';
+
+            // Poll for status every 2 seconds
+            const pollInterval = setInterval(async () => {
+                try {
+                    const statusRes = await fetch(`calendly_scan_api.php?action=status&scan_id=${scanId}`, {
+                        credentials: 'same-origin',
+                        cache: 'no-store'
+                    });
+
+                    if (!statusRes.ok) {
+                        throw new Error(`HTTP ${statusRes.status}`);
+                    }
+
+                    const status = await statusRes.json();
+                    console.log('[Async Scan] Status:', status);
+
+                    // Update progress bar
+                    const progressWidth = Math.max(0, Math.min(100, status.progress));
+                    document.getElementById('progressFill').style.width = progressWidth + '%';
+                    document.getElementById('progressPercent').textContent = progressWidth + '%';
+
+                    // Update step text
+                    document.getElementById('progressText').textContent = status.current_step || 'Verarbeitung...';
+
+                    // Update stats
+                    document.getElementById('eventsScanned').textContent = status.events_scanned || 0;
+                    document.getElementById('emailsFound').textContent = status.emails_found || 0;
+                    document.getElementById('duration').textContent = Math.round(status.duration || 0);
+
+                    // Update logs
+                    const logsDiv = document.getElementById('progressLogs');
+                    if (status.logs && status.logs.length > 0) {
+                        logsDiv.innerHTML = status.logs.map(log =>
+                            `<div>${escapeHtml(log.message)}</div>`
+                        ).join('');
+
+                        // Auto-scroll to bottom
+                        logsDiv.scrollTop = logsDiv.scrollHeight;
+                    }
+
+                    // Check if completed
+                    if (status.status === 'completed') {
+                        clearInterval(pollInterval);
+                        showSuccess(status);
+                    } else if (status.status === 'error') {
+                        clearInterval(pollInterval);
+                        showError(status.error_message || 'Unbekannter Fehler');
+                    }
+
+                } catch (pollErr) {
+                    console.error('[Async Scan] Poll error:', pollErr);
+                    // Don't clear interval on poll errors - continue trying
+                }
+            }, 2000); // Poll every 2 seconds
+
+            // Timeout after 5 minutes (safety)
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                console.warn('[Async Scan] Timeout reached');
+            }, 300000);
+
+        } catch (err) {
+            console.error('[Async Scan] Start error:', err);
+            showError(err.message);
+            this.disabled = false;
+            this.innerHTML = '📡 Calendly Scan';
+            scanProgress.style.display = 'none';
+        }
     });
+}
+
+function showSuccess(status) {
+    const scanBtn = document.getElementById('scanBtn');
+    scanBtn.disabled = false;
+    scanBtn.innerHTML = '✅ Scan erfolgreich!';
+
+    setTimeout(() => {
+        scanBtn.innerHTML = '📡 Calendly Scan';
+    }, 5000);
+
+    // Show success message
+    const summary = document.createElement('div');
+    summary.className = 'alert alert-success';
+    summary.style.marginTop = '1rem';
+    summary.innerHTML = `
+        <strong>✅ Scan erfolgreich abgeschlossen!</strong><br>
+        ${status.new_count || 0} neue Kunden gespeichert,
+        ${status.existing_count || 0} bereits vorhanden
+        (${status.events_scanned || 0} Events gescannt in ${Math.round(status.duration || 0)}s)
+    `;
+    scanProgress.appendChild(summary);
+
+    // Reload page after 3 seconds to show updated customer list
+    setTimeout(() => {
+        console.log('[Async Scan] Reloading page...');
+        window.location.reload();
+    }, 3000);
+}
+
+function showError(message) {
+    const scanBtn = document.getElementById('scanBtn');
+    scanBtn.disabled = false;
+    scanBtn.innerHTML = '📡 Calendly Scan';
+
+    const error = document.createElement('div');
+    error.className = 'alert alert-error';
+    error.style.marginTop = '1rem';
+    error.innerHTML = `<strong>❌ Fehler:</strong> ${escapeHtml(message)}`;
+    scanProgress.appendChild(error);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Live search with debounce

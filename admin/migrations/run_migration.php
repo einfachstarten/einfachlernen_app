@@ -1,125 +1,105 @@
 <?php
 /**
- * Migration Runner for Scan Progress Tables
- *
- * Run this script once to create the required database tables
- * for the async Calendly scanner feature.
- *
- * Usage: php run_migration.php
- * Or access via browser (admin session required)
+ * Migration Runner - Async Scanner Tables
+ * URL: /admin/migrations/run_migration.php
  */
-
-// Check if running from CLI or browser
-$is_cli = php_sapi_name() === 'cli';
-
-if (!$is_cli) {
-    session_start();
-    if (empty($_SESSION['admin'])) {
-        die('❌ Unauthorized - Admin login required');
-    }
-    header('Content-Type: text/html; charset=utf-8');
-    echo '<pre>';
+session_start();
+if (empty($_SESSION['admin'])) {
+    die('❌ Admin login required');
 }
 
-echo "============================================\n";
+echo "<pre>\n";
+echo "===========================================\n";
 echo "Async Calendly Scanner - Database Migration\n";
-echo "============================================\n\n";
+echo "===========================================\n\n";
 
-// Load database config
-$config = require __DIR__ . '/../config.php';
-
-try {
-    // Connect to database
-    echo "📡 Connecting to database...\n";
-    $pdo = new PDO(
+function getPDO() {
+    $config = require __DIR__ . '/../config.php';
+    return new PDO(
         "mysql:host={$config['DB_HOST']};dbname={$config['DB_NAME']};charset=utf8mb4",
         $config['DB_USER'],
         $config['DB_PASS'],
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
-    echo "✅ Connected to database: {$config['DB_NAME']}\n\n";
+}
 
-    // Read SQL file
-    $sql_file = __DIR__ . '/add_scan_progress_tables.sql';
-    if (!file_exists($sql_file)) {
-        throw new Exception("Migration file not found: {$sql_file}");
+try {
+    echo "✓ Connecting to database...\n";
+    $pdo = getPDO();
+    $dbName = $pdo->query("SELECT DATABASE()")->fetchColumn();
+    echo "✓ Connected to database: $dbName\n\n";
+
+    // Read migration file
+    $migrationFile = __DIR__ . '/migration.sql';
+    if (!file_exists($migrationFile)) {
+        throw new Exception("Migration file not found: $migrationFile");
     }
 
-    echo "📄 Reading migration file...\n";
-    $sql = file_get_contents($sql_file);
+    echo "✓ Reading migration file...\n";
+    $sql = file_get_contents($migrationFile);
 
     // Split into individual statements
     $statements = array_filter(
         array_map('trim', explode(';', $sql)),
         function($stmt) {
-            // Filter out comments and empty statements
-            return !empty($stmt)
-                && strpos($stmt, '--') !== 0
-                && strpos($stmt, '/*') !== 0;
+            // Remove comments and empty lines
+            $stmt = preg_replace('/^--.*$/m', '', $stmt);
+            $stmt = trim($stmt);
+            return !empty($stmt);
         }
     );
 
-    echo "🔄 Executing " . count($statements) . " SQL statements...\n\n";
+    echo "✓ Found " . count($statements) . " SQL statements\n\n";
+    echo "Executing statements...\n";
+
+    $success = 0;
+    $failed = 0;
 
     foreach ($statements as $index => $statement) {
-        if (empty($statement)) continue;
+        $stmtNum = $index + 1;
 
-        // Extract table name for better logging
-        if (preg_match('/CREATE TABLE.*?`?(\w+)`?/i', $statement, $matches)) {
-            $table = $matches[1];
-            echo "  Creating table: {$table}... ";
+        // Get first line for display
+        $firstLine = strtok($statement, "\n");
+        $preview = substr($firstLine, 0, 60);
+        if (strlen($firstLine) > 60) $preview .= '...';
 
-            try {
-                $pdo->exec($statement . ';');
-                echo "✅\n";
-            } catch (PDOException $e) {
-                if ($e->getCode() == '42S01') { // Table already exists
-                    echo "⚠️  Already exists\n";
-                } else {
-                    throw $e;
-                }
-            }
-        } else {
-            echo "  Executing statement " . ($index + 1) . "... ";
-            $pdo->exec($statement . ';');
-            echo "✅\n";
+        echo "\nExecuting statement $stmtNum...\n";
+        echo "  $preview\n";
+
+        try {
+            $pdo->exec($statement);
+            echo "  ✓ Success\n";
+            $success++;
+        } catch (PDOException $e) {
+            echo "  ✗ Failed: " . $e->getMessage() . "\n";
+            echo "  SQL: " . substr($statement, 0, 200) . "\n";
+            $failed++;
         }
     }
 
-    echo "\n============================================\n";
-    echo "✅ Migration completed successfully!\n";
-    echo "============================================\n\n";
+    echo "\n===========================================\n";
+    echo "MIGRATION SUMMARY\n";
+    echo "===========================================\n";
+    echo "Total statements: " . count($statements) . "\n";
+    echo "✓ Successful: $success\n";
+    echo "✗ Failed: $failed\n\n";
 
-    // Verify tables exist
-    echo "🔍 Verifying tables...\n";
-    $tables = ['scan_progress', 'scan_logs'];
-    foreach ($tables as $table) {
-        $result = $pdo->query("SHOW TABLES LIKE '{$table}'");
-        if ($result->rowCount() > 0) {
-            echo "  ✅ {$table} - OK\n";
-        } else {
-            echo "  ❌ {$table} - MISSING!\n";
-        }
+    if ($failed === 0) {
+        echo "🎉 Migration completed successfully!\n\n";
+        echo "Tables created:\n";
+        echo "  - scan_progress (for tracking scan status)\n";
+        echo "  - scan_logs (for real-time logging)\n\n";
+        echo "Next: Test async scan at customer_search.php\n";
+    } else {
+        echo "⚠️  Migration completed with errors.\n";
+        echo "Review the errors above and fix them.\n";
     }
 
-    echo "\n📊 Current table status:\n";
-    $scan_count = $pdo->query("SELECT COUNT(*) FROM scan_progress")->fetchColumn();
-    $log_count = $pdo->query("SELECT COUNT(*) FROM scan_logs")->fetchColumn();
-    echo "  - scan_progress: {$scan_count} records\n";
-    echo "  - scan_logs: {$log_count} records\n";
-
-    echo "\n✨ Ready to use async Calendly scanning!\n";
-    echo "Navigate to customer_search.php and click 'Calendly Scan'\n";
-
-} catch (PDOException $e) {
-    echo "\n❌ Database Error: " . $e->getMessage() . "\n";
-    echo "Code: " . $e->getCode() . "\n";
-    exit(1);
 } catch (Exception $e) {
-    echo "\n❌ Error: " . $e->getMessage() . "\n";
+    echo "\n✗ Migration failed: " . $e->getMessage() . "\n";
+    echo "\nStack trace:\n" . $e->getTraceAsString() . "\n";
     exit(1);
 }
 
-if (!$is_cli) {
-    echo '</pre>';
-}
+echo "\n<a href='../customer_search.php'>← Back to Customer Search</a>\n";
+echo "</pre>";

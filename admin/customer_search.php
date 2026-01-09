@@ -32,49 +32,38 @@ $pdo = getPDO();
 // Handle Calendly Scan Request
 $scan_status = null;
 if (isset($_POST['calendly_scan'])) {
-    error_log("=== [customer_search.php] Calendly Scan Request gestartet ===");
-    error_log("[DEBUG] POST Data: " . print_r($_POST, true));
-    error_log("[DEBUG] Session ID: " . session_id());
-    error_log("[DEBUG] User: " . ($_SESSION['admin'] ?? 'not set'));
+    error_log("=== ADMIN: Calendly Scan initiated by " . ($_SESSION['admin']['email'] ?? 'unknown') . " ===");
 
     $TOKEN = getenv('CALENDLY_TOKEN');
     $ORG_URI = getenv('CALENDLY_ORG_URI');
 
-    error_log("[DEBUG] Calendly Token vorhanden: " . ($TOKEN ? 'JA (länge: ' . strlen($TOKEN) . ')' : 'NEIN'));
-    error_log("[DEBUG] Calendly Org URI vorhanden: " . ($ORG_URI ? 'JA (' . $ORG_URI . ')' : 'NEIN'));
-
     if (!$TOKEN || !$ORG_URI) {
-        $scan_status = 'error|Calendly API nicht konfiguriert';
-        error_log("[ERROR] Calendly API nicht konfiguriert - Token oder Org URI fehlt");
+        $scan_status = 'error|Calendly API nicht konfiguriert. Bitte Environment Variables setzen.';
+        error_log("ERROR: Missing CALENDLY_TOKEN or CALENDLY_ORG_URI");
     } else {
-        error_log("[DEBUG] Lade calendly_email_scanner.php...");
         require_once __DIR__ . '/calendly_email_scanner.php';
-
         try {
-            error_log("[DEBUG] Erstelle CalendlyEmailScanner Instanz...");
-            $scanner = new CalendlyEmailScanner($TOKEN, $ORG_URI, $pdo);
+            error_log("Scanner starting with ORG: " . substr($ORG_URI, -12));
 
-            error_log("[DEBUG] Rufe scanAndSaveEmails() auf...");
+            $scanner = new CalendlyEmailScanner($TOKEN, $ORG_URI, $pdo);
             $result = $scanner->scanAndSaveEmails();
 
-            error_log("[DEBUG] Scanner Ergebnis: " . print_r($result, true));
-
             if ($result['success']) {
-                $scan_status = "success|{$result['new_count']} neue, {$result['existing_count']} bekannt";
-                error_log("[SUCCESS] Scan erfolgreich: {$result['new_count']} neue, {$result['existing_count']} bekannte Kunden");
+                $duration = round($result['duration_seconds'] ?? 0, 1);
+                $events_scanned = $result['events_scanned'] ?? 0;
+                $scan_status = "success|✅ Scan erfolgreich: {$result['new_count']} neue, {$result['existing_count']} bekannt ({$events_scanned} Events gescannt in {$duration}s)";
+                error_log("SUCCESS: Scanner completed - New: {$result['new_count']}, Existing: {$result['existing_count']}, Duration: {$duration}s");
             } else {
-                $scan_status = "error|Fehler: {$result['error']}";
-                error_log("[ERROR] Scan fehlgeschlagen: {$result['error']}");
+                $error_msg = $result['error'] ?? 'Unbekannter Fehler';
+                $scan_status = "error|❌ Scan fehlgeschlagen: {$error_msg}";
+                error_log("ERROR: Scanner failed - " . $error_msg);
             }
         } catch (Exception $e) {
-            $scan_status = "error|Fehler: " . $e->getMessage();
-            error_log("[EXCEPTION] Exception gefangen: " . $e->getMessage());
-            error_log("[EXCEPTION] Stack Trace: " . $e->getTraceAsString());
+            $scan_status = "error|❌ Exception: " . $e->getMessage();
+            error_log("EXCEPTION: Scanner crashed - " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
         }
     }
-
-    error_log("=== [customer_search.php] Calendly Scan Request abgeschlossen ===");
-    error_log("[DEBUG] Final scan_status: $scan_status");
 }
 
 // Search logic
@@ -347,23 +336,34 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
         .alert {
             padding: 1rem 1.5rem;
             border-radius: 8px;
-            margin-top: 1rem;
-            font-size: 0.95rem;
+            margin: 1rem 0;
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            align-items: flex-start;
+            gap: 0.75rem;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .alert-success {
             background: #d4edda;
-            border: 1px solid #c3e6cb;
             color: #155724;
+            border: 1px solid #c3e6cb;
         }
 
         .alert-error {
             background: #f8d7da;
-            border: 1px solid #f5c6cb;
             color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert strong {
+            font-weight: 600;
         }
 
         .search-header {
@@ -572,45 +572,22 @@ $total = $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
 </style>
 
 <script>
-// Calendly Scan Button Loading State
+// Enhanced scan button feedback
 const scanBtn = document.getElementById('scanBtn');
 if (scanBtn) {
-    console.log('[DEBUG] Calendly Scan Button gefunden:', scanBtn);
-
-    // Debug: Check if form exists
-    const scanForm = scanBtn.closest('form');
-    console.log('[DEBUG] Scan Form gefunden:', scanForm);
-
-    if (scanForm) {
-        scanForm.addEventListener('submit', function(e) {
-            console.log('[DEBUG] Calendly Scan Form wird submitted');
-            console.log('[DEBUG] Form action:', this.action || 'default (same page)');
-            console.log('[DEBUG] Form method:', this.method);
-            console.log('[DEBUG] Form data:', new FormData(this));
-        });
-    }
-
     scanBtn.addEventListener('click', function(e) {
-        console.log('[DEBUG] Calendly Scan Button geklickt');
-        console.log('[DEBUG] Event:', e);
-        console.log('[DEBUG] Button disabled status vor Klick:', this.disabled);
-
+        console.log('[INFO] Calendly Scan started...');
         this.disabled = true;
-        this.innerHTML = '<span class="spinner"></span> Scanne Calendly...';
+        this.innerHTML = '<span class="spinner"></span> Scanne Calendly... (bis zu 2 Minuten)';
 
-        console.log('[DEBUG] Button disabled status nach Klick:', this.disabled);
-        console.log('[DEBUG] Button HTML geändert zu:', this.innerHTML);
+        // Timeout warning after 30s
+        setTimeout(() => {
+            if (this.disabled) {
+                console.log('[INFO] Scan läuft noch... bitte warten');
+            }
+        }, 30000);
     });
 }
-
-// Debug: Check if we just came back from a POST request
-console.log('[DEBUG] Page loaded');
-console.log('[DEBUG] Current URL:', window.location.href);
-console.log('[DEBUG] Scan status from PHP:', '<?= $scan_status ?? "null" ?>');
-<?php if ($scan_status): ?>
-console.log('[DEBUG] ✅ POST Request wurde verarbeitet!');
-console.log('[DEBUG] Scan Status: <?= addslashes($scan_status) ?>');
-<?php endif; ?>
 
 // Live search with debounce
 let searchTimeout;
